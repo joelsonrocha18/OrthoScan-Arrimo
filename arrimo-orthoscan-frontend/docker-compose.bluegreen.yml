@@ -1,0 +1,55 @@
+services:
+  orthoscan-web-blue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orthoscan-web-blue
+    restart: always
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  orthoscan-web-green:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orthoscan-web-green
+    restart: always
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  orthoscan-edge:
+    image: nginx:1.27-alpine
+    container_name: orthoscan-edge
+    restart: always
+    depends_on:
+      - orthoscan-web-blue
+      - orthoscan-web-green
+    environment:
+      ACTIVE_COLOR: ${ACTIVE_COLOR:-blue}
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.edge.template.conf:/etc/nginx/templates/default.conf.template:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,572 @@
+import { useEffect, useMemo, useState } from 'react'
+import type { ChangeEvent } from 'react'
+import { EXTRA_SLOTS, INTRA_SLOTS } from '../../mocks/photoSlots'
+import type { Scan, ScanArch, ScanAttachment } from '../../types/Scan'
+import Button from '../Button'
+import Card from '../Card'
+import ImageCaptureInput from '../files/ImageCaptureInput'
+import Input from '../Input'
+
+type ScanModalProps = {
+  open: boolean
+  mode: 'create' | 'edit'
+  initialScan?: Scan | null
+  patients?: Array<{ id: string; name: string; primaryDentistId?: string; clinicId?: string }>
+  dentists?: Array<{ id: string; name: string; gender?: 'masculino' | 'feminino'; clinicId?: string }>
+  clinics?: Array<{ id: string; name: string }>
+  onClose: () => void
+  onSubmit: (
+    payload: Omit<Scan, 'id' | 'createdAt' | 'updatedAt'>,
+    options?: { setPrimaryDentist?: boolean },
+  ) => void
+}
+
+type FormState = {
+  patientName: string
+  patientId?: string
+  dentistId?: string
+  requestedByDentistId?: string
+  clinicId?: string
+  scanDate: string
+  arch: ScanArch
+  complaint: string
+  dentistGuidance: string
+  notes: string
+  attachments: ScanAttachment[]
+}
+
+const emptyForm: FormState = {
+  patientName: '',
+  patientId: undefined,
+  dentistId: undefined,
+  requestedByDentistId: undefined,
+  clinicId: undefined,
+  scanDate: '',
+  arch: 'ambos',
+  complaint: '',
+  dentistGuidance: '',
+  notes: '',
+  attachments: [],
+}
+
+function makeAttachment(
+  file: File,
+  partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>,
+): ScanAttachment {
+  return {
+    id: `scan_file_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    name: file.name,
+    kind: partial.kind,
+    slotId: partial.slotId,
+    rxType: partial.rxType,
+    arch: partial.arch,
+    mime: file.type,
+    size: file.size,
+    url: URL.createObjectURL(file),
+    isLocal: true,
+    status: 'ok',
+    attachedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  }
+}
+
+function statusPill(ok: boolean) {
+  return ok
+    ? 'inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700'
+    : 'inline-flex rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600'
+}
+
+function attachmentMetaState(att?: ScanAttachment) {
+  if (!att) return null
+  if (att.url && att.mime?.startsWith('image/')) return 'preview'
+  return 'meta'
+}
+
+export default function ScanModal({
+  open,
+  mode,
+  initialScan,
+  patients = [],
+  dentists = [],
+  clinics = [],
+  onClose,
+  onSubmit,
+}: ScanModalProps) {
+  const [form, setForm] = useState<FormState>(emptyForm)
+  const [error, setError] = useState('')
+  const [setPrimaryDentist, setSetPrimaryDentist] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+
+    if (mode === 'edit' && initialScan) {
+      setForm({
+        patientName: initialScan.patientName,
+        patientId: initialScan.patientId,
+        dentistId: initialScan.dentistId,
+        requestedByDentistId: initialScan.requestedByDentistId,
+        clinicId: initialScan.clinicId,
+        scanDate: initialScan.scanDate,
+        arch: initialScan.arch,
+        complaint: initialScan.complaint ?? '',
+        dentistGuidance: initialScan.dentistGuidance ?? '',
+        notes: initialScan.notes ?? '',
+        attachments: initialScan.attachments,
+      })
+      setError('')
+      setSetPrimaryDentist(false)
+      return
+    }
+
+    setForm({ ...emptyForm, scanDate: new Date().toISOString().slice(0, 10) })
+    setError('')
+    setSetPrimaryDentist(false)
+  }, [open, mode, initialScan])
+
+  const stlWarning = useMemo(() => {
+    const hasSup = form.attachments.some((item) => item.kind === 'scan3d' && item.arch === 'superior')
+    const hasInf = form.attachments.some((item) => item.kind === 'scan3d' && item.arch === 'inferior')
+    if (form.arch === 'superior' && !hasSup) return 'Falta arquivo 3D superior.'
+    if (form.arch === 'inferior' && !hasInf) return 'Falta arquivo 3D inferior.'
+    if (form.arch === 'ambos' && (!hasSup || !hasInf)) return 'Falta arquivo 3D superior e/ou inferior.'
+    return ''
+  }, [form.arch, form.attachments])
+
+  useEffect(() => {
+    if (!form.patientId || !form.dentistId) return
+    const patient = patients.find((item) => item.id === form.patientId)
+    if (!patient) return
+    if (!patient.primaryDentistId) {
+      setSetPrimaryDentist(true)
+    }
+  }, [form.patientId, form.dentistId, patients])
+
+  if (!open) return null
+
+  const setSingle = (file: File, partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>) => {
+    setForm((current) => ({
+      ...current,
+      attachments: [
+        ...current.attachments.filter(
+          (item) =>
+            !(
+              item.kind === partial.kind &&
+              item.slotId === partial.slotId &&
+              item.rxType === partial.rxType &&
+              item.arch === partial.arch
+            ),
+        ),
+        makeAttachment(file, partial),
+      ],
+    }))
+  }
+
+  const addMany = (files: FileList, partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>) => {
+    const next = Array.from(files).map((file) => makeAttachment(file, partial))
+    setForm((current) => ({ ...current, attachments: [...current.attachments, ...next] }))
+  }
+
+  const remove = (id: string) => {
+    setForm((current) => ({ ...current, attachments: current.attachments.filter((item) => item.id !== id) }))
+  }
+
+  const submit = () => {
+    if (!form.patientName.trim() || !form.scanDate) {
+      setError('Paciente e data do scan sao obrigatorios.')
+      return
+    }
+
+    onSubmit({
+      patientName: form.patientName.trim(),
+      patientId: form.patientId,
+      dentistId: form.dentistId,
+      requestedByDentistId: form.requestedByDentistId,
+      clinicId: form.clinicId,
+      scanDate: form.scanDate,
+      arch: form.arch,
+      complaint: form.complaint.trim() || undefined,
+      dentistGuidance: form.dentistGuidance.trim() || undefined,
+      notes: form.notes.trim() || undefined,
+      attachments: form.attachments,
+      status: mode === 'edit' && initialScan ? initialScan.status : 'pendente',
+      linkedCaseId: mode === 'edit' && initialScan ? initialScan.linkedCaseId : undefined,
+    }, { setPrimaryDentist })
+    onClose()
+  }
+
+  const bySlot = (slotId: string) => form.attachments.find((item) => item.slotId === slotId)
+  const scanByArch = (arch: 'superior' | 'inferior' | 'mordida') =>
+    form.attachments.find((item) => item.kind === 'scan3d' && item.arch === arch)
+  const rxByType = (rxType: 'panoramica' | 'teleradiografia' | 'tomografia') =>
+    form.attachments.filter((item) => item.rxType === rxType)
+  const projeto = form.attachments.filter((item) => item.kind === 'projeto')
+
+  const filePicker = (
+    label: string,
+    accept: string,
+    onPick: (event: ChangeEvent<HTMLInputElement>) => void,
+    secondary = false,
+  ) => (
+    <label
+      className={`inline-flex h-8 cursor-pointer items-center rounded-lg px-3 text-xs font-semibold transition ${
+        secondary ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-brand-500 text-white hover:bg-brand-700'
+      }`}
+    >
+      {label}
+      <input type="file" className="hidden" accept={accept} onChange={onPick} />
+    </label>
+  )
+
+  const renderAttachmentRow = (att: ScanAttachment, showRemove = true) => (
+    <div key={att.id} className="rounded-lg border border-slate-200 px-3 py-2">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm text-slate-900">{att.name}</p>
+          <p className="text-xs text-slate-500">{new Date(att.createdAt).toLocaleDateString('pt-BR')}</p>
+        </div>
+        {showRemove ? (
+          <button type="button" className="text-xs font-semibold text-red-600" onClick={() => remove(att.id)}>
+            Remover
+          </button>
+        ) : null}
+      </div>
+      {att.url && att.mime?.startsWith('image/') ? (
+        <img src={att.url} alt={att.name} className="mt-2 h-20 w-full rounded-md border border-slate-200 object-cover" />
+      ) : (
+        <p className="mt-2 text-xs text-slate-500">Arquivo cadastrado (sem preview).</p>
+      )}
+    </div>
+  )
+
+  const renderPhotoSlot = (slot: { id: string; label: string; kind: 'foto_intra' | 'foto_extra' }) => {
+    const att = bySlot(slot.id)
+    const has = Boolean(att)
+    const metaState = attachmentMetaState(att)
+    return (
+      <div key={slot.id} className="rounded-lg border border-slate-200 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-semibold text-slate-700">{slot.label}</p>
+          <span className={statusPill(has)}>{has ? 'OK' : 'Falta'}</span>
+        </div>
+
+        {att ? (
+          <>
+            <p className="mt-2 text-sm text-slate-900">{att.name}</p>
+            {metaState === 'preview' ? (
+              <img src={att.url} alt={att.name} className="mt-2 h-20 w-full rounded-md border border-slate-200 object-cover" />
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">Arquivo cadastrado (sem preview).</p>
+            )}
+            <div className="mt-2 flex items-center gap-2">
+              <ImageCaptureInput
+                onFileSelected={(file) => setSingle(file, { kind: slot.kind, slotId: slot.id })}
+                accept="image/*"
+              />
+              <button type="button" className="text-xs font-semibold text-red-600" onClick={() => remove(att.id)}>
+                Remover
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="mt-2">
+            <ImageCaptureInput
+              onFileSelected={(file) => setSingle(file, { kind: slot.kind, slotId: slot.id })}
+              accept="image/*"
+            />
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderScan3dCard = (title: string, arch: 'superior' | 'inferior' | 'mordida') => {
+    const att = scanByArch(arch)
+    const has = Boolean(att)
+    return (
+      <div className="rounded-lg border border-slate-200 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-xs font-semibold text-slate-700">{title}</p>
+          <span className={statusPill(has)}>{has ? 'OK' : 'Falta'}</span>
+        </div>
+        {att ? (
+          <>
+            <p className="mt-2 text-sm text-slate-900">{att.name}</p>
+            <p className="mt-1 text-xs text-slate-500">Arquivo cadastrado (sem preview).</p>
+            <div className="mt-2 flex items-center gap-2">
+              {filePicker('Substituir', '.stl,.obj,.ply', (event) => {
+                const file = event.target.files?.[0]
+                if (!file) return
+                setSingle(file, { kind: 'scan3d', arch })
+              }, true)}
+              <button type="button" className="text-xs font-semibold text-red-600" onClick={() => remove(att.id)}>
+                Remover
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="mt-2">
+            {filePicker('Adicionar', '.stl,.obj,.ply', (event) => {
+              const file = event.target.files?.[0]
+              if (!file) return
+              setSingle(file, { kind: 'scan3d', arch })
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const renderRxCard = (title: string, rxType: 'panoramica' | 'teleradiografia' | 'tomografia', accept: string, hint?: string) => {
+    const items = rxByType(rxType)
+    const has = items.length > 0
+    const kind = rxType === 'tomografia' ? 'dicom' : 'raiox'
+    return (
+      <div className="rounded-lg border border-slate-200 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-xs font-semibold text-slate-700">{title}</p>
+            {hint ? <p className="mt-1 text-[11px] text-slate-500">{hint}</p> : null}
+          </div>
+          <span className={statusPill(has)}>{has ? 'OK' : 'Falta'}</span>
+        </div>
+        <div className="mt-2 space-y-2">
+          {items.length === 0 ? <p className="text-xs text-slate-500">Nenhum arquivo.</p> : items.map((item) => renderAttachmentRow(item))}
+        </div>
+        <div className="mt-2">
+          <label className="inline-flex h-8 cursor-pointer items-center rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white transition hover:bg-brand-700">
+            Adicionar
+            <input
+              type="file"
+              className="hidden"
+              multiple
+              accept={accept}
+              onChange={(event) => event.target.files && addMany(event.target.files, { kind, rxType })}
+            />
+          </label>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+      <Card className="max-h-[90vh] w-full max-w-6xl overflow-y-auto">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">{mode === 'create' ? 'Novo Exame' : 'Editar Exame'}</h2>
+            <p className="mt-1 text-sm text-slate-500">Documentacao completa para alinhadores.</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Vinculos</h3>
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Clinica</label>
+              <select
+                value={form.clinicId ?? ''}
+                onChange={(event) => setForm((c) => ({ ...c, clinicId: event.target.value || undefined }))}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"
+              >
+                <option value="">Sem clinica</option>
+                {clinics.map((clinic) => (
+                  <option key={clinic.id} value={clinic.id}>
+                    {clinic.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsavel</label>
+              <select
+                value={form.dentistId ?? ''}
+                onChange={(event) => {
+                  const value = event.target.value || undefined
+                  const dentist = dentists.find((item) => item.id === value)
+                  setForm((c) => ({
+                    ...c,
+                    dentistId: value,
+                    clinicId: c.clinicId || dentist?.clinicId,
+                  }))
+                }}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"
+              >
+                <option value="">Selecione</option>
+                {dentists.map((dentist) => (
+                  <option key={dentist.id} value={dentist.id}>
+                    {dentist.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Solicitante do exame</label>
+              <select
+                value={form.requestedByDentistId ?? ''}
+                onChange={(event) => setForm((c) => ({ ...c, requestedByDentistId: event.target.value || undefined }))}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"
+              >
+                <option value="">Opcional</option>
+                {dentists.map((dentist) => (
+                  <option key={dentist.id} value={dentist.id}>
+                    {dentist.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-3 text-xs text-slate-500">
+            {(() => {
+              const dentist = dentists.find((item) => item.id === form.dentistId)
+              const requester = dentists.find((item) => item.id === form.requestedByDentistId)
+              const clinic = clinics.find((item) => item.id === form.clinicId)
+              const dentistPrefix = dentist?.gender === 'feminino' ? 'Dra.' : dentist ? 'Dr.' : ''
+              const requesterPrefix = requester?.gender === 'feminino' ? 'Dra.' : requester ? 'Dr.' : ''
+              return (
+                <>
+                  Responsavel: {dentist ? `${dentistPrefix} ${dentist.name}` : '-'}
+                  {' | '}Clinica: {clinic ? clinic.name : '-'}
+                  {requester ? ` | Solicitante: ${requesterPrefix} ${requester.name}` : ''}
+                </>
+              )
+            })()}
+          </div>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Paciente</label>
+            <Input
+              list="patients-options"
+              value={form.patientName}
+              onChange={(event) => {
+                const inputName = event.target.value
+                const matched = patients.find((item) => item.name === inputName)
+                setForm((current) => {
+                  const currentDentist = dentists.find((item) => item.id === current.dentistId)
+                  const patientClinicId = matched?.clinicId
+                  const shouldOverrideClinic =
+                    patientClinicId &&
+                    (!current.clinicId || current.clinicId === currentDentist?.clinicId)
+                  return {
+                    ...current,
+                    patientName: inputName,
+                    patientId: matched?.id,
+                    clinicId: shouldOverrideClinic ? patientClinicId : current.clinicId,
+                  }
+                })
+                if (matched && !matched.primaryDentistId && form.dentistId) {
+                  setSetPrimaryDentist(true)
+                } else if (matched && matched.primaryDentistId) {
+                  setSetPrimaryDentist(false)
+                }
+              }}
+            />
+            <datalist id="patients-options">
+              {patients.map((item) => (
+                <option key={item.id} value={item.name} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Data do scan</label>
+            <Input type="date" value={form.scanDate} onChange={(event) => setForm((c) => ({ ...c, scanDate: event.target.value }))} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Arcada</label>
+            <select
+              value={form.arch}
+              onChange={(event) => setForm((c) => ({ ...c, arch: event.target.value as ScanArch }))}
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+            >
+              <option value="superior">Caso Superior</option>
+              <option value="inferior">Caso Inferior</option>
+              <option value="ambos">Ambos</option>
+            </select>
+          </div>
+        </div>
+
+        {form.patientId && form.dentistId && !patients.find((item) => item.id === form.patientId)?.primaryDentistId ? (
+          <div className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              checked={setPrimaryDentist}
+              onChange={(event) => setSetPrimaryDentist(event.target.checked)}
+            />
+            <span>Definir como responsavel do paciente</span>
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid grid-cols-1 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Queixa do paciente</label>
+            <textarea rows={3} value={form.complaint} onChange={(event) => setForm((c) => ({ ...c, complaint: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Orientacao do dentista</label>
+            <textarea rows={3} value={form.dentistGuidance} onChange={(event) => setForm((c) => ({ ...c, dentistGuidance: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Observacoes internas</label>
+            <textarea rows={3} value={form.notes} onChange={(event) => setForm((c) => ({ ...c, notes: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Scan 3D</h3>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {(form.arch === 'superior' || form.arch === 'ambos') && renderScan3dCard('Superior (.stl, .obj, .ply)', 'superior')}
+            {(form.arch === 'inferior' || form.arch === 'ambos') && renderScan3dCard('Inferior (.stl, .obj, .ply)', 'inferior')}
+            {renderScan3dCard('Mordida (.stl, .obj, .ply)', 'mordida')}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Fotos Intraorais</h3>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{INTRA_SLOTS.map((slot) => renderPhotoSlot(slot))}</div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Fotos Extraorais</h3>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{EXTRA_SLOTS.map((slot) => renderPhotoSlot(slot))}</div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Radiografias</h3>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {renderRxCard('Panoramica', 'panoramica', 'image/*,application/pdf')}
+            {renderRxCard('Teleradiografia', 'teleradiografia', 'image/*,application/pdf')}
+            {renderRxCard('Tomografia', 'tomografia', '.dcm,.zip,application/zip,application/octet-stream,image/*,application/pdf', 'DICOM (.dcm) ou .zip')}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Planejamento</h3>
+          <div className="mt-2 space-y-2">
+            {projeto.length === 0 ? <p className="text-xs text-slate-500">Nenhum arquivo.</p> : projeto.map((item) => renderAttachmentRow(item))}
+          </div>
+          <div className="mt-2">
+            <label className="inline-flex h-8 cursor-pointer items-center rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white transition hover:bg-brand-700">
+              Adicionar
+              <input type="file" className="hidden" multiple onChange={(event) => event.target.files && addMany(event.target.files, { kind: 'projeto' })} />
+            </label>
+          </div>
+        </div>
+
+        {stlWarning ? <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">{stlWarning}</p> : null}
+        {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={submit}>Salvar Exame</Button>
+        </div>
+      </Card>
+    </div>
+  )
+}

@@ -1,0 +1,75 @@
+{
+  "startedAt": "2026-02-11T09:44:09.133Z",
+  "finishedAt": "2026-02-11T09:52:46.904Z",
+  "durationMs": 517771,
+  "summary": {
+    "pass": 9,
+    "warn": 0,
+    "fail": 0
+  },
+  "items": [
+    {
+      "id": "env_versions",
+      "title": "Node/NPM",
+      "status": "pass",
+      "message": "Node v20.20.0 | NPM 10.8.2",
+      "details": ""
+    },
+    {
+      "id": "db_key",
+      "title": "DB key",
+      "status": "pass",
+      "message": "Chave do DB local encontrada em db.ts.",
+      "details": ""
+    },
+    {
+      "id": "routes_core",
+      "title": "Rotas essenciais",
+      "status": "pass",
+      "message": "Todas as rotas essenciais estao declaradas (8).",
+      "details": ""
+    },
+    {
+      "id": "rbac_roles",
+      "title": "Roles",
+      "status": "pass",
+      "message": "Todas as roles obrigatorias foram encontradas.",
+      "details": ""
+    },
+    {
+      "id": "rbac_mapping",
+      "title": "Permissoes por role",
+      "status": "pass",
+      "message": "Mapeamento de permissoes encontrado para todas as roles.",
+      "details": ""
+    },
+    {
+      "id": "scope_fns",
+      "title": "Escopo",
+      "status": "pass",
+      "message": "Funcoes de escopo principais encontradas.",
+      "details": ""
+    },
+    {
+      "id": "camera_fallback",
+      "title": "Upload + Camera",
+      "status": "pass",
+      "message": "Componente contem accept/capture e fallback iOS.",
+      "details": ""
+    },
+    {
+      "id": "smoke_lint",
+      "title": "Smoke lint",
+      "status": "pass",
+      "message": "Lint executado com sucesso.",
+      "details": ""
+    },
+    {
+      "id": "smoke_typecheck",
+      "title": "Smoke typecheck",
+      "status": "pass",
+      "message": "Typecheck executado com sucesso.",
+      "details": ""
+    }
+  ]
+}

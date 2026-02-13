@@ -1,0 +1,18 @@
+export const APP_ROUTE_PATHS = [
+  '/',
+  '/login',
+  '/app/dashboard',
+  '/app/scans',
+  '/app/cases',
+  '/app/cases/:id',
+  '/app/lab',
+  '/app/patients',
+  '/app/patients/:id',
+  '/app/dentists',
+  '/app/dentists/:id',
+  '/app/clinics',
+  '/app/clinics/:id',
+  '/app/settings',
+  '/app/settings/diagnostics',
+  '/app/settings/migration',
+]

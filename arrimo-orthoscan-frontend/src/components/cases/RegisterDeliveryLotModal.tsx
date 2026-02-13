@@ -1,0 +1,96 @@
+import { useState } from 'react'
+import Button from '../Button'
+import Card from '../Card'
+import Input from '../Input'
+
+type RegisterDeliveryLotModalProps = {
+  open: boolean
+  caseOptions?: Array<{ id: string; patientName: string }>
+  selectedCaseId?: string
+  onCaseChange?: (caseId: string) => void
+  onClose: () => void
+  onConfirm: (payload: {
+    upperQty: number
+    lowerQty: number
+    deliveredToDoctorAt: string
+    note?: string
+  }) => void
+}
+
+export default function RegisterDeliveryLotModal({
+  open,
+  caseOptions,
+  selectedCaseId,
+  onCaseChange,
+  onClose,
+  onConfirm,
+}: RegisterDeliveryLotModalProps) {
+  const [upperQty, setUpperQty] = useState('')
+  const [lowerQty, setLowerQty] = useState('')
+  const [deliveredToDoctorAt, setDeliveredToDoctorAt] = useState(new Date().toISOString().slice(0, 10))
+  const [note, setNote] = useState('')
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+      <Card className="w-full max-w-lg">
+        <h3 className="text-xl font-semibold text-slate-900">Registrar entrega do LAB ao profissional</h3>
+        <div className="mt-4 grid gap-3">
+          {caseOptions && onCaseChange ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Caso</label>
+              <select
+                value={selectedCaseId ?? ''}
+                onChange={(event) => onCaseChange(event.target.value)}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              >
+                <option value="">Selecione um caso</option>
+                {caseOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.patientName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Data da entrega</label>
+            <Input type="date" value={deliveredToDoctorAt} onChange={(event) => setDeliveredToDoctorAt(event.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Qtd Superior</label>
+              <Input type="number" min={0} value={upperQty} onChange={(event) => setUpperQty(event.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Qtd Inferior</label>
+              <Input type="number" min={0} value={lowerQty} onChange={(event) => setLowerQty(event.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Observacao</label>
+            <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={() =>
+              onConfirm({
+                upperQty: Number(upperQty),
+                lowerQty: Number(lowerQty),
+                deliveredToDoctorAt,
+                note: note.trim() || undefined,
+              })
+            }
+          >
+            Salvar lote
+          </Button>
+        </div>
+      </Card>
+    </div>
+  )
+}

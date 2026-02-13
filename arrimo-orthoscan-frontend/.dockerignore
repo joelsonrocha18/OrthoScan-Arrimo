@@ -1,0 +1,11 @@
+node_modules
+dist
+desktop-dist
+reports
+test-results
+.git
+.vscode
+.idea
+*.log
+*.local
+certs

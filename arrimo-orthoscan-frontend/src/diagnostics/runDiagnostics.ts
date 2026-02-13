@@ -1,0 +1,361 @@
+import { DB_KEY, loadDb } from '../data/db'
+import { DATA_MODE } from '../data/dataMode'
+import { permissionsForRole, can } from '../auth/permissions'
+import type { Role, User } from '../types/User'
+import { listPatientsForUser, listScansForUser, listCasesForUser } from '../auth/scope'
+import { listPatients } from '../repo/patientRepo'
+import { listDentists } from '../data/dentistRepo'
+import { listClinics } from '../repo/clinicRepo'
+import { listScans } from '../data/scanRepo'
+import { listCases } from '../data/caseRepo'
+import { listLabItems } from '../data/labRepo'
+import { markPatientDocAsError } from '../repo/patientDocsRepo'
+import { markScanAttachmentError } from '../data/scanRepo'
+import { markCaseScanFileError } from '../data/caseRepo'
+import { APP_ROUTE_PATHS } from '../routes/appRoutes'
+import { supabase } from '../lib/supabaseClient'
+import { getProfileByUserId } from '../repo/profileRepo'
+
+export type DiagnosticStatus = 'pass' | 'fail' | 'warn'
+
+export type DiagnosticItem = {
+  id: string
+  title: string
+  status: DiagnosticStatus
+  message: string
+  details?: string
+  fixHint?: string
+}
+
+export type DiagnosticReport = {
+  startedAt: string
+  finishedAt: string
+  durationMs: number
+  items: DiagnosticItem[]
+}
+
+const REQUIRED_ROUTES = [
+  '/login',
+  '/app/dashboard',
+  '/app/scans',
+  '/app/cases',
+  '/app/lab',
+  '/app/patients',
+  '/app/dentists',
+  '/app/clinics',
+  '/app/settings',
+]
+
+const DIAG_PREFIX = 'diag_'
+
+function nowIso() {
+  return new Date().toISOString()
+}
+
+function safeLocalStorage() {
+  try {
+    const key = '__diag_probe__'
+    window.localStorage.setItem(key, '1')
+    window.localStorage.removeItem(key)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function detectDiagData(ids: string[]) {
+  return ids.some((id) => id.startsWith(DIAG_PREFIX))
+}
+
+async function pingViaCep(timeoutMs = 2500) {
+  const controller = new AbortController()
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch('https://viacep.com.br/ws/01001000/json/', { signal: controller.signal })
+    if (!response.ok) return false
+    const data = (await response.json()) as { cep?: string }
+    return Boolean(data?.cep)
+  } catch {
+    return false
+  } finally {
+    window.clearTimeout(timer)
+  }
+}
+
+export async function runDiagnostics(): Promise<DiagnosticReport> {
+  const startedAt = nowIso()
+  const items: DiagnosticItem[] = []
+  const db = loadDb()
+
+  const appMode = import.meta.env.MODE
+  const appVersion = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? ''
+  const storageOk = safeLocalStorage()
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  items.push({
+    id: 'env_mode',
+    title: 'Ambiente',
+    status: 'pass',
+    message: `Modo: ${appMode}${appVersion ? ` | Versao: ${appVersion}` : ''}`,
+    details: 'Import.meta.env.MODE e VITE_APP_VERSION (se definido).',
+  })
+  items.push({
+    id: 'env_data_mode',
+    title: 'Data mode',
+    status: 'pass',
+    message: `DATA_MODE: ${DATA_MODE}`,
+  })
+  if (DATA_MODE === 'supabase') {
+    const missing = [!supabaseUrl ? 'VITE_SUPABASE_URL' : null, !supabaseAnon ? 'VITE_SUPABASE_ANON_KEY' : null].filter(Boolean)
+    items.push({
+      id: 'env_supabase',
+      title: 'Supabase env',
+      status: missing.length === 0 ? 'pass' : 'warn',
+      message: missing.length === 0 ? 'Env vars do Supabase configuradas.' : `Faltando: ${missing.join(', ')}`,
+      fixHint: missing.length === 0 ? undefined : 'Preencha .env com as credenciais do Supabase.',
+    })
+  }
+  items.push({
+    id: 'env_storage',
+    title: 'LocalStorage',
+    status: storageOk ? 'pass' : 'fail',
+    message: storageOk ? 'LocalStorage disponivel.' : 'LocalStorage indisponivel.',
+    fixHint: storageOk ? undefined : 'Verifique bloqueio do navegador ou modo privado.',
+  })
+  const hasDbKey = storageOk ? window.localStorage.getItem(DB_KEY) !== null : false
+  items.push({
+    id: 'env_db_key',
+    title: 'DB Key',
+    status: hasDbKey ? 'pass' : 'warn',
+    message: hasDbKey ? 'Chave do DB encontrada no localStorage.' : 'DB ainda nao inicializado no localStorage.',
+    fixHint: hasDbKey ? undefined : 'Abra a aplicacao e salve algum dado para inicializar o DB.',
+  })
+  const viaCepOk = await pingViaCep()
+  items.push({
+    id: 'viacep.ping',
+    title: 'ViaCEP disponivel',
+    status: viaCepOk ? 'pass' : 'warn',
+    message: viaCepOk ? 'ViaCEP respondeu com sucesso.' : 'ViaCEP indisponivel ou sem rede.',
+    fixHint: viaCepOk ? undefined : 'Sem internet/HTTPS/ViaCEP indisponivel.',
+  })
+
+  const missingCollections: string[] = []
+  if (!Array.isArray(db.patients)) missingCollections.push('patients')
+  if (!Array.isArray(db.users)) missingCollections.push('users')
+  if (!Array.isArray(db.dentists)) missingCollections.push('dentists')
+  if (!Array.isArray(db.clinics)) missingCollections.push('clinics')
+  if (!Array.isArray(db.scans)) missingCollections.push('scans')
+  if (!Array.isArray(db.cases)) missingCollections.push('cases')
+  if (!Array.isArray(db.labItems)) missingCollections.push('labItems')
+  items.push({
+    id: 'db_collections',
+    title: 'DB & Migracoes',
+    status: missingCollections.length === 0 ? 'pass' : 'fail',
+    message: missingCollections.length === 0 ? 'Colecoes principais presentes.' : `Faltando: ${missingCollections.join(', ')}.`,
+    fixHint: missingCollections.length === 0 ? undefined : 'Revise db.ts e migracoes recentes.',
+  })
+
+  const missingRoutes = REQUIRED_ROUTES.filter((route) => !APP_ROUTE_PATHS.includes(route))
+  items.push({
+    id: 'routes_core',
+    title: 'Rotas essenciais',
+    status: missingRoutes.length === 0 ? 'pass' : 'fail',
+    message: missingRoutes.length === 0 ? 'Rotas principais presentes.' : `Rotas ausentes: ${missingRoutes.join(', ')}`,
+    details: `Lista de rotas verificada em appRoutes.ts (${APP_ROUTE_PATHS.length} rotas).`,
+    fixHint: missingRoutes.length === 0 ? undefined : 'Atualize as rotas no App.tsx.',
+  })
+
+  const repoChecks: Array<{ id: string; title: string; fn: unknown }> = [
+    { id: 'repo_patients', title: 'patientRepo.listPatients', fn: listPatients },
+    { id: 'repo_dentists', title: 'dentistRepo.listDentists', fn: listDentists },
+    { id: 'repo_clinics', title: 'clinicRepo.listClinics', fn: listClinics },
+    { id: 'repo_scans', title: 'scanRepo.listScans', fn: listScans },
+    { id: 'repo_cases', title: 'caseRepo.listCases', fn: listCases },
+    { id: 'repo_lab', title: 'labRepo.listLabItems', fn: listLabItems },
+  ]
+  const missingRepos = repoChecks.filter((item) => typeof item.fn !== 'function').map((item) => item.title)
+  items.push({
+    id: 'modules_repos',
+    title: 'Modulos (Repos)',
+    status: missingRepos.length === 0 ? 'pass' : 'warn',
+    message: missingRepos.length === 0 ? 'Repos principais encontrados.' : `Repos ausentes: ${missingRepos.join(', ')}`,
+    fixHint: missingRepos.length === 0 ? undefined : 'Revise exports nos repos.',
+  })
+
+  const roles: Role[] = [
+    'master_admin',
+    'dentist_admin',
+    'dentist_client',
+    'clinic_client',
+    'lab_tech',
+    'receptionist',
+  ]
+  const missingRoles = roles.filter((role) => permissionsForRole(role).length === 0)
+  const rbacStatus: DiagnosticStatus = missingRoles.length === 0 ? 'pass' : 'warn'
+  items.push({
+    id: 'rbac_roles',
+    title: 'Permissoes (RBAC)',
+    status: rbacStatus,
+    message: missingRoles.length === 0 ? 'Perfis principais encontrados.' : `Perfis sem permissoes: ${missingRoles.join(', ')}`,
+    fixHint: missingRoles.length === 0 ? undefined : 'Executar Prompt 22 / ajustar permissions.ts.',
+  })
+
+  const master: User = { id: 'diag_master', name: 'Master', email: 'diag@local', role: 'master_admin', isActive: true, createdAt: startedAt, updatedAt: startedAt }
+  const dentistAdmin: User = { id: 'diag_admin', name: 'Admin', email: 'diag_admin@local', role: 'dentist_admin', isActive: true, createdAt: startedAt, updatedAt: startedAt }
+  const labTech: User = { id: 'diag_lab', name: 'Lab', email: 'diag_lab@local', role: 'lab_tech', isActive: true, createdAt: startedAt, updatedAt: startedAt }
+  const receptionist: User = { id: 'diag_recep', name: 'Recep', email: 'diag_recep@local', role: 'receptionist', isActive: true, createdAt: startedAt, updatedAt: startedAt }
+
+  const permIssues: string[] = []
+  if (!can(master, 'users.delete')) permIssues.push('master_admin sem users.delete')
+  if (!can(dentistAdmin, 'users.delete')) permIssues.push('dentist_admin sem users.delete')
+  if (can(labTech, 'patients.write')) permIssues.push('lab_tech com patients.write')
+  if (can(receptionist, 'users.write')) permIssues.push('receptionist com users.write')
+  items.push({
+    id: 'rbac_rules',
+    title: 'Permissoes (Regras)',
+    status: permIssues.length === 0 ? 'pass' : 'fail',
+    message: permIssues.length === 0 ? 'Regras de permissao OK.' : `Falhas: ${permIssues.join('; ')}`,
+    fixHint: permIssues.length === 0 ? undefined : 'Revisar rolePermissions em permissions.ts.',
+  })
+
+  const hasDiagData =
+    detectDiagData(db.clinics.map((item) => item.id)) &&
+    detectDiagData(db.dentists.map((item) => item.id)) &&
+    detectDiagData(db.patients.map((item) => item.id)) &&
+    detectDiagData(db.scans.map((item) => item.id)) &&
+    detectDiagData(db.cases.map((item) => item.id))
+
+  if (!hasDiagData) {
+    items.push({
+      id: 'scope_check',
+      title: 'Escopo (Dentista/Clinica)',
+      status: 'warn',
+      message: 'Dados de teste nao encontrados.',
+      fixHint: 'Clique em "Criar dados de teste" e rode novamente.',
+    })
+  } else {
+    const dentistClient = db.users.find((item) => item.id === 'diag_user_dentist_client') ?? null
+    const clinicClient = db.users.find((item) => item.id === 'diag_user_clinic_client') ?? null
+    const patientsDent = listPatientsForUser(db, dentistClient)
+    const patientsClinic = listPatientsForUser(db, clinicClient)
+    const scansDent = listScansForUser(db, dentistClient)
+    const casesClinic = listCasesForUser(db, clinicClient)
+    const ok =
+      patientsDent.every((item) => item.id === 'diag_patient_p1') &&
+      patientsClinic.every((item) => item.id === 'diag_patient_p1') &&
+      scansDent.every((item) => item.id === 'diag_scan_s1') &&
+      casesClinic.every((item) => item.id === 'diag_case_k1')
+    items.push({
+      id: 'scope_check',
+      title: 'Escopo (Dentista/Clinica)',
+      status: ok ? 'pass' : 'fail',
+      message: ok ? 'Escopo aplicado corretamente.' : 'Escopo com vazamento ou retorno incorreto.',
+      details: `Dentist_client pacientes: ${patientsDent.map((item) => item.id).join(', ') || '-'} | Clinic_client pacientes: ${patientsClinic.map((item) => item.id).join(', ') || '-'} | Scans: ${scansDent.map((item) => item.id).join(', ') || '-'} | Cases: ${casesClinic.map((item) => item.id).join(', ') || '-'}`,
+      fixHint: ok ? undefined : 'Revisar auth/scope.ts e relacionamentos clinicId/dentistId.',
+    })
+  }
+
+  const docChecks = [
+    { id: 'docs_patient', title: 'patientDocsRepo.markPatientDocAsError', fn: markPatientDocAsError },
+    { id: 'docs_scan', title: 'scanRepo.markScanAttachmentError', fn: markScanAttachmentError },
+    { id: 'docs_case', title: 'caseRepo.markCaseScanFileError', fn: markCaseScanFileError },
+  ]
+  const missingDocFns = docChecks.filter((item) => typeof item.fn !== 'function').map((item) => item.title)
+  const docsWithErrorMissingNote = db.patientDocuments.filter((doc) => doc.status === 'erro' && !doc.errorNote)
+  items.push({
+    id: 'docs_rules',
+    title: 'Anexos/Docs (historico)',
+    status: missingDocFns.length === 0 && docsWithErrorMissingNote.length === 0 ? 'pass' : 'warn',
+    message:
+      missingDocFns.length === 0
+        ? docsWithErrorMissingNote.length === 0
+          ? 'Regras de erro presentes.'
+          : `Documentos com erro sem motivo: ${docsWithErrorMissingNote.length}.`
+        : `Funcoes ausentes: ${missingDocFns.join(', ')}`,
+    fixHint: missingDocFns.length === 0 ? undefined : 'Revisar repos de documentos e anexos.',
+  })
+
+  const allowedLabStatuses = new Set(['aguardando_iniciar', 'em_producao', 'controle_qualidade', 'prontas'])
+  const invalidLab = db.labItems.filter((item) => !allowedLabStatuses.has(item.status))
+  items.push({
+    id: 'lab_status',
+    title: 'LAB pipeline',
+    status: invalidLab.length === 0 ? 'pass' : 'warn',
+    message: invalidLab.length === 0 ? 'Status do LAB ok.' : `Status fora do esperado: ${invalidLab.map((item) => item.status).join(', ')}`,
+    fixHint: invalidLab.length === 0 ? undefined : 'Revisar migracao de status do LAB.',
+  })
+
+  if (DATA_MODE === 'supabase') {
+    if (!supabase) {
+      items.push({
+        id: 'supabase_profile',
+        title: 'Supabase profile',
+        status: 'warn',
+        message: 'Supabase nao configurado.',
+        fixHint: 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.',
+      })
+    } else {
+      const { data: authData } = await supabase.auth.getUser()
+      const userId = authData?.user?.id
+      const profile = userId ? await getProfileByUserId(userId) : null
+      items.push({
+        id: 'supabase_profile',
+        title: 'Supabase profile',
+        status: profile ? 'pass' : 'warn',
+        message: profile ? 'Profile carregado com sucesso.' : 'Nao foi possivel carregar o profile.',
+        fixHint: profile ? undefined : 'Crie profile para o usuario atual.',
+      })
+
+      if (profile?.clinic_id) {
+        const { data: patients } = await supabase
+          .from('patients')
+          .select('id, clinic_id')
+          .limit(5)
+        const mismatch = (patients ?? []).filter((item) => item.clinic_id && item.clinic_id !== profile.clinic_id)
+        items.push({
+          id: 'supabase_rls',
+          title: 'Supabase RLS',
+          status: mismatch.length === 0 ? 'pass' : 'fail',
+          message:
+            mismatch.length === 0
+              ? 'RLS aparente ok (patients).'
+              : `RLS possivel vazamento: clinic_id divergente (${mismatch.length}).`,
+          fixHint: mismatch.length === 0 ? undefined : 'Revisar policies de patients/scans/cases.',
+        })
+      } else {
+        items.push({
+          id: 'supabase_rls',
+          title: 'Supabase RLS',
+          status: 'warn',
+          message: 'Profile sem clinic_id para validar RLS.',
+          fixHint: 'Atualize clinic_id no profile.',
+        })
+      }
+    }
+  }
+
+  if (DATA_MODE === 'supabase') {
+    if (!supabase) {
+      items.push({
+        id: 'supabase_migration_tools',
+        title: 'Migration tools available',
+        status: 'warn',
+        message: 'Supabase nao configurado.',
+        fixHint: 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.',
+      })
+    } else {
+      const result = await supabase.functions.invoke('export-db', { body: {} })
+      items.push({
+        id: 'supabase_migration_tools',
+        title: 'Migration tools available',
+        status: result.error ? 'warn' : 'pass',
+        message: result.error ? 'Sem permissao ou function indisponivel.' : 'Export function respondeu.',
+        fixHint: result.error ? 'Verifique deploy das functions e permissao do usuario.' : undefined,
+      })
+    }
+  }
+
+  const finishedAt = nowIso()
+  const durationMs = new Date(finishedAt).getTime() - new Date(startedAt).getTime()
+  return { startedAt, finishedAt, durationMs, items }
+}

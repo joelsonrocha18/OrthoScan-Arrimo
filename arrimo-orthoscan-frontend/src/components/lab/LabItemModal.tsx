@@ -1,0 +1,376 @@
+import { useEffect, useMemo, useState } from 'react'
+import { canMoveToStatus } from '../../data/labRepo'
+import type { Case } from '../../types/Case'
+import type { LabItem, LabPriority, LabStatus } from '../../types/Lab'
+import { useToast } from '../../app/ToastProvider'
+import Button from '../Button'
+import Card from '../Card'
+import Input from '../Input'
+
+type LabModalMode = 'create' | 'edit'
+
+type LabItemModalProps = {
+  mode: LabModalMode
+  item: LabItem | null
+  open: boolean
+  cases: Case[]
+  readOnly?: boolean
+  onClose: () => void
+  onCreate: (payload: {
+    caseId?: string
+    arch: 'superior' | 'inferior' | 'ambos'
+    plannedUpperQty?: number
+    plannedLowerQty?: number
+    patientName: string
+    trayNumber: number
+    dueDate: string
+    priority: LabPriority
+    notes?: string
+    status: LabStatus
+  }) => { ok: boolean; message?: string }
+  onSave: (id: string, patch: Partial<LabItem>) => { ok: boolean; message?: string }
+  onDelete: (id: string) => void
+}
+
+type FormState = {
+  arch: 'superior' | 'inferior' | 'ambos'
+  plannedUpperQty: string
+  plannedLowerQty: string
+  patientName: string
+  trayNumber: string
+  dueDate: string
+  priority: LabPriority
+  notes: string
+  status: LabStatus
+}
+
+const defaultForm: FormState = {
+  arch: 'ambos',
+  plannedUpperQty: '0',
+  plannedLowerQty: '0',
+  patientName: '',
+  trayNumber: '',
+  dueDate: '',
+  priority: 'Medio',
+  notes: '',
+  status: 'aguardando_iniciar',
+}
+
+const statusOptions: Array<{ value: LabStatus; label: string }> = [
+  { value: 'aguardando_iniciar', label: 'Aguardando iniciar' },
+  { value: 'em_producao', label: 'Em Producao' },
+  { value: 'controle_qualidade', label: 'Controle de qualidade' },
+  { value: 'prontas', label: 'Prontas' },
+]
+
+export default function LabItemModal({
+  mode,
+  item,
+  open,
+  cases,
+  onClose,
+  readOnly = false,
+  onCreate,
+  onSave,
+  onDelete,
+}: LabItemModalProps) {
+  const { addToast } = useToast()
+  const [form, setForm] = useState<FormState>(defaultForm)
+  const [error, setError] = useState('')
+
+  const linkedCaseId = mode === 'edit' ? item?.caseId : undefined
+  const selectedCase = useMemo(
+    () => (linkedCaseId ? cases.find((current) => current.id === linkedCaseId) ?? null : null),
+    [cases, linkedCaseId],
+  )
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    if (mode === 'edit' && item) {
+      setForm({
+        arch: item.arch ?? 'ambos',
+        plannedUpperQty: String(item.plannedUpperQty ?? 0),
+        plannedLowerQty: String(item.plannedLowerQty ?? 0),
+        patientName: item.patientName,
+        trayNumber: String(item.trayNumber),
+        dueDate: item.dueDate,
+        priority: item.priority,
+        notes: item.notes ?? '',
+        status: item.status,
+      })
+      setError('')
+      return
+    }
+
+    setForm({ ...defaultForm, dueDate: new Date().toISOString().slice(0, 10) })
+    setError('')
+  }, [mode, item, open])
+
+  const canDelete = mode === 'edit' && Boolean(item)
+  const planQtyTotal = Math.trunc(Number(form.plannedUpperQty || 0)) + Math.trunc(Number(form.plannedLowerQty || 0))
+  const automaticStatus = planQtyTotal > 0 ? 'em_producao' : 'aguardando_iniciar'
+
+  const statusBlocked = useMemo(() => {
+    if (mode === 'create') {
+      return !canMoveToStatus('aguardando_iniciar', form.status)
+    }
+    if (!item) {
+      return false
+    }
+    return !canMoveToStatus(item.status, form.status)
+  }, [form.status, item, mode])
+
+  if (!open) {
+    return null
+  }
+
+  const submit = () => {
+    if (readOnly) {
+      return
+    }
+    const tray = mode === 'edit' && item ? item.trayNumber : 1
+    const plannedUpperQty = Number(form.plannedUpperQty || 0)
+    const plannedLowerQty = Number(form.plannedLowerQty || 0)
+    if (!form.patientName.trim() || !form.dueDate || !Number.isFinite(tray) || tray <= 0) {
+      const message = 'Preencha os campos obrigatorios com valores validos.'
+      setError(message)
+      addToast({ type: 'error', title: 'Validacao', message })
+      return
+    }
+
+    if (selectedCase && tray > selectedCase.totalTrays) {
+      const message = `A placa deve estar entre 1 e ${selectedCase.totalTrays} para este caso.`
+      setError(message)
+      addToast({ type: 'error', title: 'Validacao', message })
+      return
+    }
+    if (!Number.isFinite(plannedUpperQty) || !Number.isFinite(plannedLowerQty) || plannedUpperQty < 0 || plannedLowerQty < 0) {
+      const message = 'Informe quantidades validas por arcada (zero ou maior).'
+      setError(message)
+      addToast({ type: 'error', title: 'Validacao', message })
+      return
+    }
+    if (selectedCase) {
+      const maxUpper = selectedCase.totalTraysUpper ?? selectedCase.totalTrays
+      const maxLower = selectedCase.totalTraysLower ?? selectedCase.totalTrays
+      if (plannedUpperQty > maxUpper || plannedLowerQty > maxLower) {
+        const message = `Planejamento excede o caso. Limites: Superior ${maxUpper} | Inferior ${maxLower}.`
+        setError(message)
+        addToast({ type: 'error', title: 'Validacao', message })
+        return
+      }
+    }
+
+    if (statusBlocked) {
+      const message = 'Transicao de status invalida para este item.'
+      setError(message)
+      addToast({ type: 'error', title: 'Validacao', message })
+      return
+    }
+    if (mode === 'create') {
+      const result = onCreate({
+        caseId: undefined,
+        arch: form.arch,
+        plannedUpperQty: Math.trunc(plannedUpperQty),
+        plannedLowerQty: Math.trunc(plannedLowerQty),
+        patientName: form.patientName.trim(),
+        trayNumber: tray,
+        dueDate: form.dueDate,
+        priority: form.priority,
+        notes: form.notes.trim() || undefined,
+        status: automaticStatus,
+      })
+      if (!result.ok) {
+        setError(result.message ?? 'Erro ao salvar solicitacao.')
+        addToast({ type: 'error', title: 'Erro', message: result.message ?? 'Erro ao salvar solicitacao.' })
+        return
+      }
+      addToast({ type: 'success', title: 'Solicitacao salva' })
+      return
+    }
+
+    if (!item) {
+      return
+    }
+
+    const result = onSave(item.id, {
+      arch: form.arch,
+      plannedUpperQty: Math.trunc(plannedUpperQty),
+      plannedLowerQty: Math.trunc(plannedLowerQty),
+      patientName: form.patientName.trim(),
+      trayNumber: tray,
+      dueDate: form.dueDate,
+      priority: form.priority,
+      notes: form.notes.trim() || undefined,
+      status: mode === 'edit' && item.status !== 'aguardando_iniciar' ? form.status : automaticStatus,
+    })
+    if (!result.ok) {
+      setError(result.message ?? 'Erro ao salvar solicitacao.')
+      addToast({ type: 'error', title: 'Erro', message: result.message ?? 'Erro ao salvar solicitacao.' })
+      return
+    }
+    addToast({ type: 'success', title: 'Solicitacao salva' })
+  }
+
+  const handleDelete = () => {
+    if (readOnly) {
+      return
+    }
+    if (!item) {
+      return
+    }
+    if (!window.confirm('Deseja excluir este item do laboratorio?')) {
+      return
+    }
+    onDelete(item.id)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+      <Card className="w-full max-w-xl">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">
+              {mode === 'create' ? 'Nova Solicitacao' : 'Detalhes do Item'}
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {mode === 'create'
+                ? 'Cadastre um novo item na fila do laboratorio.'
+                : 'Edite prioridade, prazo, observacoes e status.'}
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Vinculo do caso</label>
+            <p className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              {selectedCase
+                ? `Caso vinculado: ${selectedCase.patientName} (${selectedCase.treatmentCode ?? selectedCase.id.slice(-6)})`
+                : 'Caso vinculado: item legado sem caseId'}
+            </p>
+            {selectedCase ? (
+              <p className="mt-2 text-xs text-slate-600">
+                Tratamento: Sup {selectedCase.totalTraysUpper ?? selectedCase.totalTrays} | Inf {selectedCase.totalTraysLower ?? selectedCase.totalTrays} | Troca a cada {selectedCase.changeEveryDays} dias
+              </p>
+            ) : null}
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Paciente</label>
+            <Input
+              value={form.patientName}
+              onChange={(event) => setForm((current) => ({ ...current, patientName: event.target.value }))}
+              placeholder="Nome do paciente"
+              readOnly={Boolean(linkedCaseId)}
+              disabled={readOnly}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Prazo</label>
+            <Input
+              type="date"
+              value={form.dueDate}
+              onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))}
+              disabled={readOnly}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Prioridade</label>
+            <select
+              value={form.priority}
+              onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value as LabPriority }))}
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              disabled={readOnly}
+            >
+              <option value="Baixo">Baixo</option>
+              <option value="Medio">Medio</option>
+              <option value="Urgente">Urgente</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Superior</label>
+            <Input
+              type="number"
+              min={0}
+              value={form.plannedUpperQty}
+              onChange={(event) => setForm((current) => ({ ...current, plannedUpperQty: event.target.value }))}
+              disabled={readOnly}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Inferior</label>
+            <Input
+              type="number"
+              min={0}
+              value={form.plannedLowerQty}
+              onChange={(event) => setForm((current) => ({ ...current, plannedLowerQty: event.target.value }))}
+              disabled={readOnly}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
+            {(mode === 'create' || item?.status === 'aguardando_iniciar') ? (
+              <p className="mb-1 text-xs text-slate-500">
+                Status automatico: fica em "Aguardando iniciar" ate definir quantidade. Ao salvar com quantidade, vai para "Em Producao".
+              </p>
+            ) : null}
+            <select
+              value={form.status}
+              onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as LabStatus }))}
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              disabled={readOnly || mode === 'create' || item?.status === 'aguardando_iniciar'}
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Observacoes</label>
+            <textarea
+              value={form.notes}
+              onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+              rows={4}
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              placeholder="Detalhes internos do laboratorio..."
+              disabled={readOnly}
+            />
+          </div>
+        </div>
+
+        {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+
+        <div className="mt-6 flex items-center justify-between gap-2">
+          <div>
+            {!readOnly && canDelete ? (
+              <Button variant="secondary" onClick={handleDelete}>
+                Excluir
+              </Button>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={onClose}>
+              {readOnly ? 'Fechar' : 'Cancelar'}
+            </Button>
+            {!readOnly ? <Button onClick={submit}>Salvar</Button> : null}
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
