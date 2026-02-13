@@ -14,7 +14,7 @@ export const DB_KEY = 'arrimo_orthoscan_db_v1'
 const DB_MODE_KEY = 'arrimo_orthoscan_seed_mode_v1'
 const SEED_MODE = ((import.meta.env.VITE_LOCAL_SEED as string | undefined) ?? 'full') as 'full' | 'empty'
 const MASTER_EMAIL = (import.meta.env.VITE_LOCAL_MASTER_EMAIL as string | undefined) ?? 'grupoarrimoadm@gmail.com'
-const LOCAL_DEFAULT_PASSWORD = (import.meta.env.VITE_LOCAL_PASSWORD as string | undefined) ?? 'Senha@123'
+const LOCAL_DEFAULT_PASSWORD = (import.meta.env.VITE_LOCAL_PASSWORD as string | undefined) ?? '*#Esparta321'
 
 export type AppDb = {
   cases: Case[]
@@ -478,6 +478,10 @@ function ensureMasterUser(users: User[]): User[] {
   }
   if (existing.email !== MASTER_EMAIL) {
     next = { ...next, email: MASTER_EMAIL }
+    changed = true
+  }
+  if (existing.password !== LOCAL_DEFAULT_PASSWORD) {
+    next = { ...next, password: LOCAL_DEFAULT_PASSWORD }
     changed = true
   }
   if (!changed) return users
