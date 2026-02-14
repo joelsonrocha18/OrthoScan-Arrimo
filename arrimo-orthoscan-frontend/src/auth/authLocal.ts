@@ -1,10 +1,10 @@
 import { ensureMasterUserInDb, loadDb } from '../data/db'
-import { SESSION_USER_KEY, setSessionUserId, clearSession, setSessionProfile } from '../lib/auth'
+import { getSessionUserId, setSessionUserId, clearSession, setSessionProfile } from '../lib/auth'
 import type { AuthProvider, SessionUser } from './session'
 
 export const authLocal: AuthProvider = {
   async getCurrentUser(): Promise<SessionUser | null> {
-    const userId = localStorage.getItem(SESSION_USER_KEY)
+    const userId = getSessionUserId()
     if (!userId) return null
     const db = loadDb()
     const user = db.users.find((item) => item.id === userId)
