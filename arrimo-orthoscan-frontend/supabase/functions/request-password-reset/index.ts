@@ -55,16 +55,20 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
   // Avoid user enumeration: always return success.
-  const usersResult = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 })
-  const user = usersResult.data?.users?.find((item) => item.email?.toLowerCase() === payload.email.toLowerCase())
-  if (!user) return json({ ok: true })
+  const email = payload.email.trim().toLowerCase()
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('user_id')
+    .ilike('login_email', email)
+    .maybeSingle()
+  if (profileError || !profile?.user_id) return json({ ok: true })
 
   const rawToken = `${crypto.randomUUID()}${crypto.randomUUID().replaceAll('-', '')}`
   const tokenHash = await sha256(rawToken)
   const expiresAt = new Date(Date.now() + 1000 * 60 * 30).toISOString()
 
   await supabase.from('password_reset_tokens').insert({
-    user_id: user.id,
+    user_id: profile.user_id,
     token_hash: tokenHash,
     expires_at: expiresAt,
   })
@@ -78,7 +82,7 @@ Deno.serve(async (req) => {
 
   await supabase.from('security_audit_logs').insert({
     event_type: 'password_reset_requested',
-    target_user_id: user.id,
+    target_user_id: profile.user_id,
     metadata: { email: payload.email, email_sent: emailResult.ok },
   })
 

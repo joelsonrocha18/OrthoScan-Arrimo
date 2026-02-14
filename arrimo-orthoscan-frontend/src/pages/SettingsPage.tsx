@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, EyeOff, LockKeyhole, Mail, Pause, PenLine, Play, Trash2, UserRound, WandSparkles } from 'lucide-react'
 import { can, groupedPermissionsForRole, permissionLabel, profileDescription, profileLabel, type PermissionModule } from '../auth/permissions'
@@ -16,6 +16,7 @@ import { addAuditEntry, applyTheme, loadSystemSettings, saveSystemSettings, type
 import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUser } from '../repo/userRepo'
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
 import { createOnboardingInvite } from '../repo/onboardingRepo'
+import { listProfiles } from '../repo/profileRepo'
 import type { Role, User } from '../types/User'
 import { useDb } from '../lib/useDb'
 
@@ -48,7 +49,12 @@ export default function SettingsPage() {
   const currentUser = getCurrentUser(db)
   const dentists = useMemo(() => db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt), [db.dentists])
   const clinics = useMemo(() => db.clinics.filter((item) => !item.deletedAt), [db.clinics])
-  const users = useMemo(() => [...db.users].sort((a, b) => a.name.localeCompare(b.name)), [db.users])
+  const isSupabaseMode = DATA_MODE === 'supabase'
+  const [supabaseUsers, setSupabaseUsers] = useState<User[]>([])
+  const users = useMemo(() => {
+    if (isSupabaseMode) return supabaseUsers
+    return [...db.users].sort((a, b) => a.name.localeCompare(b.name))
+  }, [db.users, isSupabaseMode, supabaseUsers])
 
   const [mainTab, setMainTab] = useState<MainTab>('registration')
   const [modalOpen, setModalOpen] = useState(false)
@@ -63,8 +69,37 @@ export default function SettingsPage() {
 
   const canManageUsers = can(currentUser, 'users.write')
   const canDeleteUsers = can(currentUser, 'users.delete')
-  const isSupabaseMode = DATA_MODE === 'supabase'
   const [inviteLink, setInviteLink] = useState('')
+
+  useEffect(() => {
+    let active = true
+    if (!isSupabaseMode) {
+      setSupabaseUsers([])
+      return
+    }
+    // In Supabase mode, user management is based on profiles (server-side), not localStorage db.users.
+    listProfiles().then((profiles) => {
+      if (!active) return
+      const mapped: User[] = profiles
+        .filter((profile) => profile.deleted_at == null)
+        .map((profile) => ({
+          id: profile.user_id,
+          name: (profile.full_name ?? '').trim() || (profile.login_email ?? '').trim() || profile.user_id,
+          email: (profile.login_email ?? '').trim(),
+          role: profile.role as Role,
+          isActive: Boolean(profile.is_active),
+          linkedClinicId: profile.clinic_id ?? undefined,
+          linkedDentistId: profile.dentist_id ?? undefined,
+          createdAt: profile.created_at ?? '',
+          updatedAt: profile.updated_at ?? '',
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+      setSupabaseUsers(mapped)
+    })
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
 
   const openNew = () => {
     setEditingUser(null)

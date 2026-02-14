@@ -8,6 +8,15 @@ type InvitePayload = {
   fullName?: string
 }
 
+const APP_ROLES = new Set([
+  'master_admin',
+  'dentist_admin',
+  'dentist_client',
+  'clinic_client',
+  'lab_tech',
+  'receptionist',
+])
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
@@ -30,6 +39,9 @@ Deno.serve(async (req) => {
   const payload = (await req.json()) as InvitePayload
   if (!payload.email || !payload.role || !payload.clinicId) {
     return new Response(JSON.stringify({ ok: false, error: 'Missing payload fields.' }), { status: 400 })
+  }
+  if (!APP_ROLES.has(payload.role)) {
+    return new Response(JSON.stringify({ ok: false, error: 'Invalid role.' }), { status: 400 })
   }
 
   const {
@@ -54,6 +66,9 @@ Deno.serve(async (req) => {
   if (role === 'dentist_admin' && profile?.clinic_id !== payload.clinicId) {
     return new Response(JSON.stringify({ ok: false, error: 'Clinic mismatch.' }), { status: 403 })
   }
+  if (role === 'dentist_admin' && ['master_admin', 'dentist_admin'].includes(payload.role)) {
+    return new Response(JSON.stringify({ ok: false, error: 'Role not allowed for actor.' }), { status: 403 })
+  }
 
   const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(payload.email, {
     redirectTo: inviteRedirect || siteUrl,
@@ -64,6 +79,7 @@ Deno.serve(async (req) => {
 
   const { error: upsertError } = await supabase.from('profiles').upsert({
     user_id: inviteData.user.id,
+    login_email: payload.email.toLowerCase(),
     role: payload.role,
     clinic_id: payload.clinicId,
     dentist_id: payload.dentistId ?? null,

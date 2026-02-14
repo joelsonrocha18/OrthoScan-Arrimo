@@ -81,3 +81,7 @@ Execute `supabase/seed/seed.sql` no SQL Editor e siga as instrucoes comentadas.
 
 ## 8) Migração
 Use `/app/settings/migration` (somente master_admin) para exportar o DB local e importar no Supabase.
+
+## Nota: perfis (profiles) no modo Supabase
+- O app lista e aplica RBAC usando `profiles`.
+- O reset de senha busca o usuario por `profiles.login_email` (preenchido automaticamente no onboarding/invite).

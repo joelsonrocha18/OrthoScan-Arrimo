@@ -9,6 +9,15 @@ type Payload = {
   dentistId?: string
 }
 
+const APP_ROLES = new Set([
+  'master_admin',
+  'dentist_admin',
+  'dentist_client',
+  'clinic_client',
+  'lab_tech',
+  'receptionist',
+])
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -48,6 +57,9 @@ Deno.serve(async (req) => {
   if (!payload.fullName?.trim() || !payload.role?.trim() || !payload.clinicId?.trim()) {
     return json({ ok: false, error: 'Missing fullName, role or clinicId.' }, 400)
   }
+  if (!APP_ROLES.has(payload.role)) {
+    return json({ ok: false, error: 'Invalid role.' }, 400)
+  }
 
   const {
     data: { user: actor },
@@ -68,6 +80,9 @@ Deno.serve(async (req) => {
   }
   if (actorRole === 'dentist_admin' && actorProfile?.clinic_id !== payload.clinicId) {
     return json({ ok: false, error: 'Clinic mismatch.' }, 403)
+  }
+  if (actorRole === 'dentist_admin' && ['master_admin', 'dentist_admin'].includes(payload.role)) {
+    return json({ ok: false, error: 'Role not allowed for actor.' }, 403)
   }
 
   const token = randomToken()
@@ -109,4 +124,3 @@ Deno.serve(async (req) => {
 
   return json({ ok: true, inviteId: invite.id, inviteLink })
 })
-

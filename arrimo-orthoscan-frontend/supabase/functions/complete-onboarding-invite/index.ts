@@ -69,6 +69,7 @@ Deno.serve(async (req) => {
 
   const { error: profileError } = await supabase.from('profiles').upsert({
     user_id: userId,
+    login_email: email,
     role: invite.role,
     clinic_id: invite.clinic_id,
     dentist_id: invite.dentist_id,
@@ -110,4 +111,3 @@ Deno.serve(async (req) => {
 
   return json({ ok: true })
 })
-
