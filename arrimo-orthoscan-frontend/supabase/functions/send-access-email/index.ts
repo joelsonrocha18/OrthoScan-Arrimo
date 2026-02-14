@@ -42,10 +42,11 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   const siteUrl = Deno.env.get('SITE_URL') ?? ''
-  if (!supabaseUrl || !serviceRoleKey) return json({ ok: false, error: 'Missing Supabase env vars.' }, 500)
+  // Return 200 with {ok:false} so the client can show a helpful message.
+  if (!supabaseUrl || !serviceRoleKey) return json({ ok: false, error: 'Missing SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY.' })
 
   const payload = (await req.json()) as Payload
-  if (!payload.email) return json({ ok: false, error: 'Email obrigatorio.' }, 400)
+  if (!payload.email) return json({ ok: false, error: 'Email obrigatorio.' })
 
   const authHeader = req.headers.get('Authorization') ?? ''
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -56,7 +57,7 @@ Deno.serve(async (req) => {
     data: { user: actor },
     error: actorError,
   } = await supabase.auth.getUser()
-  if (actorError || !actor) return json({ ok: false, error: 'Unauthorized.' }, 401)
+  if (actorError || !actor) return json({ ok: false, error: 'Unauthorized.' })
 
   const { data: actorProfile } = await supabase
     .from('profiles')
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
     .maybeSingle()
 
   if (!actorProfile || !['master_admin', 'dentist_admin'].includes(actorProfile.role)) {
-    return json({ ok: false, error: 'Forbidden.' }, 403)
+    return json({ ok: false, error: 'Forbidden.' })
   }
 
   const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
@@ -74,7 +75,7 @@ Deno.serve(async (req) => {
     options: { redirectTo: `${siteUrl.replace(/\/$/, '')}/login` },
   })
   if (linkError || !linkData?.properties?.action_link) {
-    return json({ ok: false, error: linkError?.message ?? 'Falha ao gerar link de acesso.' }, 400)
+    return json({ ok: false, error: linkError?.message ?? 'Falha ao gerar link de acesso.' })
   }
 
   const emailResult = await sendEmail({
@@ -90,7 +91,7 @@ Deno.serve(async (req) => {
   })
 
   if (!emailResult.ok) {
-    return json({ ok: false, error: emailResult.error }, 400)
+    return json({ ok: false, error: emailResult.error })
   }
   return json({ ok: true })
 })

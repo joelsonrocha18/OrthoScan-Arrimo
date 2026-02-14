@@ -238,6 +238,7 @@ export default function SettingsPage() {
                       if (DATA_MODE === 'supabase') {
                         const result = await requestPasswordReset({ email: user.email })
                         if (!result.ok) return addToast({ type: 'error', title: result.error })
+                        if (result.warning) return addToast({ type: 'error', title: result.warning })
                         return addToast({ type: 'success', title: `Token enviado para ${user.email}` })
                       }
                       const p = generatePassword()
