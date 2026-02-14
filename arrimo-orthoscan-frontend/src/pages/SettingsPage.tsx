@@ -15,6 +15,7 @@ import { formatCnpj, isValidCnpj } from '../lib/cnpj'
 import { addAuditEntry, applyTheme, loadSystemSettings, saveSystemSettings, type AppThemeMode, type LabCompanyProfile } from '../lib/systemSettings'
 import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUser } from '../repo/userRepo'
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
+import { createOnboardingInvite } from '../repo/onboardingRepo'
 import type { Role, User } from '../types/User'
 import { useDb } from '../lib/useDb'
 
@@ -62,12 +63,15 @@ export default function SettingsPage() {
 
   const canManageUsers = can(currentUser, 'users.write')
   const canDeleteUsers = can(currentUser, 'users.delete')
+  const isSupabaseMode = DATA_MODE === 'supabase'
+  const [inviteLink, setInviteLink] = useState('')
 
   const openNew = () => {
     setEditingUser(null)
     setModalTab('personal')
-    setPasswordMode('auto')
-    setForm({ name: '', email: '', password: generatePassword(), cpf: '', birthDate: '', phone: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+    setPasswordMode(isSupabaseMode ? 'manual' : 'auto')
+    setForm({ name: '', email: '', password: isSupabaseMode ? '' : generatePassword(), cpf: '', birthDate: '', phone: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+    setInviteLink('')
     setError('')
     setModalOpen(true)
   }
@@ -77,11 +81,32 @@ export default function SettingsPage() {
     setModalTab('personal')
     setPasswordMode('manual')
     setForm({ name: user.name, email: user.email, password: user.password ?? '', cpf: user.cpf ?? '', birthDate: user.birthDate ?? '', phone: user.phone ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
+    setInviteLink('')
     setError('')
     setModalOpen(true)
   }
 
-  const submitUser = () => {
+  const submitUser = async () => {
+    setError('')
+    if (isSupabaseMode && !editingUser) {
+      if (!form.name.trim()) return setError('Nome e obrigatorio.')
+      if (!form.linkedClinicId.trim()) return setError('Clinica vinculada e obrigatoria para convite.')
+      const result = await createOnboardingInvite({
+        fullName: form.name.trim(),
+        cpf: form.cpf || undefined,
+        phone: form.phone || undefined,
+        role: form.role,
+        clinicId: form.linkedClinicId,
+        dentistId: form.linkedDentistId || undefined,
+      })
+      if (!result.ok || !result.inviteLink) {
+        return setError(result.ok ? 'Falha ao gerar link de convite.' : result.error)
+      }
+      setInviteLink(result.inviteLink)
+      addToast({ type: 'success', title: 'Convite gerado', message: 'Envie o link para o colaborador concluir cadastro.' })
+      return
+    }
+
     if (!form.name.trim() || !form.email.trim() || !form.password.trim()) return setError('Nome, email e senha sao obrigatorios.')
     const payload = { name: form.name.trim(), email: form.email.trim(), password: form.password.trim(), cpf: form.cpf || undefined, birthDate: form.birthDate || undefined, phone: form.phone || undefined, addressLine: form.addressLine || undefined, role: form.role, isActive: form.isActive, linkedDentistId: form.linkedDentistId || undefined, linkedClinicId: form.linkedClinicId || undefined }
     const result = editingUser ? updateUser(editingUser.id, payload) : createUser(payload)
@@ -147,7 +172,7 @@ export default function SettingsPage() {
               <h2 className="text-lg font-semibold text-slate-900">Usuarios</h2>
               <p className="text-sm text-slate-500">Tabela limpa com Perfil, status e vinculo.</p>
             </div>
-            {canManageUsers ? <Button onClick={openNew}>+ Novo usuario</Button> : null}
+            {canManageUsers ? <Button onClick={openNew}>{isSupabaseMode ? '+ Convidar colaborador' : '+ Novo usuario'}</Button> : null}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
@@ -172,8 +197,8 @@ export default function SettingsPage() {
                   <td className="px-5 py-4"><Badge tone={user.isActive ? 'success' : 'neutral'}>{user.isActive ? 'Ativo' : 'Inativo'}</Badge></td>
                   <td className="px-5 py-4 text-sm text-slate-700">{linkage(user)}</td>
                   <td className="px-5 py-4"><div className="flex flex-wrap gap-2">
-                    {canManageUsers ? <Button size="sm" variant="secondary" onClick={() => openEdit(user)} title="Editar"><PenLine className="h-4 w-4" /></Button> : null}
-                    {canManageUsers ? <Button size="sm" variant="ghost" onClick={() => setUserActive(user.id, !user.isActive)} title={user.isActive ? 'Desativar' : 'Ativar'}>{user.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button> : null}
+                    {canManageUsers && !isSupabaseMode ? <Button size="sm" variant="secondary" onClick={() => openEdit(user)} title="Editar"><PenLine className="h-4 w-4" /></Button> : null}
+                    {canManageUsers && !isSupabaseMode ? <Button size="sm" variant="ghost" onClick={() => setUserActive(user.id, !user.isActive)} title={user.isActive ? 'Desativar' : 'Ativar'}>{user.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button> : null}
                     {canManageUsers ? <Button size="sm" variant="ghost" onClick={async () => {
                       if (DATA_MODE === 'supabase') {
                         const result = await requestPasswordReset({ email: user.email })
@@ -192,7 +217,7 @@ export default function SettingsPage() {
                       }
                       addToast({ type: 'info', title: `Acesso enviado para ${user.email}` })
                     }} title="Enviar acesso por email"><Mail className="h-4 w-4" /></Button> : null}
-                    {canDeleteUsers ? <Button size="sm" variant="ghost" className="text-red-600" onClick={() => softDeleteUser(user.id)} title="Excluir"><Trash2 className="h-4 w-4" /></Button> : null}
+                    {canDeleteUsers && !isSupabaseMode ? <Button size="sm" variant="ghost" className="text-red-600" onClick={() => softDeleteUser(user.id)} title="Excluir"><Trash2 className="h-4 w-4" /></Button> : null}
                   </div></td>
                 </tr>)}
               </tbody>
@@ -247,8 +272,15 @@ export default function SettingsPage() {
 
       {modalOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
         <Card className="w-full max-w-3xl">
-          <h2 className="text-xl font-semibold text-slate-900">{editingUser ? 'Editar usuario' : 'Novo usuario'}</h2>
-          <div className="mt-4 flex flex-wrap gap-2">{[{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (login e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, { id: 'link', label: 'Vinculo' }].map((tab) => <button key={tab.id} type="button" onClick={() => setModalTab(tab.id as ModalTab)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${modalTab === tab.id ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{tab.label}</button>)}</div>
+          <h2 className="text-xl font-semibold text-slate-900">
+            {editingUser ? 'Editar usuario' : isSupabaseMode ? 'Convidar colaborador' : 'Novo usuario'}
+          </h2>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(isSupabaseMode
+              ? [{ id: 'personal', label: 'Dados pessoais' }, { id: 'profile', label: 'Perfil e permissoes' }, { id: 'link', label: 'Vinculo' }]
+              : [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (login e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, { id: 'link', label: 'Vinculo' }]
+            ).map((tab) => <button key={tab.id} type="button" onClick={() => setModalTab(tab.id as ModalTab)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${modalTab === tab.id ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{tab.label}</button>)}
+          </div>
           {modalTab === 'personal' ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Nome completo</label><Input aria-label="Nome completo" value={form.name} onChange={(event) => setForm((c) => ({ ...c, name: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">CPF</label><Input value={form.cpf} onChange={(event) => setForm((c) => ({ ...c, cpf: event.target.value }))} /></div>
@@ -256,7 +288,7 @@ export default function SettingsPage() {
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone</label><Input value={form.phone} onChange={(event) => setForm((c) => ({ ...c, phone: event.target.value }))} /></div>
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Endereco completo</label><Input value={form.addressLine} onChange={(event) => setForm((c) => ({ ...c, addressLine: event.target.value }))} /></div>
           </div> : null}
-          {modalTab === 'access' ? <div className="mt-4 space-y-4">
+          {!isSupabaseMode && modalTab === 'access' ? <div className="mt-4 space-y-4">
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Email (login)</label><Input aria-label="Email (login)" type="email" value={form.email} onChange={(event) => setForm((c) => ({ ...c, email: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Senha</label><div className="flex items-center gap-2"><div className="relative flex-1"><Input aria-label="Senha" type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm((c) => ({ ...c, password: event.target.value }))} className="pr-12" /><button type="button" onClick={() => setShowPassword((current) => !current)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div><Button variant={passwordMode === 'manual' ? 'secondary' : 'ghost'} size="sm" onClick={() => setPasswordMode('manual')}>Manual</Button><Button variant={passwordMode === 'auto' ? 'secondary' : 'ghost'} size="sm" onClick={() => { setPasswordMode('auto'); setForm((c) => ({ ...c, password: generatePassword() })) }}>Auto</Button></div></div>
             <div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={() => setForm((c) => ({ ...c, password: generatePassword() }))}><WandSparkles className="mr-2 h-4 w-4" />Gerar senha automatica</Button><Button variant="ghost" size="sm" onClick={async () => {
@@ -271,8 +303,23 @@ export default function SettingsPage() {
           </div> : null}
           {modalTab === 'profile' ? <div className="mt-4 space-y-4"><div><label className="mb-1 block text-sm font-medium text-slate-700">Perfil</label><select value={form.role} onChange={(event) => setForm((c) => ({ ...c, role: event.target.value as Role }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{ROLE_LIST.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select></div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
           {modalTab === 'link' ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinics.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsavel</label><select value={form.linkedDentistId} onChange={(event) => setForm((c) => ({ ...c, linkedDentistId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{dentists.map((dentist) => <option key={dentist.id} value={dentist.id}>{dentist.name}</option>)}</select></div></div> : null}
+          {inviteLink ? <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Link de cadastro</p>
+            <p className="mt-1 break-all text-sm text-emerald-800">{inviteLink}</p>
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" variant="secondary" onClick={() => navigator.clipboard.writeText(inviteLink)}>
+                Copiar link
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => window.open(inviteLink, '_blank')}>
+                Abrir link
+              </Button>
+            </div>
+          </div> : null}
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
-          <div className="mt-6 flex justify-end gap-2"><Button variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button><Button onClick={submitUser}>Salvar</Button></div>
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
+            <Button onClick={submitUser}>{isSupabaseMode && !editingUser ? 'Gerar link de cadastro' : 'Salvar'}</Button>
+          </div>
         </Card>
       </div> : null}
     </AppShell>

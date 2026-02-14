@@ -6,6 +6,9 @@ export type ProfileRecord = {
   clinic_id: string | null
   dentist_id: string | null
   full_name: string | null
+  cpf: string | null
+  phone: string | null
+  onboarding_completed_at: string | null
   is_active: boolean
   deleted_at: string | null
   created_at?: string
@@ -16,7 +19,7 @@ export async function getProfileByUserId(userId: string) {
   if (!supabase) return null
   const { data, error } = await supabase
     .from('profiles')
-    .select('user_id, role, clinic_id, dentist_id, full_name, is_active, deleted_at, created_at, updated_at')
+    .select('user_id, role, clinic_id, dentist_id, full_name, cpf, phone, onboarding_completed_at, is_active, deleted_at, created_at, updated_at')
     .eq('user_id', userId)
     .maybeSingle()
   if (error) return null
@@ -27,7 +30,7 @@ export async function listProfiles(options?: { includeDeleted?: boolean }) {
   if (!supabase) return []
   let query = supabase
     .from('profiles')
-    .select('user_id, role, clinic_id, dentist_id, full_name, is_active, deleted_at, created_at, updated_at')
+    .select('user_id, role, clinic_id, dentist_id, full_name, cpf, phone, onboarding_completed_at, is_active, deleted_at, created_at, updated_at')
   if (!options?.includeDeleted) {
     query = query.is('deleted_at', null)
   }

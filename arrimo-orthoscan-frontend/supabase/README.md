@@ -28,6 +28,17 @@ Configure variáveis da function:
 Deploy:
 - `supabase functions deploy invite-user`
 
+## 4.3) Edge Functions (onboarding por link)
+Configure variaveis:
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SITE_URL` (ex.: https://seu-dominio.com)
+
+Deploy:
+- `supabase functions deploy create-onboarding-invite`
+- `supabase functions deploy validate-onboarding-invite`
+- `supabase functions deploy complete-onboarding-invite`
+
 ## 4.1) Edge Function (import/export)
 Configure variáveis:
 - `SUPABASE_URL`

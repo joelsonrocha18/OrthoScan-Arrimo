@@ -12,6 +12,7 @@ import DiagnosticsPage from './pages/DiagnosticsPage'
 import MigrationPage from './pages/MigrationPage'
 import LabPage from './pages/LabPage'
 import LoginPage from './pages/LoginPage'
+import OnboardingInvitePage from './pages/OnboardingInvitePage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import PatientDetailPage from './pages/PatientDetailPage'
 import PatientsPage from './pages/PatientsPage'
@@ -61,6 +62,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/complete-signup" element={<OnboardingInvitePage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route element={<ProtectedRoute permission="dashboard.read" />}>
             <Route path="/app/dashboard" element={<DashboardPage />} />

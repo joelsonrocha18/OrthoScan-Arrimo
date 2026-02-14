@@ -1,6 +1,7 @@
 export const APP_ROUTE_PATHS = [
   '/',
   '/login',
+  '/complete-signup',
   '/app/dashboard',
   '/app/scans',
   '/app/cases',
