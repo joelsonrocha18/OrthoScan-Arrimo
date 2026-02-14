@@ -72,10 +72,8 @@ export default function ScanDetailsModal({
   const [note, setNote] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [errorModal, setErrorModal] = useState<{ id: string; reason: string } | null>(null)
-  const attachments = scan?.attachments ?? []
-
   const grouped = useMemo(() => {
-    const files = attachments
+    const files = scan?.attachments ?? []
     return {
       scan3d: {
         superior: files.filter((item) => item.kind === 'scan3d' && item.arch === 'superior'),
@@ -92,7 +90,7 @@ export default function ScanDetailsModal({
       planejamento: files.filter((item) => item.kind === 'projeto'),
       outros: files.filter((item) => item.kind === 'outro'),
     }
-  }, [attachments])
+  }, [scan?.attachments])
 
   if (!open || !scan) return null
 

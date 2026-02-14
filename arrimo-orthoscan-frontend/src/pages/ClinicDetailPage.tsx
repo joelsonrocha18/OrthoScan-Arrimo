@@ -79,7 +79,7 @@ export default function ClinicDetailPage() {
   const canWrite = can(currentUser, 'clinics.write')
   const canDelete = can(currentUser, 'clinics.delete')
   const isNew = params.id === 'new'
-  const existing = useMemo(() => (!isNew && params.id ? getClinic(params.id) : null), [db, isNew, params.id])
+  const existing = useMemo(() => (!isNew && params.id ? getClinic(params.id) : null), [isNew, params.id])
 
   const [form, setForm] = useState<ClinicForm>(emptyForm)
   const [error, setError] = useState('')

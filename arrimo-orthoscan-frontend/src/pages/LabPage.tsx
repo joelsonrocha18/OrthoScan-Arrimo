@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useToast } from '../app/ToastProvider'
 import RegisterDeliveryLotModal from '../components/cases/RegisterDeliveryLotModal'
 import LabBoard from '../components/lab/LabBoard'
@@ -186,7 +186,7 @@ export default function LabPage() {
       return matchSearch && matchPriority && matchStatus && matchOverdue && matchAlerts
     })
   }, [alertsOnly, casesWithAlerts, items, overdueOnly, priority, search, status])
-  const isDeliveredToProfessional = (item: LabItem) => {
+  const isDeliveredToProfessional = useCallback((item: LabItem) => {
     if (!item.caseId) return false
     const caseItem = caseById.get(item.caseId)
     const hasAnyDeliveryLot = (caseItem?.deliveryLots?.length ?? 0) > 0
@@ -196,10 +196,10 @@ export default function LabPage() {
     }
     const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
     return tray?.state === 'entregue'
-  }
+  }, [caseById])
   const pipelineItems = useMemo(
     () => filteredItems.filter((item) => !isDeliveredToProfessional(item) && !isReworkItem(item)),
-    [filteredItems, caseById],
+    [filteredItems, isDeliveredToProfessional],
   )
   const reworkItems = useMemo(
     () => filteredItems.filter((item) => isReworkItem(item)),
@@ -247,7 +247,7 @@ export default function LabPage() {
 
       return [...caseScoped.values(), ...standalone]
     },
-    [filteredItems, caseById],
+    [filteredItems, caseById, isDeliveredToProfessional],
   )
   const kpis = useMemo(
     () => ({

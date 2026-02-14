@@ -26,6 +26,33 @@ const requiredRoles = [
   'receptionist',
 ]
 
+const requiredPermissionKeys = [
+  'dashboard.read',
+  'users.read',
+  'users.write',
+  'users.delete',
+  'dentists.read',
+  'dentists.write',
+  'dentists.delete',
+  'clinics.read',
+  'clinics.write',
+  'clinics.delete',
+  'patients.read',
+  'patients.write',
+  'patients.delete',
+  'scans.read',
+  'scans.write',
+  'scans.approve',
+  'cases.read',
+  'cases.write',
+  'lab.read',
+  'lab.write',
+  'docs.read',
+  'docs.write',
+  'settings.read',
+  'settings.write',
+]
+
 function now() {
   return new Date().toISOString()
 }
@@ -100,6 +127,26 @@ if (requiredRoles.every((role) => perms.includes(`${role}:`))) {
 } else {
   items.push(fail('rbac_mapping', 'Permissoes por role', 'Ha roles sem mapeamento em permissions.ts.'))
 }
+const missingPermissionKeysInApp = requiredPermissionKeys.filter((key) => !perms.includes(`'${key}'`))
+if (missingPermissionKeysInApp.length === 0) {
+  items.push(pass('rbac_permissions_app', 'Permissoes no app', `Todas as permissoes obrigatorias foram encontradas (${requiredPermissionKeys.length}).`))
+} else {
+  items.push(fail('rbac_permissions_app', 'Permissoes no app', `Permissoes ausentes no app: ${missingPermissionKeysInApp.join(', ')}`))
+}
+
+const permsMigration = read('supabase/migrations/0004_rbac_permissions.sql')
+const missingPermissionKeysInMigration = requiredPermissionKeys.filter((key) => !permsMigration.includes(`'${key}'`))
+if (missingPermissionKeysInMigration.length === 0) {
+  items.push(pass('rbac_permissions_migration', 'Permissoes na migration', 'Migration de permissoes contem todas as chaves esperadas.'))
+} else {
+  items.push(
+    fail(
+      'rbac_permissions_migration',
+      'Permissoes na migration',
+      `Permissoes ausentes na migration 0004: ${missingPermissionKeysInMigration.join(', ')}`,
+    ),
+  )
+}
 
 const scope = read('src/auth/scope.ts')
 if (scope.includes('listPatientsForUser') && scope.includes('listScansForUser') && scope.includes('listCasesForUser')) {
@@ -130,6 +177,13 @@ if (typecheck.ok) {
   items.push(pass('smoke_typecheck', 'Smoke typecheck', 'Typecheck executado com sucesso.'))
 } else {
   items.push(fail('smoke_typecheck', 'Smoke typecheck', 'Typecheck falhou.', typecheck.output.slice(0, 1500)))
+}
+
+const rbacSmoke = run('npm run test -- --run src/tests/rbac/rbacScope.test.ts')
+if (rbacSmoke.ok) {
+  items.push(pass('smoke_rbac_runtime', 'Smoke RBAC runtime', 'Teste de RBAC executado com sucesso.'))
+} else {
+  items.push(fail('smoke_rbac_runtime', 'Smoke RBAC runtime', 'Teste de RBAC falhou.', rbacSmoke.output.slice(0, 1500)))
 }
 
 const finishedAt = now()

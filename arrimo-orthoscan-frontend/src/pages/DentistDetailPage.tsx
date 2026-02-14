@@ -83,7 +83,7 @@ export default function DentistDetailPage() {
   const isNew = params.id === 'new'
   const existing = useMemo(
     () => (!isNew && params.id ? getDentist(params.id) : null),
-    [db, isNew, params.id],
+    [isNew, params.id],
   )
 
   const [form, setForm] = useState<DentistForm>(emptyForm)

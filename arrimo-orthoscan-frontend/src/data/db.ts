@@ -13,8 +13,8 @@ import { EXTRA_SLOTS, INTRA_SLOTS } from '../mocks/photoSlots'
 export const DB_KEY = 'arrimo_orthoscan_db_v1'
 const DB_MODE_KEY = 'arrimo_orthoscan_seed_mode_v1'
 const SEED_MODE = ((import.meta.env.VITE_LOCAL_SEED as string | undefined) ?? 'full') as 'full' | 'empty'
-const MASTER_EMAIL = (import.meta.env.VITE_LOCAL_MASTER_EMAIL as string | undefined) ?? 'grupoarrimoadm@gmail.com'
-const LOCAL_DEFAULT_PASSWORD = (import.meta.env.VITE_LOCAL_PASSWORD as string | undefined) ?? '*#Esparta321'
+const MASTER_EMAIL = (import.meta.env.VITE_LOCAL_MASTER_EMAIL as string | undefined)?.trim()
+const LOCAL_DEFAULT_PASSWORD = (import.meta.env.VITE_LOCAL_PASSWORD as string | undefined)?.trim()
 
 export type AppDb = {
   cases: Case[]
@@ -398,7 +398,7 @@ function seedUsers(): User[] {
     {
       id: 'user_master',
       name: 'Master Admin',
-      email: MASTER_EMAIL,
+      email: MASTER_EMAIL || 'master@orthoscan.local',
       password: LOCAL_DEFAULT_PASSWORD,
       role: 'master_admin',
       isActive: true,
@@ -476,11 +476,11 @@ function ensureMasterUser(users: User[]): User[] {
     next = { ...next, isActive: true }
     changed = true
   }
-  if (existing.email !== MASTER_EMAIL) {
+  if (MASTER_EMAIL && existing.email !== MASTER_EMAIL) {
     next = { ...next, email: MASTER_EMAIL }
     changed = true
   }
-  if (existing.password !== LOCAL_DEFAULT_PASSWORD) {
+  if (LOCAL_DEFAULT_PASSWORD && existing.password !== LOCAL_DEFAULT_PASSWORD) {
     next = { ...next, password: LOCAL_DEFAULT_PASSWORD }
     changed = true
   }
@@ -883,7 +883,7 @@ function migrateUser(raw: LegacyUser): User {
     id: raw.id,
     name: raw.name?.trim() || 'Usuario',
     email: raw.email?.trim() || 'user@orthoscan.local',
-    password: raw.password ?? LOCAL_DEFAULT_PASSWORD,
+    password: raw.password,
     role: raw.role ?? 'receptionist',
     isActive: raw.isActive ?? true,
     linkedDentistId: raw.linkedDentistId,

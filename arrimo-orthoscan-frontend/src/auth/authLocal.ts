@@ -20,7 +20,7 @@ export const authLocal: AuthProvider = {
     return profile
   },
   async signIn(email: string, password: string) {
-    const localPassword = import.meta.env.VITE_LOCAL_PASSWORD as string | undefined
+    const localPassword = (import.meta.env.VITE_LOCAL_PASSWORD as string | undefined)?.trim()
     let db = loadDb()
     let user = db.users.find((item) => item.email.toLowerCase() === email.toLowerCase() && item.isActive && !item.deletedAt)
     if (!user) {
@@ -29,6 +29,9 @@ export const authLocal: AuthProvider = {
     }
     if (!user) {
       throw new Error('Usuario nao encontrado.')
+    }
+    if (!user.password && !localPassword) {
+      throw new Error('Senha local nao configurada. Defina VITE_LOCAL_PASSWORD para ambiente local.')
     }
     const validPassword = user.password ? password === user.password : Boolean(localPassword) && password === localPassword
     if (!validPassword) {

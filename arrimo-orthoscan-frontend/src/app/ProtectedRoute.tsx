@@ -4,7 +4,6 @@ import { can } from '../auth/permissions'
 import type { Permission } from '../auth/permissions'
 import type { Role, User } from '../types/User'
 import Card from '../components/Card'
-import { useDb } from '../lib/useDb'
 import { getAuthProvider } from '../auth/authProvider'
 import type { SessionUser } from '../auth/session'
 
@@ -14,7 +13,6 @@ type ProtectedRouteProps = {
 }
 
 export default function ProtectedRoute({ permission, roles }: ProtectedRouteProps) {
-  const { db } = useDb()
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -38,7 +36,7 @@ export default function ProtectedRoute({ permission, roles }: ProtectedRouteProp
     return () => {
       active = false
     }
-  }, [db])
+  }, [])
 
   if (loading) {
     return (

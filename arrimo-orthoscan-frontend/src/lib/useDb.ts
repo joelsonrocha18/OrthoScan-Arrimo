@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { DB_KEY, loadDb } from '../data/db'
 import { onDbChanged } from './events'
 
 export function useDb() {
-  const [tick, setTick] = useState(0)
+  const [, setTick] = useState(0)
 
   useEffect(() => {
     const off = onDbChanged(() => {
@@ -21,7 +21,7 @@ export function useDb() {
     }
   }, [])
 
-  const db = useMemo(() => loadDb(), [tick])
+  const db = loadDb()
 
   const refresh = useCallback(() => {
     setTick((current) => current + 1)

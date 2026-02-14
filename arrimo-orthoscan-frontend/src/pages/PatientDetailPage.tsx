@@ -102,7 +102,7 @@ export default function PatientDetailPage() {
   const canDelete = can(currentUser, 'patients.delete')
   const canDocsWrite = can(currentUser, 'docs.write')
   const isNew = params.id === 'new'
-  const existing = useMemo(() => (!isNew && params.id ? getPatient(params.id) : null), [db, isNew, params.id])
+  const existing = useMemo(() => (!isNew && params.id ? getPatient(params.id) : null), [isNew, params.id])
   const scopedPatients = useMemo(() => listPatientsForUser(db, currentUser), [db, currentUser])
 
   const [form, setForm] = useState<PatientForm>(emptyForm)
@@ -114,7 +114,7 @@ export default function PatientDetailPage() {
 
   const dentists = useMemo(() => db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt), [db.dentists])
   const clinics = useMemo(() => db.clinics.filter((item) => !item.deletedAt), [db.clinics])
-  const docs = useMemo(() => (existing ? listPatientDocs(existing.id) : []), [db, existing])
+  const docs = useMemo(() => (existing ? listPatientDocs(existing.id) : []), [existing])
 
   const scans = useMemo(() => {
     if (!existing) return []

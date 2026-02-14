@@ -1,9 +1,9 @@
 {
-  "startedAt": "2026-02-11T09:44:09.133Z",
-  "finishedAt": "2026-02-11T09:52:46.904Z",
-  "durationMs": 517771,
+  "startedAt": "2026-02-14T02:03:47.927Z",
+  "finishedAt": "2026-02-14T02:07:18.148Z",
+  "durationMs": 210221,
   "summary": {
-    "pass": 9,
+    "pass": 12,
     "warn": 0,
     "fail": 0
   },
@@ -44,6 +44,20 @@
       "details": ""
     },
     {
+      "id": "rbac_permissions_app",
+      "title": "Permissoes no app",
+      "status": "pass",
+      "message": "Todas as permissoes obrigatorias foram encontradas (24).",
+      "details": ""
+    },
+    {
+      "id": "rbac_permissions_migration",
+      "title": "Permissoes na migration",
+      "status": "pass",
+      "message": "Migration de permissoes contem todas as chaves esperadas.",
+      "details": ""
+    },
+    {
       "id": "scope_fns",
       "title": "Escopo",
       "status": "pass",
@@ -69,6 +83,13 @@
       "title": "Smoke typecheck",
       "status": "pass",
       "message": "Typecheck executado com sucesso.",
+      "details": ""
+    },
+    {
+      "id": "smoke_rbac_runtime",
+      "title": "Smoke RBAC runtime",
+      "status": "pass",
+      "message": "Teste de RBAC executado com sucesso.",
       "details": ""
     }
   ]

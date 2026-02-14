@@ -6,25 +6,38 @@ import type { SessionUser } from '../auth/session'
 export const SESSION_USER_KEY = 'arrimo_session_user_id'
 export const SESSION_PROFILE_KEY = 'arrimo_session_profile'
 
+function readSession(key: string) {
+  const sessionValue = sessionStorage.getItem(key)
+  if (sessionValue !== null) return sessionValue
+  const legacyValue = localStorage.getItem(key)
+  if (legacyValue !== null) {
+    sessionStorage.setItem(key, legacyValue)
+    localStorage.removeItem(key)
+  }
+  return legacyValue
+}
+
 export function getSessionUserId() {
-  return localStorage.getItem(SESSION_USER_KEY)
+  return readSession(SESSION_USER_KEY)
 }
 
 export function setSessionUserId(userId: string) {
-  localStorage.setItem(SESSION_USER_KEY, userId)
+  sessionStorage.setItem(SESSION_USER_KEY, userId)
 }
 
 export function clearSession() {
+  sessionStorage.removeItem(SESSION_USER_KEY)
+  sessionStorage.removeItem(SESSION_PROFILE_KEY)
   localStorage.removeItem(SESSION_USER_KEY)
   localStorage.removeItem(SESSION_PROFILE_KEY)
 }
 
 export function setSessionProfile(profile: SessionUser) {
-  localStorage.setItem(SESSION_PROFILE_KEY, JSON.stringify(profile))
+  sessionStorage.setItem(SESSION_PROFILE_KEY, JSON.stringify(profile))
 }
 
 export function getSessionProfile(): SessionUser | null {
-  const raw = localStorage.getItem(SESSION_PROFILE_KEY)
+  const raw = readSession(SESSION_PROFILE_KEY)
   if (!raw) return null
   try {
     return JSON.parse(raw) as SessionUser
