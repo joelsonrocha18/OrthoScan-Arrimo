@@ -1,11 +1,11 @@
 # QA Report
 
-Generated at: 2026-02-10T23:51:18.001Z
+Generated at: 2026-02-14T21:20:20.870Z
 
 ## Summary
 
-- Diagnostics: PASS 9 | WARN 0 | FAIL 0
-- E2E (Playwright): expected 4 | unexpected 0 | flaky 0 | skipped 0
+- Diagnostics: PASS 12 | WARN 0 | FAIL 0
+- E2E (Playwright): expected 5 | unexpected 0 | flaky 0 | skipped 0
 - Build artifacts (dist): PASS
 
 ## Diagnostics Items
@@ -15,10 +15,13 @@ Generated at: 2026-02-10T23:51:18.001Z
 - [PASS] Rotas essenciais: Todas as rotas essenciais estao declaradas (8).
 - [PASS] Roles: Todas as roles obrigatorias foram encontradas.
 - [PASS] Permissoes por role: Mapeamento de permissoes encontrado para todas as roles.
+- [PASS] Permissoes no app: Todas as permissoes obrigatorias foram encontradas (24).
+- [PASS] Permissoes na migration: Migration de permissoes contem todas as chaves esperadas.
 - [PASS] Escopo: Funcoes de escopo principais encontradas.
 - [PASS] Upload + Camera: Componente contem accept/capture e fallback iOS.
 - [PASS] Smoke lint: Lint executado com sucesso.
 - [PASS] Smoke typecheck: Typecheck executado com sucesso.
+- [PASS] Smoke RBAC runtime: Teste de RBAC executado com sucesso.
 
 ## Evidence Paths
 
@@ -36,5 +39,5 @@ Generated at: 2026-02-10T23:51:18.001Z
 
 ## Duration
 
-- Diagnostics duration: 78.59 s
-- E2E duration: 210.04 s
+- Diagnostics duration: 126.04 s
+- E2E duration: 142.87 s

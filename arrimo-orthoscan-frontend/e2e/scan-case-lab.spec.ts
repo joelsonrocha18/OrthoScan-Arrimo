@@ -25,14 +25,18 @@ test('scan to case to lab flow', async ({ page }) => {
       const key = 'arrimo_orthoscan_db_v1'
       const raw = window.localStorage.getItem(key)
       if (!raw) return
-      const db = JSON.parse(raw) as any
-      db.cases = (db.cases ?? []).map((c: any) => {
-        if (c.id !== id) return c
+      const db = JSON.parse(raw) as { cases?: Array<Record<string, unknown>> }
+      const cases = Array.isArray(db.cases) ? db.cases : []
+      db.cases = cases.map((c) => {
+        const currentId = typeof c.id === 'string' ? c.id : ''
+        if (currentId !== id) return c
+        const currentContract =
+          typeof c.contract === 'object' && c.contract !== null ? (c.contract as Record<string, unknown>) : {}
         return {
           ...c,
           phase: 'contrato_pendente',
           budget: { value: 12000, createdAt: new Date().toISOString() },
-          contract: { ...(c.contract ?? {}), status: 'pendente' },
+          contract: { ...currentContract, status: 'pendente' },
           updatedAt: new Date().toISOString(),
         }
       })
