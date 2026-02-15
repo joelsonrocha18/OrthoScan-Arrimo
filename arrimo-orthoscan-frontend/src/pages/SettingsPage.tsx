@@ -16,6 +16,7 @@ import { addAuditEntry, applyTheme, loadSystemSettings, saveSystemSettings, type
 import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUser } from '../repo/userRepo'
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
 import { createOnboardingInvite } from '../repo/onboardingRepo'
+import { listClinicsSupabase, listDentistsSupabase, type ClinicOption, type DentistOption } from '../repo/directoryRepo'
 import { listProfiles } from '../repo/profileRepo'
 import type { Role, User } from '../types/User'
 import { useDb } from '../lib/useDb'
@@ -25,6 +26,10 @@ type ModalTab = 'personal' | 'access' | 'profile' | 'link'
 type PasswordMode = 'auto' | 'manual'
 const ROLE_LIST: Role[] = ['master_admin', 'dentist_admin', 'dentist_client', 'clinic_client', 'lab_tech', 'receptionist']
 const MODULE_ORDER: PermissionModule[] = ['Dashboard', 'Pacientes', 'Scans', 'Casos', 'Laboratorio', 'Usuarios', 'Configuracoes']
+
+// In Supabase mode, collaborator onboarding via link is for operational profiles only (no admin).
+const INVITE_ROLE_LIST: Role[] = ['dentist_client', 'clinic_client', 'lab_tech', 'receptionist']
+const ROLE_REQUIRES_LINK: Role[] = ['dentist_client', 'clinic_client', 'lab_tech', 'receptionist']
 
 function generatePassword(size = 12) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%'
@@ -47,9 +52,21 @@ export default function SettingsPage() {
   const { db } = useDb()
   const { addToast } = useToast()
   const currentUser = getCurrentUser(db)
-  const dentists = useMemo(() => db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt), [db.dentists])
-  const clinics = useMemo(() => db.clinics.filter((item) => !item.deletedAt), [db.clinics])
   const isSupabaseMode = DATA_MODE === 'supabase'
+
+  const dentistsLocal = useMemo(() => db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt), [db.dentists])
+  const clinicsLocal = useMemo(() => db.clinics.filter((item) => !item.deletedAt), [db.clinics])
+  const [clinicsSupabase, setClinicsSupabase] = useState<ClinicOption[]>([])
+  const [dentistsSupabase, setDentistsSupabase] = useState<DentistOption[]>([])
+  const clinicOptions = useMemo<ClinicOption[]>(() => {
+    if (isSupabaseMode) return clinicsSupabase
+    return clinicsLocal.map((clinic) => ({ id: clinic.id, tradeName: clinic.tradeName }))
+  }, [clinicsLocal, clinicsSupabase, isSupabaseMode])
+  const dentistOptions = useMemo<DentistOption[]>(() => {
+    if (isSupabaseMode) return dentistsSupabase
+    return dentistsLocal.map((dentist) => ({ id: dentist.id, name: dentist.name, clinicId: dentist.clinicId ?? null }))
+  }, [dentistsLocal, dentistsSupabase, isSupabaseMode])
+
   const [supabaseUsers, setSupabaseUsers] = useState<User[]>([])
   const users = useMemo(() => {
     if (isSupabaseMode) return supabaseUsers
@@ -70,6 +87,23 @@ export default function SettingsPage() {
   const canManageUsers = can(currentUser, 'users.write')
   const canDeleteUsers = can(currentUser, 'users.delete')
   const [inviteLink, setInviteLink] = useState('')
+
+  useEffect(() => {
+    let active = true
+    if (!isSupabaseMode) {
+      setClinicsSupabase([])
+      setDentistsSupabase([])
+      return
+    }
+    Promise.all([listClinicsSupabase(), listDentistsSupabase()]).then(([clinics, dentists]) => {
+      if (!active) return
+      setClinicsSupabase(clinics)
+      setDentistsSupabase(dentists)
+    })
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
 
   useEffect(() => {
     let active = true
@@ -125,7 +159,15 @@ export default function SettingsPage() {
     setError('')
     if (isSupabaseMode && !editingUser) {
       if (!form.name.trim()) return setError('Nome e obrigatorio.')
-      if (!form.linkedClinicId.trim()) return setError('Clinica vinculada e obrigatoria para convite.')
+      if (!INVITE_ROLE_LIST.includes(form.role)) {
+        return setError('Convite por link (Supabase) apenas para: Dentista Cliente, Clinica Cliente, Recepcao e Laboratorio.')
+      }
+      if (ROLE_REQUIRES_LINK.includes(form.role) && !form.linkedClinicId.trim()) {
+        return setError('Clinica vinculada e obrigatoria para este perfil.')
+      }
+      if (form.role === 'dentist_client' && !form.linkedDentistId.trim()) {
+        return setError('Dentista responsavel e obrigatorio para perfil Dentista Cliente.')
+      }
       const result = await createOnboardingInvite({
         fullName: form.name.trim(),
         cpf: form.cpf || undefined,
@@ -151,8 +193,8 @@ export default function SettingsPage() {
   }
 
   const linkage = (user: User) => {
-    if (user.role === 'dentist_client') return dentists.find((item) => item.id === user.linkedDentistId)?.name ?? '-'
-    if (user.role === 'clinic_client') return clinics.find((item) => item.id === user.linkedClinicId)?.tradeName ?? '-'
+    if (user.role === 'dentist_client') return dentistOptions.find((item) => item.id === user.linkedDentistId)?.name ?? '-'
+    if (user.role === 'clinic_client') return clinicOptions.find((item) => item.id === user.linkedClinicId)?.tradeName ?? '-'
     if (user.role === 'lab_tech') return 'Laboratorio'
     return '-'
   }
@@ -180,6 +222,13 @@ export default function SettingsPage() {
   }
 
   const modalPermissions = groupedPermissionsForRole(form.role)
+  const showLinkTab = !isSupabaseMode || ROLE_REQUIRES_LINK.includes(form.role)
+  const availableRoleList = isSupabaseMode && !editingUser ? INVITE_ROLE_LIST : ROLE_LIST
+  const dentistsForSelect = useMemo(() => {
+    if (form.role !== 'dentist_client') return dentistOptions
+    if (!form.linkedClinicId) return dentistOptions
+    return dentistOptions.filter((dentist) => (dentist.clinicId ? dentist.clinicId === form.linkedClinicId : true))
+  }, [dentistOptions, form.linkedClinicId, form.role])
 
   return (
     <AppShell breadcrumb={['Inicio', 'Configuracoes']}>
@@ -313,7 +362,7 @@ export default function SettingsPage() {
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {(isSupabaseMode
-              ? [{ id: 'personal', label: 'Dados pessoais' }, { id: 'profile', label: 'Perfil e permissoes' }, { id: 'link', label: 'Vinculo' }]
+              ? [{ id: 'personal', label: 'Dados pessoais' }, { id: 'profile', label: 'Perfil e permissoes' }, ...(showLinkTab ? [{ id: 'link', label: 'Vinculo' }] : [])]
               : [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (login e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, { id: 'link', label: 'Vinculo' }]
             ).map((tab) => <button key={tab.id} type="button" onClick={() => setModalTab(tab.id as ModalTab)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${modalTab === tab.id ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{tab.label}</button>)}
           </div>
@@ -337,8 +386,11 @@ export default function SettingsPage() {
               addToast({ type: 'info', title: `Acesso enviado para ${form.email || '-'}` })
             }}><Mail className="mr-2 h-4 w-4" />Enviar acesso por email</Button></div>
           </div> : null}
-          {modalTab === 'profile' ? <div className="mt-4 space-y-4"><div><label className="mb-1 block text-sm font-medium text-slate-700">Perfil</label><select value={form.role} onChange={(event) => setForm((c) => ({ ...c, role: event.target.value as Role }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{ROLE_LIST.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select></div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
-          {modalTab === 'link' ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinics.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsavel</label><select value={form.linkedDentistId} onChange={(event) => setForm((c) => ({ ...c, linkedDentistId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{dentists.map((dentist) => <option key={dentist.id} value={dentist.id}>{dentist.name}</option>)}</select></div></div> : null}
+          {modalTab === 'profile' ? <div className="mt-4 space-y-4"><div><label className="mb-1 block text-sm font-medium text-slate-700">Perfil</label><select value={form.role} onChange={(event) => {
+            const nextRole = event.target.value as Role
+            setForm((c) => ({ ...c, role: nextRole, linkedDentistId: nextRole === 'dentist_client' ? c.linkedDentistId : '' }))
+          }} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{availableRoleList.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select>{isSupabaseMode ? <p className="mt-1 text-xs text-slate-500">Convite por link apenas para perfis operacionais (nao-admin).</p> : null}</div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
+          {modalTab === 'link' && showLinkTab ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value, linkedDentistId: '' }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div>{form.role === 'dentist_client' ? <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsavel</label><select value={form.linkedDentistId} onChange={(event) => setForm((c) => ({ ...c, linkedDentistId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{dentistsForSelect.map((dentist) => <option key={dentist.id} value={dentist.id}>{dentist.name}</option>)}</select></div> : null}</div> : null}
           {inviteLink ? <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Link de cadastro</p>
             <p className="mt-1 break-all text-sm text-emerald-800">{inviteLink}</p>
