@@ -10,8 +10,16 @@ export async function createOnboardingInvite(payload: {
   dentistId?: string
 }) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+
+  // In production, Edge Functions that change data require the user's JWT (not the anon key).
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  if (sessionError) return { ok: false as const, error: sessionError.message }
+  const accessToken = sessionData.session?.access_token
+  if (!accessToken) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
+
   const { data, error } = await supabase.functions.invoke('create-onboarding-invite', {
     body: payload,
+    headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (error) return { ok: false as const, error: error.message }
   return {
@@ -52,4 +60,3 @@ export async function completeOnboardingInvite(payload: { token: string; email: 
   }
   return { ok: true as const }
 }
-
