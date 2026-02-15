@@ -15,6 +15,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import Card from '../components/Card'
 import AppShell from '../layouts/AppShell'
+import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import { useDb } from '../lib/useDb'
 
 type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success'
@@ -89,9 +90,8 @@ function SectionHeader(props: { title: string; subtitle: string }) {
 }
 
 export default function DashboardPage() {
-  // Keep the db hook so the page can be wired to real KPIs later.
-  // This refactor uses mock data to demonstrate the new operational dashboard.
-  useDb()
+  // Dashboard layout is refactored; KPIs are mocked but some can be derived from DB when available.
+  const { db } = useDb()
 
   const mock = {
     funnel: {
@@ -122,6 +122,22 @@ export default function DashboardPage() {
   const planningPending = Math.max(0, mock.funnel.scansRecent - mock.funnel.plansDone)
   const planningPendingTone: Tone = planningPending > 0 ? (planningPending >= 10 ? 'danger' : 'warning') : 'success'
   const reworksTone: Tone = mock.production.reworks > 0 ? 'danger' : 'neutral'
+
+  // "Reposicoes" (as you described) is the remaining aligners within closed-contract treatments:
+  // planned total - delivered to patient (based on delivery lots/installation).
+  const hasCases = db.cases.length > 0
+  const closedContractCases = db.cases.filter((caseItem) => {
+    const contractClosed = caseItem.contract?.status === 'aprovado'
+    const phaseClosed = caseItem.phase === 'contrato_aprovado' || caseItem.phase === 'em_producao' || caseItem.phase === 'finalizado'
+    return contractClosed || phaseClosed
+  })
+  const supplySummaries = closedContractCases.map((caseItem) => ({ caseItem, supply: getCaseSupplySummary(caseItem) }))
+  const remainingTotal = supplySummaries.reduce((acc, item) => acc + item.supply.remaining, 0)
+  const remainingCases = supplySummaries.filter((item) => item.supply.remaining > 0).length
+  const replenishmentAlerts = closedContractCases.flatMap((caseItem) => getReplenishmentAlerts(caseItem))
+  const overdueReplenishments = replenishmentAlerts.filter((item) => item.severity === 'urgent').length
+  const dueSoonReplenishments = replenishmentAlerts.filter((item) => item.severity === 'high' || item.severity === 'medium').length
+  const remainingTone: Tone = remainingTotal > 0 ? (overdueReplenishments > 0 ? 'danger' : dueSoonReplenishments > 0 ? 'warning' : 'info') : 'neutral'
 
   const pendingActions = [
     ...mock.funnel.pendingPlanning.slice(0, 4).map((name) => ({
@@ -217,10 +233,14 @@ export default function DashboardPage() {
               icon={<Truck className="h-4 w-4" />}
             />
             <KpiCard
-              title="Reposicoes"
-              value={String(mock.production.reworks)}
-              meta="Refacoes (critico)"
-              tone={reworksTone}
+              title="Reposicoes (saldo de placas)"
+              value={String(hasCases ? remainingTotal : mock.production.reworks)}
+              meta={
+                hasCases
+                  ? `${remainingCases} tratamentos com saldo${overdueReplenishments > 0 ? ` | ${overdueReplenishments} atrasados` : ''}`
+                  : 'Saldo pendente (mock)'
+              }
+              tone={hasCases ? remainingTone : reworksTone}
               icon={<BadgeAlert className="h-4 w-4" />}
             />
           </div>
@@ -262,7 +282,9 @@ export default function DashboardPage() {
                 <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Risco</p>
                   <p className="mt-1 text-sm font-semibold text-slate-100">Reposicoes</p>
-                  <p className="mt-1 text-xs text-slate-400">{mock.production.reworks} refacoes abertas</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {hasCases ? `${remainingTotal} placas em saldo` : `${mock.production.reworks} (mock)`}
+                  </p>
                 </div>
               </div>
             </Card>
