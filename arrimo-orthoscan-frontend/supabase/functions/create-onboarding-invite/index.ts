@@ -20,7 +20,9 @@ const APP_ROLES = new Set([
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  // `x-user-jwt` carries the authenticated user's access token (ES256) because the Functions gateway
+  // rejects it in the standard `Authorization` header as "Invalid JWT". We keep `Authorization` as anon.
+  'Access-Control-Allow-Headers': 'authorization, x-user-jwt, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -48,17 +50,20 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ ok: false, error: 'Method not allowed' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  // Use our own secret, since some Supabase-provided env keys are not available/consistent across plans.
+  const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
   const siteUrl = Deno.env.get('SITE_URL') ?? ''
 
   if (!supabaseUrl || !serviceRoleKey || !siteUrl) {
-    return json({ ok: false, error: 'Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY or SITE_URL.' }, 500)
+    return json({ ok: false, error: 'Missing SUPABASE_URL, SERVICE_ROLE_KEY or SITE_URL.' }, 500)
   }
 
-  const authHeader = req.headers.get('Authorization') ?? ''
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    global: { headers: { Authorization: authHeader } },
-  })
+  const supabase = createClient(supabaseUrl, serviceRoleKey)
+
+  // The Functions gateway must receive `Authorization: Bearer <anon>` when the project issues ES256 JWTs.
+  // We pass the authenticated user access token via `x-user-jwt` and validate it explicitly here.
+  const userJwtRaw = req.headers.get('x-user-jwt') ?? ''
+  const userJwt = userJwtRaw.replace(/^Bearer\\s+/i, '').trim()
 
   const payload = (await req.json()) as Payload
   if (!payload.fullName?.trim() || !payload.role?.trim() || !payload.clinicId?.trim()) {
@@ -71,7 +76,7 @@ Deno.serve(async (req) => {
   const {
     data: { user: actor },
     error: actorError,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser(userJwt)
 
   if (actorError || !actor) return json({ ok: false, error: 'Unauthorized.' }, 401)
 

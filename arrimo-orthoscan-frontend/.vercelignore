@@ -1,0 +1,18 @@
+# Vercel uploads files from the project root directory.
+# Ignore local-only artifacts to avoid exceeding upload limits.
+node_modules
+**/node_modules
+.git
+.vercel
+dist
+desktop-dist
+test-results
+reports
+playwright-report
+coverage
+*.log
+dev.log
+dev-live.log
+.env
+.env.*
+!.env.example

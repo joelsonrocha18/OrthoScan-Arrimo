@@ -16,10 +16,14 @@ export async function createOnboardingInvite(payload: {
   if (sessionError) return { ok: false as const, error: sessionError.message }
   const accessToken = sessionData.session?.access_token
   if (!accessToken) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
 
   const { data, error } = await supabase.functions.invoke('create-onboarding-invite', {
     body: payload,
-    headers: { Authorization: `Bearer ${accessToken}` },
+    // Functions gateway rejects ES256 auth JWT as "Invalid JWT" when used as Authorization.
+    // Send anon in Authorization and pass the real user JWT via `x-user-jwt`.
+    headers: { Authorization: `Bearer ${anonKey}`, 'x-user-jwt': accessToken },
   })
   if (error) return { ok: false as const, error: error.message }
   return {

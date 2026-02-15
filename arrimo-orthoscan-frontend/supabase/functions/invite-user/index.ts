@@ -17,40 +17,53 @@ const APP_ROLES = new Set([
   'receptionist',
 ])
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-user-jwt, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 })
+    return json({ ok: false, error: 'Method not allowed' }, 405)
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
   const siteUrl = Deno.env.get('SITE_URL') ?? ''
   const inviteRedirect = Deno.env.get('INVITE_REDIRECT_URL') ?? siteUrl
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return new Response(JSON.stringify({ ok: false, error: 'Missing Supabase env vars.' }), { status: 500 })
+    return json({ ok: false, error: 'Missing Supabase env vars.' }, 500)
   }
 
-  const authHeader = req.headers.get('Authorization') ?? ''
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    global: { headers: { Authorization: authHeader } },
-  })
+  const supabase = createClient(supabaseUrl, serviceRoleKey)
+  const userJwtRaw = req.headers.get('x-user-jwt') ?? ''
+  const userJwt = userJwtRaw.replace(/^Bearer\\s+/i, '').trim()
 
   const payload = (await req.json()) as InvitePayload
   if (!payload.email || !payload.role || !payload.clinicId) {
-    return new Response(JSON.stringify({ ok: false, error: 'Missing payload fields.' }), { status: 400 })
+    return json({ ok: false, error: 'Missing payload fields.' }, 400)
   }
   if (!APP_ROLES.has(payload.role)) {
-    return new Response(JSON.stringify({ ok: false, error: 'Invalid role.' }), { status: 400 })
+    return json({ ok: false, error: 'Invalid role.' }, 400)
   }
 
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser()
+  } = await supabase.auth.getUser(userJwt)
 
   if (authError || !user) {
-    return new Response(JSON.stringify({ ok: false, error: 'Unauthorized.' }), { status: 401 })
+    return json({ ok: false, error: 'Unauthorized.' }, 401)
   }
 
   const { data: profile } = await supabase
@@ -61,20 +74,20 @@ Deno.serve(async (req) => {
 
   const role = profile?.role ?? 'dentist_client'
   if (!['master_admin', 'dentist_admin'].includes(role)) {
-    return new Response(JSON.stringify({ ok: false, error: 'Forbidden.' }), { status: 403 })
+    return json({ ok: false, error: 'Forbidden.' }, 403)
   }
   if (role === 'dentist_admin' && profile?.clinic_id !== payload.clinicId) {
-    return new Response(JSON.stringify({ ok: false, error: 'Clinic mismatch.' }), { status: 403 })
+    return json({ ok: false, error: 'Clinic mismatch.' }, 403)
   }
   if (role === 'dentist_admin' && ['master_admin', 'dentist_admin'].includes(payload.role)) {
-    return new Response(JSON.stringify({ ok: false, error: 'Role not allowed for actor.' }), { status: 403 })
+    return json({ ok: false, error: 'Role not allowed for actor.' }, 403)
   }
 
   const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(payload.email, {
     redirectTo: inviteRedirect || siteUrl,
   })
   if (inviteError || !inviteData?.user) {
-    return new Response(JSON.stringify({ ok: false, error: inviteError?.message ?? 'Invite failed.' }), { status: 400 })
+    return json({ ok: false, error: inviteError?.message ?? 'Invite failed.' }, 400)
   }
 
   const { error: upsertError } = await supabase.from('profiles').upsert({
@@ -87,8 +100,8 @@ Deno.serve(async (req) => {
     is_active: true,
   })
   if (upsertError) {
-    return new Response(JSON.stringify({ ok: false, error: upsertError.message }), { status: 400 })
+    return json({ ok: false, error: upsertError.message }, 400)
   }
 
-  return new Response(JSON.stringify({ ok: true, invitedEmail: payload.email }), { status: 200 })
+  return json({ ok: true, invitedEmail: payload.email }, 200)
 })

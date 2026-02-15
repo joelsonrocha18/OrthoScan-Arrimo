@@ -37,9 +37,9 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ ok: false, error: 'Method not allowed' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   if (!supabaseUrl || !serviceRoleKey) {
-    return json({ ok: false, error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.' }, 500)
+    return json({ ok: false, error: 'Missing SUPABASE_URL or SERVICE_ROLE_KEY.' }, 500)
   }
 
   const payload = (await req.json()) as Payload

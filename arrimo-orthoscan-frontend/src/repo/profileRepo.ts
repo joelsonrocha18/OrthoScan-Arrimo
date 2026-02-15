@@ -84,10 +84,12 @@ export async function inviteUser(payload: {
   if (sessionError) return { ok: false as const, error: sessionError.message }
   const accessToken = sessionData.session?.access_token
   if (!accessToken) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
 
   const { data, error } = await supabase.functions.invoke('invite-user', {
     body: payload,
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${anonKey}`, 'x-user-jwt': accessToken },
   })
   if (error) return { ok: false as const, error: error.message }
   return { ok: true as const, data }
