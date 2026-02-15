@@ -35,8 +35,12 @@ export async function createOnboardingInvite(payload: {
 
 export async function validateOnboardingInvite(token: string) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
   const { data, error } = await supabase.functions.invoke('validate-onboarding-invite', {
     body: { token },
+    // Force anon auth so this works even if a user is currently logged in (ES256 session JWT breaks gateway auth).
+    headers: { Authorization: `Bearer ${anonKey}` },
   })
   if (error) return { ok: false as const, error: error.message, expired: false, used: false }
   if (!data?.ok) {
@@ -55,8 +59,11 @@ export async function validateOnboardingInvite(token: string) {
 
 export async function completeOnboardingInvite(payload: { token: string; email: string; password: string }) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
   const { data, error } = await supabase.functions.invoke('complete-onboarding-invite', {
     body: payload,
+    headers: { Authorization: `Bearer ${anonKey}` },
   })
   if (error) return { ok: false as const, error: error.message }
   if (!data?.ok) {
