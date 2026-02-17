@@ -49,6 +49,19 @@ export type CaseInstallation = {
   note?: string
   deliveredUpper?: number
   deliveredLower?: number
+  patientDeliveryLots?: Array<{
+    id: string
+    fromTray: number
+    toTray: number
+    quantity: number
+    deliveredAt: string
+    note?: string
+    createdAt: string
+  }>
+  actualChangeDates?: Array<{
+    trayNumber: number
+    changedAt: string
+  }>
 }
 
 export type Case = {

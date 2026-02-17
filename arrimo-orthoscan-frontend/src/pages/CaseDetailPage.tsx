@@ -142,18 +142,30 @@ function buildChangeSchedule(
   deliveredUpper: number,
   deliveredLower: number,
   trays: CaseTray[],
-): Array<{ trayNumber: number; changeDate: string; superiorState: TrayState | 'nao_aplica'; inferiorState: TrayState | 'nao_aplica' }> {
+  actualChangeDateByTray: Map<number, string>,
+): Array<{ trayNumber: number; changeDate: string; actualChangeDate?: string; superiorState: TrayState | 'nao_aplica'; inferiorState: TrayState | 'nao_aplica' }> {
   if (!installedAt) return []
   const max = Math.max(totalUpper, totalLower)
-  return Array.from({ length: max }, (_, index) => {
+  const schedule: Array<{ trayNumber: number; changeDate: string; actualChangeDate?: string; superiorState: TrayState | 'nao_aplica'; inferiorState: TrayState | 'nao_aplica' }> = []
+  let nextPlannedDate = installedAt
+  for (let index = 0; index < max; index += 1) {
     const trayNumber = index + 1
-    return {
+    if (trayNumber > 1) {
+      nextPlannedDate = addDays(nextPlannedDate, changeEveryDays)
+    }
+    const actualChangeDate = actualChangeDateByTray.get(trayNumber)
+    if (actualChangeDate) {
+      nextPlannedDate = actualChangeDate
+    }
+    schedule.push({
       trayNumber,
-      changeDate: addDays(installedAt, index * changeEveryDays),
+      changeDate: nextPlannedDate,
+      actualChangeDate,
       superiorState: scheduleStateForTray(trayNumber, totalUpper, deliveredUpper, trays),
       inferiorState: scheduleStateForTray(trayNumber, totalLower, deliveredLower, trays),
-    }
-  })
+    })
+  }
+  return schedule
 }
 
 function countScheduleStates(schedule: ReturnType<typeof buildChangeSchedule>) {
@@ -225,6 +237,29 @@ export default function CaseDetailPage() {
     }),
     [deliveredLower, deliveredToDentist.lower, deliveredToDentist.upper, deliveredUpper],
   )
+  const actualChangeDateByTray = useMemo(() => {
+    const map = new Map<number, string>()
+    ;(currentCase?.installation?.actualChangeDates ?? []).forEach((entry) => {
+      if (entry.trayNumber > 0 && entry.changedAt) {
+        map.set(entry.trayNumber, entry.changedAt)
+      }
+    })
+    return map
+  }, [currentCase])
+  const patientDeliveryDateByTray = useMemo(() => {
+    const map = new Map<number, string>()
+    const lots = [...(currentCase?.installation?.patientDeliveryLots ?? [])].sort((a, b) =>
+      a.deliveredAt.localeCompare(b.deliveredAt),
+    )
+    lots.forEach((lot) => {
+      for (let tray = lot.fromTray; tray <= lot.toTray; tray += 1) {
+        if (!map.has(tray)) {
+          map.set(tray, lot.deliveredAt)
+        }
+      }
+    })
+    return map
+  }, [currentCase])
   const progressUpper = useMemo(() => caseProgress(totalUpper, deliveredUpper), [deliveredUpper, totalUpper])
   const progressLower = useMemo(() => caseProgress(totalLower, deliveredLower), [deliveredLower, totalLower])
   const changeSchedule = useMemo(
@@ -238,9 +273,10 @@ export default function CaseDetailPage() {
             progressUpper.delivered,
             progressLower.delivered,
             currentCase.trays,
+            actualChangeDateByTray,
           )
         : [],
-    [currentCase, progressLower.delivered, progressUpper.delivered, totalLower, totalUpper],
+    [actualChangeDateByTray, currentCase, progressLower.delivered, progressUpper.delivered, totalLower, totalUpper],
   )
   const scheduleSummary = useMemo(() => countScheduleStates(changeSchedule), [changeSchedule])
   const inProductionCount = useMemo(() => scheduleSummary.em_producao + scheduleSummary.controle_qualidade, [scheduleSummary])
@@ -586,6 +622,28 @@ export default function CaseDetailPage() {
     addToast({ type: 'success', title: 'Instalacao registrada' })
   }
 
+  const saveActualChangeDate = (trayNumber: number, changedAt: string) => {
+    if (!canWrite) return
+    if (!currentCase.installation) return
+    const nextActualDates = (currentCase.installation.actualChangeDates ?? []).filter(
+      (entry) => entry.trayNumber !== trayNumber,
+    )
+    if (changedAt) {
+      nextActualDates.push({ trayNumber, changedAt })
+    }
+    const updated = updateCase(currentCase.id, {
+      installation: {
+        ...currentCase.installation,
+        actualChangeDates: nextActualDates.length > 0 ? nextActualDates : undefined,
+      },
+    })
+    if (!updated) {
+      addToast({ type: 'error', title: 'Troca real', message: 'Nao foi possivel atualizar a data real de troca.' })
+      return
+    }
+    addToast({ type: 'success', title: 'Troca real atualizada' })
+  }
+
   const renderScanFile = (item: NonNullable<Case['scanFiles']>[number], labelOverride?: string) => {
     const availability = fileAvailability(item)
     const status = item.status ?? 'ok'
@@ -797,12 +855,13 @@ export default function CaseDetailPage() {
               </p>
             )}
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Data de inicio do tratamento</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                {currentCase.installation ? 'Data da entrega ao paciente' : 'Data de inicio do tratamento'}
+              </label>
               <Input
                 type="date"
                 value={installationDate}
                 onChange={(event) => setInstallationDate(event.target.value)}
-                disabled={Boolean(currentCase.installation?.installedAt)}
               />
             </div>
             <div>
@@ -993,6 +1052,7 @@ export default function CaseDetailPage() {
                 <tr>
                   <th className="px-3 py-2 font-semibold">Placa</th>
                   <th className="px-3 py-2 font-semibold">Troca prevista</th>
+                  <th className="px-3 py-2 font-semibold">Data real de troca</th>
                   <th className="px-3 py-2 font-semibold">Superior</th>
                   <th className="px-3 py-2 font-semibold">Inferior</th>
                   <th className="px-3 py-2 font-semibold">Entrega paciente</th>
@@ -1001,7 +1061,7 @@ export default function CaseDetailPage() {
               <tbody>
                 {changeSchedule.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-3 py-4 text-slate-500">
+                    <td colSpan={6} className="px-3 py-4 text-slate-500">
                       Registre a instalacao para gerar agenda de trocas.
                     </td>
                   </tr>
@@ -1010,11 +1070,21 @@ export default function CaseDetailPage() {
                     <tr key={row.trayNumber} className="border-t border-slate-100">
                       <td className="px-3 py-2 font-semibold text-slate-800">#{row.trayNumber}</td>
                       <td className="px-3 py-2 text-slate-700">{new Date(`${row.changeDate}T00:00:00`).toLocaleDateString('pt-BR')}</td>
+                      <td className="px-3 py-2 text-slate-700">
+                        <Input
+                          type="date"
+                          value={row.actualChangeDate ?? ''}
+                          onChange={(event) => saveActualChangeDate(row.trayNumber, event.target.value)}
+                          disabled={!canWrite}
+                        />
+                      </td>
                       <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.superiorState)}`}>{scheduleStateLabel(row.superiorState)}</td>
                       <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.inferiorState)}`}>{scheduleStateLabel(row.inferiorState)}</td>
                       <td className="px-3 py-2 text-slate-700">
                         {row.trayNumber <= deliveredPairCount
-                          ? new Date(`${row.changeDate}T00:00:00`).toLocaleDateString('pt-BR')
+                          ? (patientDeliveryDateByTray.get(row.trayNumber)
+                              ? new Date(`${patientDeliveryDateByTray.get(row.trayNumber)}T00:00:00`).toLocaleDateString('pt-BR')
+                              : '-')
                           : '-'}
                       </td>
                     </tr>

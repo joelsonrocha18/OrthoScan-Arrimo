@@ -291,6 +291,26 @@ export function registerCaseInstallation(
 
   const normalizedDeliveredUpper = deliveredUpper
   const normalizedDeliveredLower = deliveredLower
+  const currentPairDelivered = Math.max(0, Math.min(currentDeliveredUpper, currentDeliveredLower))
+  const nextPairDelivered = Math.max(0, Math.min(normalizedDeliveredUpper, normalizedDeliveredLower))
+  const newPairQty = Math.max(0, nextPairDelivered - currentPairDelivered)
+  if (newPairQty > 0 && !payload.installedAt) {
+    return { ok: false, error: 'Data da entrega ao paciente e obrigatoria.' }
+  }
+  const patientDeliveryLots = [...(currentInstallation?.patientDeliveryLots ?? [])]
+  if (newPairQty > 0) {
+    const fromTray = currentPairDelivered + 1
+    const toTray = fromTray + newPairQty - 1
+    patientDeliveryLots.push({
+      id: `patient_lot_${Date.now()}`,
+      fromTray,
+      toTray,
+      quantity: newPairQty,
+      deliveredAt: payload.installedAt,
+      note: payload.note?.trim() || undefined,
+      createdAt: nowIso(),
+    })
+  }
   const finishedByRemaining = normalizedDeliveredUpper >= upperTotal && normalizedDeliveredLower >= lowerTotal
 
   const updated = updateCase(caseId, {
@@ -299,6 +319,8 @@ export function registerCaseInstallation(
       note: payload.note?.trim() || currentInstallation?.note,
       deliveredUpper: normalizedDeliveredUpper,
       deliveredLower: normalizedDeliveredLower,
+      patientDeliveryLots,
+      actualChangeDates: currentInstallation?.actualChangeDates,
     },
     status: finishedByRemaining || targetCase.status === 'finalizado' ? 'finalizado' : 'em_entrega',
     phase: finishedByRemaining || targetCase.phase === 'finalizado' ? 'finalizado' : 'em_producao',
