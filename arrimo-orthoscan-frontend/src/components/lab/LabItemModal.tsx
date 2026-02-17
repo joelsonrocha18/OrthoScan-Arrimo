@@ -251,14 +251,8 @@ export default function LabItemModal({
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Vinculo do caso</label>
-            <p className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              {selectedCase
-                ? `Guia atual: ${item?.requestCode ?? selectedCase.treatmentCode ?? selectedCase.id.slice(-6)} | Caso vinculado: ${selectedCase.patientName} (${selectedCase.treatmentCode ?? selectedCase.id.slice(-6)})`
-                : 'Caso vinculado: item legado sem caseId'}
-            </p>
             {selectedCase ? (
-              <p className="mt-2 text-xs text-slate-600">
+              <p className="text-xs text-slate-600">
                 Tratamento: Sup {selectedCase.totalTraysUpper ?? selectedCase.totalTrays} | Inf {selectedCase.totalTraysLower ?? selectedCase.totalTrays} | Troca a cada {selectedCase.changeEveryDays} dias
               </p>
             ) : null}
