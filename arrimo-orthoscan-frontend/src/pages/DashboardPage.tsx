@@ -94,7 +94,20 @@ export default function DashboardPage() {
 
   const queueItems = db.labItems.filter((item) => item.status === 'aguardando_iniciar')
   const inProductionItems = db.labItems.filter((item) => item.status === 'em_producao' || item.status === 'controle_qualidade')
-  const readyToDeliverItems = db.labItems.filter((item) => item.status === 'prontas')
+  const caseById = new Map(db.cases.map((caseItem) => [caseItem.id, caseItem]))
+  const isReworkItem = (notes?: string, requestKind?: string) => {
+    const note = (notes ?? '').toLowerCase()
+    return requestKind === 'reconfeccao' || note.includes('rework') || note.includes('defeito') || note.includes('reconfecc')
+  }
+  const readyToDeliverItems = db.labItems.filter((item) => {
+    if (!item.caseId) return false
+    if ((item.requestKind ?? 'producao') !== 'producao') return false
+    if (item.status !== 'prontas') return false
+    if (isReworkItem(item.notes, item.requestKind)) return false
+    const caseItem = caseById.get(item.caseId)
+    const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
+    return tray?.state === 'pronta'
+  })
   const reworkItems = db.labItems.filter((item) => item.requestKind === 'reconfeccao' && item.status !== 'prontas')
 
   const inTreatmentCases = db.cases.filter((caseItem) => caseItem.phase !== 'finalizado' && caseItem.status !== 'finalizado')
