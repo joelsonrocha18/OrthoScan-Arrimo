@@ -100,8 +100,9 @@ function scheduleStateForTray(
   if (trayNumber <= deliveredCount) return 'entregue'
   const tray = trays.find((item) => item.trayNumber === trayNumber)
   if (!tray) return 'pendente'
-  // "entregue" no tray representa entrega ao dentista/LAB. Para paciente, so conta pelo deliveredCount.
-  if (tray.state === 'entregue') return 'pronta'
+  // "entregue" no tray representa entrega ao profissional/LAB.
+  // No contexto do paciente, so conta "entregue" pelo deliveredCount.
+  if (tray.state === 'entregue') return 'pendente'
   return tray.state
 }
 
@@ -130,7 +131,7 @@ function timelineStateForTray(
 ): TrayState {
   const deliveredPair = Math.max(0, Math.min(deliveredUpper, deliveredLower))
   if (tray.trayNumber <= deliveredPair) return 'entregue'
-  if (tray.state === 'entregue') return 'pronta'
+  if (tray.state === 'entregue') return 'pendente'
   return tray.state
 }
 
