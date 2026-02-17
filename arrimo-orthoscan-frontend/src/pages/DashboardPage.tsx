@@ -144,26 +144,34 @@ export default function DashboardPage() {
 
   const pendingActions = [
     ...planningPendingItems.slice(0, 4).map((item) => ({
+      key: `planning_${item.id}`,
       title: `Planejamento pendente: ${item.patientName}`,
       meta: 'Triagem / setup digital',
+      osCode: item.serviceOrderCode ?? '-',
       tone: 'warning' as const,
       href: '/app/scans',
     })),
     ...budgetsOpenItems.slice(0, 3).map((item) => ({
+      key: `budget_${item.id}`,
       title: `Orcamento em aberto: ${item.patientName}`,
       meta: 'Gerar/enviar proposta',
+      osCode: item.treatmentCode ?? '-',
       tone: 'info' as const,
       href: '/app/cases',
     })),
     ...contractsToCloseItems.slice(0, 3).map((item) => ({
+      key: `contract_${item.id}`,
       title: `Contrato a fechar: ${item.patientName}`,
       meta: 'Aguardando assinatura',
+      osCode: item.treatmentCode ?? '-',
       tone: 'neutral' as const,
       href: '/app/cases',
     })),
     ...reworkItems.slice(0, 3).map((item) => ({
+      key: `rework_${item.id}`,
       title: `Reposicao (refaccao): ${item.patientName}`,
       meta: 'Prioridade alta',
+      osCode: item.requestCode ?? (item.caseId ? caseById.get(item.caseId)?.treatmentCode : undefined) ?? '-',
       tone: 'danger' as const,
       href: '/app/lab',
     })),
@@ -303,12 +311,13 @@ export default function DashboardPage() {
               ) : (
                 pendingActions.map((item) => (
                   <Link
-                    key={item.title}
+                    key={item.key}
                     to={item.href}
                     className="flex items-start justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950 px-4 py-3 hover:bg-slate-900/40"
                   >
                     <div>
                       <p className="text-sm font-semibold text-slate-100">{item.title}</p>
+                      <p className="mt-1 text-xs text-slate-400">OS: {item.osCode}</p>
                       <p className="mt-1 text-xs text-slate-400">{item.meta}</p>
                     </div>
                     <span
