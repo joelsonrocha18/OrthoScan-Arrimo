@@ -251,6 +251,11 @@ export default function LabItemModal({
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
+            {mode === 'edit' ? (
+              <p className="mb-2 text-sm text-slate-700">
+                OS: {item?.requestCode ?? selectedCase?.treatmentCode ?? '-'}
+              </p>
+            ) : null}
             {selectedCase ? (
               <p className="text-xs text-slate-600">
                 Tratamento: Sup {selectedCase.totalTraysUpper ?? selectedCase.totalTrays} | Inf {selectedCase.totalTraysLower ?? selectedCase.totalTrays} | Troca a cada {selectedCase.changeEveryDays} dias
