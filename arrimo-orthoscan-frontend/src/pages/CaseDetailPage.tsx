@@ -410,6 +410,7 @@ export default function CaseDetailPage() {
       return
     }
 
+    let keepModalOpen = false
     if (trayState !== trayInCase.state) {
       const stateResult = setTrayState(currentCase.id, selectedTray.trayNumber, trayState)
       if (!stateResult.ok) {
@@ -453,6 +454,7 @@ export default function CaseDetailPage() {
             addToast({ type: 'error', title: 'Reconfeccao', message: created.sync.message })
             return
           }
+          keepModalOpen = true
         }
 
         if (!hasOpenReworkProduction) {
@@ -478,6 +480,7 @@ export default function CaseDetailPage() {
             addToast({ type: 'error', title: 'Rework', message: production.sync.message })
             return
           }
+          keepModalOpen = true
         }
 
         if (!hasOpenRework || !hasOpenReworkProduction) {
@@ -491,7 +494,9 @@ export default function CaseDetailPage() {
     )
     updateCase(currentCase.id, { trays: nextTrays })
     addToast({ type: 'success', title: 'Placa atualizada' })
-    setSelectedTray(null)
+    if (!keepModalOpen) {
+      setSelectedTray(null)
+    }
   }
 
   const handleAttachmentSave = () => {
