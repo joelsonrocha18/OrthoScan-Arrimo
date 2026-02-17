@@ -73,6 +73,23 @@ function addDays(baseIsoDate: string, days: number) {
   return base.toISOString().slice(0, 10)
 }
 
+function deliveredToDentistByArch(caseItem: Case | null) {
+  if (!caseItem) return { upper: 0, lower: 0 }
+  return (caseItem.deliveryLots ?? []).reduce(
+    (acc, lot) => {
+      const qty = Math.max(0, Math.trunc(lot.quantity ?? 0))
+      if (lot.arch === 'superior') acc.upper += qty
+      if (lot.arch === 'inferior') acc.lower += qty
+      if (lot.arch === 'ambos') {
+        acc.upper += qty
+        acc.lower += qty
+      }
+      return acc
+    },
+    { upper: 0, lower: 0 },
+  )
+}
+
 function scheduleStateForTray(
   trayNumber: number,
   maxForArch: number,
@@ -200,6 +217,14 @@ export default function CaseDetailPage() {
   const totalLower = currentCase?.totalTraysLower ?? currentCase?.totalTrays ?? 0
   const deliveredUpper = currentCase?.installation?.deliveredUpper ?? 0
   const deliveredLower = currentCase?.installation?.deliveredLower ?? 0
+  const deliveredToDentist = useMemo(() => deliveredToDentistByArch(currentCase), [currentCase])
+  const readyToDeliverPatient = useMemo(
+    () => ({
+      upper: Math.max(0, deliveredToDentist.upper - deliveredUpper),
+      lower: Math.max(0, deliveredToDentist.lower - deliveredLower),
+    }),
+    [deliveredLower, deliveredToDentist.lower, deliveredToDentist.upper, deliveredUpper],
+  )
   const progressUpper = useMemo(() => caseProgress(totalUpper, deliveredUpper), [deliveredUpper, totalUpper])
   const progressLower = useMemo(() => caseProgress(totalLower, deliveredLower), [deliveredLower, totalLower])
   const changeSchedule = useMemo(
@@ -532,6 +557,22 @@ export default function CaseDetailPage() {
       addToast({ type: 'error', title: 'Instalacao', message: 'Informe quantidades validas por arcada.' })
       return
     }
+    if (Math.trunc(upperCount) > readyToDeliverPatient.upper) {
+      addToast({
+        type: 'error',
+        title: 'Instalacao',
+        message: `Superior disponivel para paciente: ${readyToDeliverPatient.upper} (entregue pelo LAB ao profissional e ainda nao consumido).`,
+      })
+      return
+    }
+    if (Math.trunc(lowerCount) > readyToDeliverPatient.lower) {
+      addToast({
+        type: 'error',
+        title: 'Instalacao',
+        message: `Inferior disponivel para paciente: ${readyToDeliverPatient.lower} (entregue pelo LAB ao profissional e ainda nao consumido).`,
+      })
+      return
+    }
     const result = registerCaseInstallation(currentCase.id, {
       installedAt: installationDate,
       note: installationNote.trim() || undefined,
@@ -746,6 +787,15 @@ export default function CaseDetailPage() {
                 {currentCase.installation.deliveredUpper ?? 0} | Inf {currentCase.installation.deliveredLower ?? 0}
               </p>
             ) : null}
+            {(readyToDeliverPatient.upper > 0 || readyToDeliverPatient.lower > 0) ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                Prontas para entrega ao paciente (saldo do profissional): Sup {readyToDeliverPatient.upper} | Inf {readyToDeliverPatient.lower}
+              </p>
+            ) : (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                Sem saldo pronto para entrega ao paciente no momento.
+              </p>
+            )}
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Data de inicio do tratamento</label>
               <Input
