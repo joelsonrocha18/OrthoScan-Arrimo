@@ -22,7 +22,7 @@ const phaseLabelMap: Record<CasePhase, string> = {
   orcamento: 'Orcamento',
   contrato_pendente: 'Contrato pendente',
   contrato_aprovado: 'Contrato aprovado',
-  em_producao: 'Em producao',
+  em_producao: 'Em tratamento',
   finalizado: 'Finalizado',
 }
 
@@ -276,6 +276,16 @@ export default function CaseDetailPage() {
         : [],
     [actualChangeDateByTray, currentCase, progressLower.delivered, progressUpper.delivered, totalLower, totalUpper],
   )
+  const patientProgressUpper = useMemo(() => {
+    const todayIso = new Date().toISOString().slice(0, 10)
+    const progressed = changeSchedule.filter((row) => row.trayNumber <= totalUpper && row.changeDate <= todayIso).length
+    return caseProgress(totalUpper, progressed)
+  }, [changeSchedule, totalUpper])
+  const patientProgressLower = useMemo(() => {
+    const todayIso = new Date().toISOString().slice(0, 10)
+    const progressed = changeSchedule.filter((row) => row.trayNumber <= totalLower && row.changeDate <= todayIso).length
+    return caseProgress(totalLower, progressed)
+  }, [changeSchedule, totalLower])
   const scheduleSummary = useMemo(() => countScheduleStates(changeSchedule), [changeSchedule])
   const inProductionCount = useMemo(() => scheduleSummary.em_producao + scheduleSummary.controle_qualidade, [scheduleSummary])
   const readyCount = useMemo(() => scheduleSummary.prontas, [scheduleSummary])
@@ -705,7 +715,7 @@ export default function CaseDetailPage() {
     <AppShell breadcrumb={['Início', 'Tratamentos', patientDisplayName]}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Caso: {patientDisplayName}</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Paciente: {patientDisplayName}</h1>
           {currentCase.treatmentCode ? (
             <p className="mt-1 text-sm font-semibold text-slate-700">
               Identificacao: {currentCase.treatmentCode} ({currentCase.treatmentOrigin === 'interno' ? 'Interno ARRIMO' : 'Externo'})
@@ -735,20 +745,20 @@ export default function CaseDetailPage() {
         <Card>
           <p className="text-sm text-slate-500">Progresso - Superior</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {progressUpper.delivered}/{progressUpper.total}
+            {patientProgressUpper.delivered}/{patientProgressUpper.total}
           </p>
           <div className="mt-3 h-2 rounded-full bg-slate-200">
-            <div className="h-2 rounded-full bg-brand-500" style={{ width: `${progressUpper.percent}%` }} />
+            <div className="h-2 rounded-full bg-brand-500" style={{ width: `${patientProgressUpper.percent}%` }} />
           </div>
         </Card>
 
         <Card>
           <p className="text-sm text-slate-500">Progresso - Inferior</p>
           <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {progressLower.delivered}/{progressLower.total}
+            {patientProgressLower.delivered}/{patientProgressLower.total}
           </p>
           <div className="mt-3 h-2 rounded-full bg-slate-200">
-            <div className="h-2 rounded-full bg-brand-500" style={{ width: `${progressLower.percent}%` }} />
+            <div className="h-2 rounded-full bg-brand-500" style={{ width: `${patientProgressLower.percent}%` }} />
           </div>
         </Card>
 
