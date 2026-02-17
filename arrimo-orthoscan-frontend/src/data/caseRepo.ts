@@ -8,7 +8,7 @@ const trayTransitionMap: Record<TrayState, TrayState[]> = {
   pendente: ['pendente', 'em_producao'],
   em_producao: ['em_producao', 'pronta', 'rework'],
   pronta: ['pronta', 'entregue', 'rework'],
-  entregue: ['entregue'],
+  entregue: ['entregue', 'rework'],
   rework: ['rework', 'em_producao', 'pronta'],
 }
 
@@ -85,7 +85,7 @@ export function setTrayState(caseId: string, trayNumber: number, newState: TrayS
   if (!allowed.includes(newState)) {
     return { ok: false, error: 'Transicao de estado invalida para esta placa.' }
   }
-  if (tray.state === 'entregue' && newState !== 'entregue') {
+  if (tray.state === 'entregue' && newState !== 'entregue' && newState !== 'rework') {
     return { ok: false, error: 'Nao e permitido regredir uma placa ja entregue ao dentista.' }
   }
 
