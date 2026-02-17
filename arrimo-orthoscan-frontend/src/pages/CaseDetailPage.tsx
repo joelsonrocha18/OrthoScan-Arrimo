@@ -57,10 +57,6 @@ const scanArchLabelMap: Record<'superior' | 'inferior' | 'mordida', string> = {
 
 const slotLabelMap = Object.fromEntries([...INTRA_SLOTS, ...EXTRA_SLOTS].map((slot) => [slot.id, slot.label]))
 
-function formatDate(dateIso: string) {
-  return new Date(`${dateIso}T00:00:00`).toLocaleDateString('pt-BR')
-}
-
 function caseProgress(total: number, delivered: number) {
   const safeDelivered = Math.max(0, Math.min(delivered, total))
   const safeTotal = Math.max(0, total)
@@ -715,8 +711,9 @@ export default function CaseDetailPage() {
               Identificacao: {currentCase.treatmentCode} ({currentCase.treatmentOrigin === 'interno' ? 'Interno ARRIMO' : 'Externo'})
             </p>
           ) : null}
-          <p className="mt-2 text-sm text-slate-500">
-            Scan em {formatDate(currentCase.scanDate)} - {currentCase.totalTrays} placas - troca a cada {currentCase.changeEveryDays} dias
+          <p className="mt-2 text-sm font-medium text-slate-600">
+            Planejamento: Superior {currentCase.totalTraysUpper ?? '-'} | Inferior {currentCase.totalTraysLower ?? '-'} |
+            Troca {currentCase.changeEveryDays} dias | Attachments: {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
           </p>
           <div className="mt-3 flex items-center gap-3">
             <Badge tone={phaseToneMap[currentCase.phase]}>{phaseLabelMap[currentCase.phase]}</Badge>
@@ -724,10 +721,6 @@ export default function CaseDetailPage() {
               Ultima atualizacao: {new Date(currentCase.updatedAt).toLocaleString('pt-BR')}
             </span>
           </div>
-          <p className="mt-2 text-xs font-medium text-slate-600">
-            Planejamento: Superior {currentCase.totalTraysUpper ?? '-'} | Inferior {currentCase.totalTraysLower ?? '-'} |
-            Troca {currentCase.changeEveryDays} dias | Attachments: {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
-          </p>
         </div>
 
         <Link
@@ -763,7 +756,7 @@ export default function CaseDetailPage() {
           <p className="text-sm text-slate-500">Resumo</p>
           <p className="mt-2 text-sm text-slate-700">Em producao/CQ: {inProductionCount}</p>
           <p className="mt-1 text-sm text-slate-700">Prontas: {readyCount}</p>
-          <p className="mt-1 text-sm text-slate-700">Entregues: {labSummary.entregues}</p>
+          <p className="mt-1 text-sm text-slate-700">Entregues: Sup {progressUpper.delivered} | Inf {progressLower.delivered}</p>
         </Card>
       </section>
 
