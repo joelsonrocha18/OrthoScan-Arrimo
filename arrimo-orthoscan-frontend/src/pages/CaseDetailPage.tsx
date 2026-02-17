@@ -195,6 +195,19 @@ function slotLabel(slotId?: string) {
   return slotLabelMap[slotId] ?? slotId
 }
 
+function formatBrlCurrencyInput(raw: string) {
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  const value = Number(digits) / 100
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function parseBrlCurrencyInput(raw: string) {
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return 0
+  return Number(digits) / 100
+}
+
 export default function CaseDetailPage() {
   const params = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -361,7 +374,11 @@ export default function CaseDetailPage() {
     }
     if (initializedCaseIdRef.current === currentCase.id) return
     initializedCaseIdRef.current = currentCase.id
-    setBudgetValue(currentCase.budget?.value ? String(currentCase.budget.value) : '')
+    setBudgetValue(
+      currentCase.budget?.value
+        ? currentCase.budget.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : '',
+    )
     setBudgetNotes(currentCase.budget?.notes ?? '')
     setContractNotes(currentCase.contract?.notes ?? '')
     setInstallationDate(currentCase.installation?.installedAt?.slice(0, 10) ?? new Date().toISOString().slice(0, 10))
@@ -566,8 +583,7 @@ export default function CaseDetailPage() {
 
   const closeBudget = () => {
     if (!canWrite) return
-    const normalized = budgetValue.trim().replace(/\./g, '').replace(',', '.')
-    const parsed = Number(normalized)
+    const parsed = parseBrlCurrencyInput(budgetValue)
     if (!Number.isFinite(parsed) || parsed <= 0) {
       addToast({ type: 'error', title: 'Orcamento', message: 'Informe um valor valido para o orcamento.' })
       return
@@ -844,10 +860,10 @@ export default function CaseDetailPage() {
                 <div className="mt-2 grid gap-2">
                   <Input
                     type="text"
-                    inputMode="decimal"
-                    placeholder="Valor do orcamento"
+                    inputMode="numeric"
+                    placeholder="R$ 0,00"
                     value={budgetValue}
-                    onChange={(event) => setBudgetValue(event.target.value)}
+                    onChange={(event) => setBudgetValue(formatBrlCurrencyInput(event.target.value))}
                   />
                   <textarea
                     rows={2}
