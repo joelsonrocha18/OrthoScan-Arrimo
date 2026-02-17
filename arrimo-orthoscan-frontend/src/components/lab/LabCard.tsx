@@ -22,6 +22,12 @@ const priorityToneMap: Record<LabItem['priority'], 'neutral' | 'info' | 'danger'
   Urgente: 'danger',
 }
 
+const archLabelMap: Record<LabItem['arch'], string> = {
+  superior: 'Superior',
+  inferior: 'Inferior',
+  ambos: 'Ambas',
+}
+
 function formatDate(dateIso: string) {
   return new Date(`${dateIso}T00:00:00`).toLocaleDateString('pt-BR')
 }
@@ -37,17 +43,28 @@ export default function LabCard({
   hasPrevious,
   hasNext,
 }: LabCardProps) {
+  const isRework = item.requestKind === 'reconfeccao' || (item.notes ?? '').toLowerCase().includes('rework')
+  const cardTone = isRework ? 'border border-red-300 bg-red-50/40' : ''
+
   return (
-    <Card className="p-4">
+    <Card className={`p-4 ${cardTone}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           {item.requestCode ? <p className="text-xs font-medium text-slate-600">Guia: {item.requestCode}</p> : null}
           <p className="text-sm font-semibold text-slate-900">Paciente: {item.patientName}</p>
-          {!item.requestCode ? (
+          {!item.requestCode && !isRework ? (
             <p className="mt-1 text-xs text-slate-500">Placa #{item.trayNumber}</p>
+          ) : null}
+          {isRework ? (
+            <div className="mt-1 space-y-0.5">
+              <p className="text-xs font-semibold text-red-700">Rework solicitado</p>
+              <p className="text-xs text-slate-700">Placa(s): #{item.trayNumber}</p>
+              <p className="text-xs text-slate-700">Arcada: {archLabelMap[item.arch]}</p>
+            </div>
           ) : null}
         </div>
         <div className="flex flex-col items-end gap-1">
+          {isRework ? <Badge tone="danger">Rework</Badge> : null}
           <Badge tone={priorityToneMap[item.priority]}>{item.priority}</Badge>
         </div>
       </div>

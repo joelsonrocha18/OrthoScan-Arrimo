@@ -63,6 +63,12 @@ const statusOptions: Array<{ value: LabStatus; label: string }> = [
   { value: 'prontas', label: 'Prontas' },
 ]
 
+const archLabelMap: Record<'superior' | 'inferior' | 'ambos', string> = {
+  superior: 'Superior',
+  inferior: 'Inferior',
+  ambos: 'Ambas',
+}
+
 export default function LabItemModal({
   mode,
   item,
@@ -110,6 +116,10 @@ export default function LabItemModal({
   }, [mode, item, open])
 
   const canDelete = mode === 'edit' && Boolean(item)
+  const isReworkItem = useMemo(
+    () => mode === 'edit' && Boolean(item) && (item?.requestKind === 'reconfeccao' || (item?.notes ?? '').toLowerCase().includes('rework')),
+    [item, mode],
+  )
   const planQtyTotal = Math.trunc(Number(form.plannedUpperQty || 0)) + Math.trunc(Number(form.plannedLowerQty || 0))
   const automaticStatus = planQtyTotal > 0 ? 'em_producao' : 'aguardando_iniciar'
 
@@ -236,12 +246,14 @@ export default function LabItemModal({
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">
-              {mode === 'create' ? 'Nova Solicitacao' : 'Detalhes do Item'}
+              {mode === 'create' ? 'Nova Solicitacao' : isReworkItem ? 'Detalhes do Rework' : 'Detalhes do Item'}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
               {mode === 'create'
                 ? 'Cadastre um novo item na fila do laboratorio.'
-                : 'Edite prioridade, prazo, observacoes e status.'}
+                : isReworkItem
+                  ? 'Rework da esteira: ajuste prazo, observacoes e status.'
+                  : 'Edite prioridade, prazo, observacoes e status.'}
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -255,6 +267,12 @@ export default function LabItemModal({
               <p className="mb-2 text-sm text-slate-700">
                 OS: {item?.requestCode ?? selectedCase?.treatmentCode ?? '-'}
               </p>
+            ) : null}
+            {isReworkItem && item ? (
+              <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                <p className="font-semibold">Placa(s) solicitada(s) para rework: #{item.trayNumber}</p>
+                <p className="text-xs">Arcada: {archLabelMap[item.arch]}</p>
+              </div>
             ) : null}
             {selectedCase ? (
               <p className="text-xs text-slate-600">
