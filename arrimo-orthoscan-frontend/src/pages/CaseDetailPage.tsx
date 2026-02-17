@@ -260,6 +260,7 @@ export default function CaseDetailPage() {
     })
     return map
   }, [currentCase])
+  const fallbackPatientDeliveryDate = currentCase?.installation?.installedAt
   const progressUpper = useMemo(() => caseProgress(totalUpper, deliveredUpper), [deliveredUpper, totalUpper])
   const progressLower = useMemo(() => caseProgress(totalLower, deliveredLower), [deliveredLower, totalLower])
   const changeSchedule = useMemo(
@@ -1055,7 +1056,7 @@ export default function CaseDetailPage() {
                   <th className="px-3 py-2 font-semibold">Data real de troca</th>
                   <th className="px-3 py-2 font-semibold">Superior</th>
                   <th className="px-3 py-2 font-semibold">Inferior</th>
-                  <th className="px-3 py-2 font-semibold">Entrega paciente</th>
+                  <th className="px-3 py-2 font-semibold">Data de entrega</th>
                 </tr>
               </thead>
               <tbody>
@@ -1073,7 +1074,7 @@ export default function CaseDetailPage() {
                       <td className="px-3 py-2 text-slate-700">
                         <Input
                           type="date"
-                          value={row.actualChangeDate ?? ''}
+                          value={row.actualChangeDate ?? row.changeDate}
                           onChange={(event) => saveActualChangeDate(row.trayNumber, event.target.value)}
                           disabled={!canWrite}
                         />
@@ -1082,9 +1083,10 @@ export default function CaseDetailPage() {
                       <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.inferiorState)}`}>{scheduleStateLabel(row.inferiorState)}</td>
                       <td className="px-3 py-2 text-slate-700">
                         {row.trayNumber <= deliveredPairCount
-                          ? (patientDeliveryDateByTray.get(row.trayNumber)
-                              ? new Date(`${patientDeliveryDateByTray.get(row.trayNumber)}T00:00:00`).toLocaleDateString('pt-BR')
-                              : '-')
+                          ? (() => {
+                              const deliveredAt = patientDeliveryDateByTray.get(row.trayNumber) ?? fallbackPatientDeliveryDate
+                              return deliveredAt ? new Date(`${deliveredAt}T00:00:00`).toLocaleDateString('pt-BR') : '-'
+                            })()
                           : '-'}
                       </td>
                     </tr>
