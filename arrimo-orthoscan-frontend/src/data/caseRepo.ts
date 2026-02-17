@@ -70,6 +70,31 @@ export function updateCase(id: string, patch: Partial<Case>): Case | null {
   return updatedCase
 }
 
+export function deleteCase(id: string): RepoResult<null> {
+  const db = loadDb()
+  const target = db.cases.find((item) => item.id === id)
+  if (!target) {
+    return { ok: false, error: 'Caso nao encontrado.' }
+  }
+
+  db.cases = db.cases.filter((item) => item.id !== id)
+  db.labItems = db.labItems.filter((item) => item.caseId !== id)
+  db.scans = db.scans.map((item) =>
+    item.linkedCaseId === id
+      ? { ...item, linkedCaseId: undefined, serviceOrderCode: undefined, updatedAt: nowIso() }
+      : item,
+  )
+
+  pushAudit(db, {
+    entity: 'case',
+    entityId: id,
+    action: 'case.delete',
+    message: `Caso ${target.treatmentCode ?? target.id} excluido com itens LAB vinculados.`,
+  })
+  saveDb(db)
+  return { ok: true, data: null }
+}
+
 export function setTrayState(caseId: string, trayNumber: number, newState: TrayState): RepoResult<Case> {
   const targetCase = getCase(caseId)
   if (!targetCase) {

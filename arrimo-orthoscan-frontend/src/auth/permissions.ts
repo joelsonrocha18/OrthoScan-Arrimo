@@ -19,6 +19,7 @@ export type Permission =
   | 'scans.approve'
   | 'cases.read'
   | 'cases.write'
+  | 'cases.delete'
   | 'lab.read'
   | 'lab.write'
   | 'docs.read'
@@ -57,6 +58,7 @@ const allPermissions: Permission[] = [
   'scans.approve',
   'cases.read',
   'cases.write',
+  'cases.delete',
   'lab.read',
   'lab.write',
   'docs.read',
@@ -117,6 +119,7 @@ const permissionLabels: Record<Permission, string> = {
   'scans.approve': 'Aprovar escaneamentos',
   'cases.read': 'Visualizar casos',
   'cases.write': 'Criar/editar casos',
+  'cases.delete': 'Excluir casos',
   'lab.read': 'Visualizar laboratorio',
   'lab.write': 'Gerenciar laboratorio',
   'docs.read': 'Visualizar documentos',
@@ -144,6 +147,7 @@ const permissionModules: Record<Permission, PermissionModule> = {
   'scans.approve': 'Scans',
   'cases.read': 'Casos',
   'cases.write': 'Casos',
+  'cases.delete': 'Casos',
   'lab.read': 'Laboratorio',
   'lab.write': 'Laboratorio',
   'docs.read': 'Documentos',
@@ -154,6 +158,7 @@ const permissionModules: Record<Permission, PermissionModule> = {
 
 export function can(user: User | null | undefined, permission: Permission) {
   if (!user) return false
+  if (user.role === 'master_admin') return true
   return rolePermissions[user.role]?.includes(permission) ?? false
 }
 

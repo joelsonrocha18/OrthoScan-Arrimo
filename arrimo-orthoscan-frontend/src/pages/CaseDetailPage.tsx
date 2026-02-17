@@ -6,7 +6,7 @@ import Button from '../components/Button'
 import Card from '../components/Card'
 import ImageCaptureInput from '../components/files/ImageCaptureInput'
 import Input from '../components/Input'
-import { addAttachment, clearCaseScanFileError, getCase, markCaseScanFileError, registerCaseInstallation, setTrayState, updateCase } from '../data/caseRepo'
+import { addAttachment, clearCaseScanFileError, deleteCase, getCase, markCaseScanFileError, registerCaseInstallation, setTrayState, updateCase } from '../data/caseRepo'
 import { addLabItem, generateLabOrder } from '../data/labRepo'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
@@ -202,6 +202,7 @@ export default function CaseDetailPage() {
   const { addToast } = useToast()
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'cases.write')
+  const canDeleteCase = can(currentUser, 'cases.delete')
   const [selectedTray, setSelectedTray] = useState<CaseTray | null>(null)
   const [trayState, setSelectedTrayState] = useState<TrayState>('pendente')
   const [reworkArch, setReworkArch] = useState<'superior' | 'inferior' | 'ambos'>('ambos')
@@ -591,6 +592,19 @@ export default function CaseDetailPage() {
     addToast({ type: 'success', title: 'Contrato aprovado', message: `Aprovado em ${new Date(approvedAt).toLocaleString('pt-BR')}` })
   }
 
+  const handleDeleteCase = () => {
+    if (!canDeleteCase) return
+    const confirmed = window.confirm('Tem certeza que deseja excluir este tratamento? Esta acao remove os itens LAB vinculados.')
+    if (!confirmed) return
+    const result = deleteCase(currentCase.id)
+    if (!result.ok) {
+      addToast({ type: 'error', title: 'Erro ao excluir tratamento', message: result.error })
+      return
+    }
+    addToast({ type: 'success', title: 'Tratamento excluido' })
+    navigate('/app/cases', { replace: true })
+  }
+
   const createLabOrder = () => {
     if (!canWrite) return
     const result = generateLabOrder(currentCase.id)
@@ -767,12 +781,19 @@ export default function CaseDetailPage() {
           </div>
         </div>
 
-        <Link
-          to="/app/cases"
-          className="inline-flex h-10 items-center rounded-lg bg-slate-200 px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-300"
-        >
-          Voltar
-        </Link>
+        <div className="flex items-center gap-2">
+          {canDeleteCase ? (
+            <Button variant="secondary" className="text-red-600 hover:text-red-700" onClick={handleDeleteCase}>
+              Excluir tratamento
+            </Button>
+          ) : null}
+          <Link
+            to="/app/cases"
+            className="inline-flex h-10 items-center rounded-lg bg-slate-200 px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-300"
+          >
+            Voltar
+          </Link>
+        </div>
       </section>
 
       <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
