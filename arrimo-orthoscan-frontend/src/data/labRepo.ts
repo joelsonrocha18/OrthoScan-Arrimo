@@ -505,16 +505,49 @@ export function moveLabItem(id: string, status: LabStatus) {
 
 export function deleteLabItem(id: string) {
   const db = loadDb()
-  const removed = db.labItems.find((item) => item.id === id)
-  db.labItems = db.labItems.filter((item) => item.id !== id)
-  if (removed) {
+  const removed = db.labItems.find((item) => item.id === id) ?? null
+  if (!removed) {
+    saveDb(db)
+    return
+  }
+  const isReworkProduction = (item: LabItem) =>
+    (item.requestKind ?? 'producao') === 'producao' && (item.notes ?? '').toLowerCase().includes('rework da placa')
+
+  const idsToRemove = new Set<string>([id])
+  if (removed.caseId) {
+    if (removed.requestKind === 'reconfeccao') {
+      db.labItems
+        .filter(
+          (item) =>
+            item.id !== removed.id &&
+            item.caseId === removed.caseId &&
+            item.trayNumber === removed.trayNumber &&
+            isReworkProduction(item),
+        )
+        .forEach((item) => idsToRemove.add(item.id))
+    } else if (isReworkProduction(removed)) {
+      db.labItems
+        .filter(
+          (item) =>
+            item.id !== removed.id &&
+            item.caseId === removed.caseId &&
+            item.trayNumber === removed.trayNumber &&
+            item.requestKind === 'reconfeccao',
+        )
+        .forEach((item) => idsToRemove.add(item.id))
+    }
+  }
+
+  const removedItems = db.labItems.filter((item) => idsToRemove.has(item.id))
+  db.labItems = db.labItems.filter((item) => !idsToRemove.has(item.id))
+  removedItems.forEach((item) => {
     pushAudit(db, {
       entity: 'lab',
-      entityId: removed.id,
+      entityId: item.id,
       action: 'lab.delete',
-      message: `OS ${removed.requestCode ?? removed.id} removida.`,
+      message: `OS ${item.requestCode ?? item.id} removida.`,
     })
-  }
+  })
   saveDb(db)
 }
 
