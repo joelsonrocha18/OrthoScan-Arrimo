@@ -143,7 +143,14 @@ export function linkScanToCase(scanId: string, caseId: string) {
 
 export function deleteScan(id: string) {
   const db = loadDb()
+  const target = db.scans.find((item) => item.id === id)
+  if (!target) return
   db.scans = db.scans.filter((item) => item.id !== id)
+  db.cases = db.cases.map((item) =>
+    item.sourceScanId === id
+      ? { ...item, sourceScanId: undefined, updatedAt: nowIso() }
+      : item,
+  )
   pushAudit(db, { entity: 'scan', entityId: id, action: 'scan.delete', message: 'Exame removido.' })
   saveDb(db)
 }

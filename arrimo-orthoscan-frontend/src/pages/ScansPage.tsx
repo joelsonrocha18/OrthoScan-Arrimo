@@ -15,6 +15,7 @@ import {
   clearScanAttachmentError,
   createCaseFromScan,
   createScan,
+  deleteScan,
   markScanAttachmentError,
   rejectScan,
 } from '../data/scanRepo'
@@ -60,6 +61,7 @@ export default function ScansPage() {
   const canRead = can(currentUser, 'scans.read')
   const canWrite = can(currentUser, 'scans.write')
   const canApprove = can(currentUser, 'scans.approve')
+  const canDelete = can(currentUser, 'scans.delete')
   const canCreateCase = can(currentUser, 'cases.write')
   const [createOpen, setCreateOpen] = useState(false)
   const [details, setDetails] = useState<Scan | null>(null)
@@ -79,6 +81,17 @@ export default function ScansPage() {
   const handleReject = (id: string) => {
     rejectScan(id)
     addToast({ type: 'info', title: 'Scan reprovado' })
+  }
+
+  const handleDelete = (scan: Scan) => {
+    if (!canDelete) return
+    const confirmed = window.confirm(`Tem certeza que deseja excluir o escaneamento de ${scan.patientName}?`)
+    if (!confirmed) return
+    deleteScan(scan.id)
+    if (details?.id === scan.id) {
+      setDetails(null)
+    }
+    addToast({ type: 'success', title: 'Escaneamento excluido' })
   }
 
   const addAttachment = async (
@@ -231,6 +244,11 @@ export default function ScansPage() {
                                   </Button>
                                 </>
                               ) : null}
+                              {canDelete ? (
+                                <Button size="sm" variant="secondary" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(scan)}>
+                                  Excluir
+                                </Button>
+                              ) : null}
                             </>
                           ) : null}
                           {scan.status === 'aprovado' ? (
@@ -243,12 +261,24 @@ export default function ScansPage() {
                                   Criar Caso
                                 </Button>
                               ) : null}
+                              {canDelete ? (
+                                <Button size="sm" variant="secondary" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(scan)}>
+                                  Excluir
+                                </Button>
+                              ) : null}
                             </>
                           ) : null}
                           {scan.status === 'reprovado' ? (
-                            <Button size="sm" variant="ghost" onClick={() => setDetails(scan)}>
-                              Ver
-                            </Button>
+                            <>
+                              <Button size="sm" variant="ghost" onClick={() => setDetails(scan)}>
+                                Ver
+                              </Button>
+                              {canDelete ? (
+                                <Button size="sm" variant="secondary" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(scan)}>
+                                  Excluir
+                                </Button>
+                              ) : null}
+                            </>
                           ) : null}
                           {scan.status === 'convertido' ? (
                             <>
@@ -259,6 +289,11 @@ export default function ScansPage() {
                                 <Link to={`/app/cases/${scan.linkedCaseId}`} className="inline-flex h-9 items-center rounded-lg bg-brand-500 px-3 text-sm font-semibold text-white">
                                   Abrir Caso
                                 </Link>
+                              ) : null}
+                              {canDelete ? (
+                                <Button size="sm" variant="secondary" className="text-red-600 hover:text-red-700" onClick={() => handleDelete(scan)}>
+                                  Excluir
+                                </Button>
                               ) : null}
                             </>
                           ) : null}

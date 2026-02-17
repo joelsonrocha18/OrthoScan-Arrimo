@@ -17,6 +17,7 @@ export type Permission =
   | 'scans.read'
   | 'scans.write'
   | 'scans.approve'
+  | 'scans.delete'
   | 'cases.read'
   | 'cases.write'
   | 'cases.delete'
@@ -56,6 +57,7 @@ const allPermissions: Permission[] = [
   'scans.read',
   'scans.write',
   'scans.approve',
+  'scans.delete',
   'cases.read',
   'cases.write',
   'cases.delete',
@@ -117,6 +119,7 @@ const permissionLabels: Record<Permission, string> = {
   'scans.read': 'Visualizar escaneamentos',
   'scans.write': 'Enviar escaneamentos',
   'scans.approve': 'Aprovar escaneamentos',
+  'scans.delete': 'Excluir escaneamentos',
   'cases.read': 'Visualizar casos',
   'cases.write': 'Criar/editar casos',
   'cases.delete': 'Excluir casos',
@@ -145,6 +148,7 @@ const permissionModules: Record<Permission, PermissionModule> = {
   'scans.read': 'Scans',
   'scans.write': 'Scans',
   'scans.approve': 'Scans',
+  'scans.delete': 'Scans',
   'cases.read': 'Casos',
   'cases.write': 'Casos',
   'cases.delete': 'Casos',
