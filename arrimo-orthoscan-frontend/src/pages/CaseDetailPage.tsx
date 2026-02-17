@@ -93,8 +93,10 @@ function scheduleStateForTray(
   trays: CaseTray[],
 ): TrayState | 'nao_aplica' {
   if (trayNumber > maxForArch) return 'nao_aplica'
-  if (trayNumber <= deliveredCount) return 'entregue'
   const tray = trays.find((item) => item.trayNumber === trayNumber)
+  // Rework sempre prevalece na visao de tratamento/tabela.
+  if (tray?.state === 'rework') return 'rework'
+  if (trayNumber <= deliveredCount) return 'entregue'
   if (!tray) return 'pendente'
   // "entregue" no tray representa entrega ao profissional/LAB.
   // No contexto do paciente, so conta "entregue" pelo deliveredCount.
@@ -125,6 +127,7 @@ function timelineStateForTray(
   deliveredUpper: number,
   deliveredLower: number,
 ): TrayState {
+  if (tray.state === 'rework') return 'rework'
   const deliveredPair = Math.max(0, Math.min(deliveredUpper, deliveredLower))
   if (tray.trayNumber <= deliveredPair) return 'entregue'
   if (tray.state === 'entregue') return 'pendente'

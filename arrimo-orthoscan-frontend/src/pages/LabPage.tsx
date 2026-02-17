@@ -227,6 +227,7 @@ export default function LabPage() {
         },
       )
       const caseScoped = new Map<string, LabItem>()
+      const explicitRework: LabItem[] = []
       const standalone: LabItem[] = []
       const score = (item: LabItem) => {
         if (item.requestKind === 'reposicao_programada' && item.status === 'aguardando_iniciar') return 4
@@ -236,6 +237,10 @@ export default function LabPage() {
       }
 
       raw.forEach((item) => {
+        if (item.requestKind === 'reconfeccao') {
+          explicitRework.push(item)
+          return
+        }
         if (!item.caseId) {
           standalone.push(item)
           return
@@ -251,7 +256,7 @@ export default function LabPage() {
         }
       })
 
-      return [...caseScoped.values(), ...standalone]
+      return [...explicitRework, ...caseScoped.values(), ...standalone]
     },
     [filteredItems, caseById, isDeliveredToProfessional],
   )
