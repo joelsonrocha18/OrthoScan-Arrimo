@@ -58,6 +58,14 @@ function isDeliveredToDentist(
   return tray?.state === 'entregue'
 }
 
+function nextPendingTrayNumber(caseItem: { trays: Array<{ trayNumber: number; state: string }> }) {
+  const pending = caseItem.trays
+    .filter((tray) => tray.state !== 'entregue')
+    .map((tray) => tray.trayNumber)
+    .sort((a, b) => a - b)
+  return pending[0]
+}
+
 function ensureProgrammedReplenishments(db: ReturnType<typeof loadDb>) {
   const today = new Date().toISOString().slice(0, 10)
   let created = false
@@ -574,6 +582,10 @@ export function createAdvanceLabOrder(
   if (invalidPlan) {
     return { ok: false as const, error: invalidPlan }
   }
+  const nextTrayNumber = nextPendingTrayNumber(linkedCase)
+  if (!nextTrayNumber) {
+    return { ok: false as const, error: 'Nao ha placas pendentes para gerar OS antecipada.' }
+  }
 
   const now = nowIso()
   const today = now.slice(0, 10)
@@ -593,6 +605,7 @@ export function createAdvanceLabOrder(
     requestCode,
     requestKind: 'producao',
     expectedReplacementDate: source.expectedReplacementDate ?? source.dueDate,
+    trayNumber: nextTrayNumber,
     plannedUpperQty,
     plannedLowerQty,
     planningDefinedAt: now,

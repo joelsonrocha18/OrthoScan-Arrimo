@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { addLabItem, canMoveToStatus, generateLabOrder, listLabItems, moveLabItem, nextStatus } from '../../data/labRepo'
+import { addLabItem, canMoveToStatus, createAdvanceLabOrder, generateLabOrder, listLabItems, moveLabItem, nextStatus } from '../../data/labRepo'
 import { getCase } from '../../data/caseRepo'
 import { loadDb, saveDb } from '../../data/db'
 import { clearQaSeed, seedQaData } from '../seed'
@@ -73,5 +73,26 @@ describe('LAB flow and commercial gate', () => {
     expect(bankItem).toBeTruthy()
     expect(bankItem?.status).toBe('aguardando_iniciar')
     expect(bankItem?.requestCode).toMatch(/^[AC]-\d{4}\/\d+$/)
+  })
+
+  it('creates advance OS using the first pending tray number', () => {
+    const db = loadDb()
+    db.cases = db.cases.map((item) => {
+      if (item.id !== 'qa_case_1') return item
+      return {
+        ...item,
+        trays: item.trays.map((tray) => {
+          if (tray.trayNumber === 1) return { ...tray, state: 'entregue' as const }
+          if (tray.trayNumber === 2) return { ...tray, state: 'pendente' as const }
+          return tray
+        }),
+      }
+    })
+    saveDb(db)
+
+    const result = createAdvanceLabOrder('qa_lab_1', { plannedUpperQty: 5, plannedLowerQty: 10 })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.item.trayNumber).toBe(2)
   })
 })
