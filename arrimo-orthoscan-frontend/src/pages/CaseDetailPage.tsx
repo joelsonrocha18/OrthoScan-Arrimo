@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useToast } from '../app/ToastProvider'
 import Badge from '../components/Badge'
@@ -188,6 +188,7 @@ export default function CaseDetailPage() {
   const [attachmentNote, setAttachmentNote] = useState('')
   const [attachmentDate, setAttachmentDate] = useState(new Date().toISOString().slice(0, 10))
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const initializedCaseIdRef = useRef<string | null>(null)
 
   const currentCase = useMemo(
     () => (params.id ? db.cases.find((item) => item.id === params.id) ?? null : null),
@@ -277,7 +278,12 @@ export default function CaseDetailPage() {
   const requesterPrefix = requester?.gender === 'feminino' ? 'Dra.' : requester ? 'Dr.' : ''
 
   useEffect(() => {
-    if (!currentCase) return
+    if (!currentCase) {
+      initializedCaseIdRef.current = null
+      return
+    }
+    if (initializedCaseIdRef.current === currentCase.id) return
+    initializedCaseIdRef.current = currentCase.id
     setBudgetValue(currentCase.budget?.value ? String(currentCase.budget.value) : '')
     setBudgetNotes(currentCase.budget?.notes ?? '')
     setContractNotes(currentCase.contract?.notes ?? '')
@@ -344,8 +350,16 @@ export default function CaseDetailPage() {
         const hasOpenRework = linkedLabItems.some(
           (item) => item.trayNumber === selectedTray.trayNumber && item.requestKind === 'reconfeccao' && item.status !== 'prontas',
         )
+        const hasOpenReworkProduction = linkedLabItems.some(
+          (item) =>
+            item.trayNumber === selectedTray.trayNumber &&
+            (item.requestKind ?? 'producao') === 'producao' &&
+            (item.notes ?? '').toLowerCase().includes('rework') &&
+            item.status !== 'prontas',
+        )
+        const today = new Date().toISOString().slice(0, 10)
+
         if (!hasOpenRework) {
-          const today = new Date().toISOString().slice(0, 10)
           const created = addLabItem({
             caseId: currentCase.id,
             requestKind: 'reconfeccao',
@@ -368,7 +382,35 @@ export default function CaseDetailPage() {
             addToast({ type: 'error', title: 'Reconfeccao', message: created.sync.message })
             return
           }
-          addToast({ type: 'success', title: 'OS de reconfeccao gerada' })
+        }
+
+        if (!hasOpenReworkProduction) {
+          const production = addLabItem({
+            caseId: currentCase.id,
+            requestKind: 'producao',
+            arch: currentCase.arch ?? 'ambos',
+            plannedUpperQty: 0,
+            plannedLowerQty: 0,
+            patientName: currentCase.patientName,
+            trayNumber: selectedTray.trayNumber,
+            plannedDate: today,
+            dueDate: trayInCase.dueDate ?? today,
+            status: 'aguardando_iniciar',
+            priority: 'Urgente',
+            notes: `OS de producao para rework da placa #${selectedTray.trayNumber}.`,
+          })
+          if (!production.ok) {
+            addToast({ type: 'error', title: 'Rework', message: production.error })
+            return
+          }
+          if (!production.sync.ok) {
+            addToast({ type: 'error', title: 'Rework', message: production.sync.message })
+            return
+          }
+        }
+
+        if (!hasOpenRework || !hasOpenReworkProduction) {
+          addToast({ type: 'success', title: 'OS de rework geradas', message: 'Reconfeccao e confeccao adicionadas na esteira.' })
         }
       }
     }
@@ -420,7 +462,8 @@ export default function CaseDetailPage() {
 
   const closeBudget = () => {
     if (!canWrite) return
-    const parsed = Number(budgetValue)
+    const normalized = budgetValue.trim().replace(/\./g, '').replace(',', '.')
+    const parsed = Number(normalized)
     if (!Number.isFinite(parsed) || parsed <= 0) {
       addToast({ type: 'error', title: 'Orcamento', message: 'Informe um valor valido para o orcamento.' })
       return
@@ -639,7 +682,13 @@ export default function CaseDetailPage() {
             <div className="rounded-lg border border-slate-200 p-3">
               <p className="text-sm font-semibold text-slate-800">Etapa 2 - Orcamento</p>
               <div className="mt-2 grid gap-2">
-                <Input type="number" min={0} placeholder="Valor do orcamento" value={budgetValue} onChange={(event) => setBudgetValue(event.target.value)} />
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Valor do orcamento"
+                  value={budgetValue}
+                  onChange={(event) => setBudgetValue(event.target.value)}
+                />
                 <textarea
                   rows={2}
                   placeholder="Observacoes do orcamento"

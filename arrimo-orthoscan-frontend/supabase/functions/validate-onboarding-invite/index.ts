@@ -4,16 +4,34 @@ type Payload = {
   token: string
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+function resolveAllowedOrigin(_req: Request) {
+  const configured = (Deno.env.get('ALLOWED_ORIGIN') ?? '').trim()
+  if (configured) return configured
+  const siteUrl = (Deno.env.get('SITE_URL') ?? '').trim()
+  if (!siteUrl) return 'null'
+  try {
+    return new URL(siteUrl).origin
+  } catch {
+    return 'null'
+  }
 }
 
-function json(body: unknown, status = 200) {
+function corsHeaders(req: Request) {
+  const allowedOrigin = resolveAllowedOrigin(req)
+  const requestOrigin = req.headers.get('origin') ?? ''
+  const origin = requestOrigin && requestOrigin === allowedOrigin ? requestOrigin : allowedOrigin
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin',
+  }
+}
+
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
   })
 }
 
@@ -33,17 +51,17 @@ const ROLE_LABEL: Record<string, string> = {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return json({ ok: false, error: 'Method not allowed' }, 405)
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) })
+  if (req.method !== 'POST') return json(req, { ok: false, error: 'Method not allowed' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   if (!supabaseUrl || !serviceRoleKey) {
-    return json({ ok: false, error: 'Missing SUPABASE_URL or SERVICE_ROLE_KEY.' }, 500)
+    return json(req, { ok: false, error: 'Missing SUPABASE_URL or SERVICE_ROLE_KEY.' }, 500)
   }
 
   const payload = (await req.json()) as Payload
-  if (!payload.token?.trim()) return json({ ok: false, error: 'Token obrigatorio.' }, 400)
+  if (!payload.token?.trim()) return json(req, { ok: false, error: 'Token obrigatorio.' }, 400)
 
   const tokenHash = await sha256Hex(payload.token.trim())
   const supabase = createClient(supabaseUrl, serviceRoleKey)
@@ -54,14 +72,14 @@ Deno.serve(async (req) => {
     .eq('token_hash', tokenHash)
     .maybeSingle()
 
-  if (error) return json({ ok: false, error: error.message }, 400)
-  if (!invite) return json({ ok: false, expired: false, used: false, error: 'Token invalido.' }, 404)
+  if (error) return json(req, { ok: false, error: error.message }, 400)
+  if (!invite) return json(req, { ok: false, expired: false, used: false, error: 'Token invalido.' }, 404)
 
   const expired = new Date(invite.expires_at).getTime() <= Date.now()
   const used = Boolean(invite.used_at)
 
   if (expired || used) {
-    return json({ ok: false, expired, used })
+    return json(req, { ok: false, expired, used })
   }
 
   const { data: clinic } = await supabase
@@ -70,7 +88,7 @@ Deno.serve(async (req) => {
     .eq('id', invite.clinic_id)
     .maybeSingle()
 
-  return json({
+  return json(req, {
     ok: true,
     expired: false,
     used: false,

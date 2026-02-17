@@ -150,7 +150,7 @@ export default function SettingsPage() {
     setEditingUser(user)
     setModalTab('personal')
     setPasswordMode('manual')
-    setForm({ name: user.name, email: user.email, password: user.password ?? '', cpf: user.cpf ?? '', birthDate: user.birthDate ?? '', phone: user.phone ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
+    setForm({ name: user.name, email: user.email, password: '', cpf: user.cpf ?? '', birthDate: user.birthDate ?? '', phone: user.phone ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
     setInviteLink('')
     setError('')
     setModalOpen(true)
@@ -185,9 +185,23 @@ export default function SettingsPage() {
       return
     }
 
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) return setError('Nome, email e senha sao obrigatorios.')
-    const payload = { name: form.name.trim(), email: form.email.trim(), password: form.password.trim(), cpf: form.cpf || undefined, birthDate: form.birthDate || undefined, phone: form.phone || undefined, addressLine: form.addressLine || undefined, role: form.role, isActive: form.isActive, linkedDentistId: form.linkedDentistId || undefined, linkedClinicId: form.linkedClinicId || undefined }
-    const result = editingUser ? updateUser(editingUser.id, payload) : createUser(payload)
+    if (!form.name.trim() || !form.email.trim()) return setError('Nome e email sao obrigatorios.')
+    if (!editingUser && !form.password.trim()) return setError('Senha e obrigatoria para novo usuario.')
+    const basePayload = {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      cpf: form.cpf || undefined,
+      birthDate: form.birthDate || undefined,
+      phone: form.phone || undefined,
+      addressLine: form.addressLine || undefined,
+      role: form.role,
+      isActive: form.isActive,
+      linkedDentistId: form.linkedDentistId || undefined,
+      linkedClinicId: form.linkedClinicId || undefined,
+    }
+    const result = editingUser
+      ? updateUser(editingUser.id, { ...basePayload, ...(form.password.trim() ? { password: form.password.trim() } : {}) })
+      : createUser({ ...basePayload, password: form.password.trim() })
     if (!result.ok) return setError(result.error)
     setModalOpen(false)
     addToast({ type: 'success', title: editingUser ? 'Usuario atualizado' : 'Usuario criado' })
@@ -346,6 +360,19 @@ export default function SettingsPage() {
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Endereco completo *</label><Input value={labForm.addressLine} onChange={(event) => setLabForm((c) => ({ ...c, addressLine: event.target.value }))} /></div>
           </div>
           <div className="mt-4"><Button onClick={saveLab}>Salvar cadastro do laboratorio</Button></div>
+        </Card>
+        <Card>
+          <h2 className="text-lg font-semibold text-slate-900">Ajuda e LGPD</h2>
+          <p className="mt-1 text-sm text-slate-500">Tutoriais rapidos e documentos legais para entrega/operacao.</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link to="/app/help" className="text-sm font-semibold text-brand-700 hover:text-brand-500">Abrir Ajuda</Link>
+            <span className="text-slate-300">|</span>
+            <Link to="/legal/terms" className="text-sm font-semibold text-brand-700 hover:text-brand-500">Termos</Link>
+            <span className="text-slate-300">|</span>
+            <Link to="/legal/privacy" className="text-sm font-semibold text-brand-700 hover:text-brand-500">Privacidade</Link>
+            <span className="text-slate-300">|</span>
+            <Link to="/legal/lgpd" className="text-sm font-semibold text-brand-700 hover:text-brand-500">Direitos LGPD</Link>
+          </div>
         </Card>
       </section> : null}
 

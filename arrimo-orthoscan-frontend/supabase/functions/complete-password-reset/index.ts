@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
 
   const payload = (await req.json()) as Payload
   if (!payload.token || !payload.newPassword) return json({ ok: false, error: 'Token e nova senha obrigatorios.' }, 400)
-  if (payload.newPassword.length < 8) return json({ ok: false, error: 'Senha deve ter no minimo 8 caracteres.' }, 400)
+  if (payload.newPassword.length < 10) return json({ ok: false, error: 'Senha deve ter no minimo 10 caracteres.' }, 400)
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const tokenHash = await sha256(payload.token)

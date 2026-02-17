@@ -24,6 +24,7 @@ Configure variáveis da function:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SITE_URL`
 - `INVITE_REDIRECT_URL` (ex.: https://seu-dominio.com/login)
+- `ALLOWED_ORIGIN` (ex.: https://seu-dominio.com)
 
 Deploy:
 - `supabase functions deploy invite-user`
@@ -33,6 +34,7 @@ Configure variaveis:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `SITE_URL` (ex.: https://seu-dominio.com)
+- `ALLOWED_ORIGIN` (ex.: https://seu-dominio.com)
 
 Deploy:
 - `supabase functions deploy create-onboarding-invite`

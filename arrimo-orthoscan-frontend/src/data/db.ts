@@ -66,6 +66,7 @@ type LegacyCase = {
     arch?: string
     isLocal?: boolean
     url?: string
+    filePath?: string
     status?: 'ok' | 'erro'
     attachedAt?: string
     note?: string
@@ -82,6 +83,7 @@ type LegacyCase = {
     arch?: string
     isLocal?: boolean
     url?: string
+    filePath?: string
     status?: 'ok' | 'erro'
     attachedAt?: string
     note?: string
@@ -574,6 +576,7 @@ function ensureFullSeedData(db: AppDb): AppDb {
         arch: att.arch,
         isLocal: att.isLocal,
         url: att.url,
+        filePath: att.filePath,
         status: att.status ?? 'ok',
         attachedAt: att.attachedAt ?? att.createdAt,
         note: att.note,
@@ -627,6 +630,7 @@ function migrateCase(oldCase: LegacyCase): Case {
         arch: item.arch as NonNullable<Case['scanFiles']>[number]['arch'],
         isLocal: item.isLocal ?? isObjectUrl(item.url),
         url: item.url,
+        filePath: item.filePath,
         status: item.status ?? 'ok',
         attachedAt: item.attachedAt ?? item.createdAt ?? nowIso(),
         note: item.note,
@@ -694,6 +698,7 @@ function migrateScan(raw: LegacyScan): Scan {
           mime: item.mime,
           size: item.size,
           url: isLocal ? undefined : item.url,
+          filePath: (item as { filePath?: string; file_path?: string }).filePath ?? (item as { file_path?: string }).file_path,
           isLocal,
           status: item.status ?? 'ok',
           attachedAt: item.attachedAt ?? item.createdAt ?? nowIso(),
@@ -875,6 +880,7 @@ function normalizeDb(raw: unknown): AppDb {
         note: item.note,
         isLocal: item.isLocal ?? false,
         url: item.url,
+        filePath: (item as { filePath?: string; file_path?: string }).filePath ?? (item as { file_path?: string }).file_path,
         fileName: item.fileName ?? item.title ?? 'arquivo',
         mimeType: item.mimeType,
         status: item.status ?? 'ok',

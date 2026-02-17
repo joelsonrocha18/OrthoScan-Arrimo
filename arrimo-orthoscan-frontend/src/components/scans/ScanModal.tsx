@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { EXTRA_SLOTS, INTRA_SLOTS } from '../../mocks/photoSlots'
+import { DATA_MODE } from '../../data/dataMode'
 import type { Scan, ScanArch, ScanAttachment } from '../../types/Scan'
 import Button from '../Button'
 import Card from '../Card'
 import ImageCaptureInput from '../files/ImageCaptureInput'
 import Input from '../Input'
+import { buildScanAttachmentPath, createSignedUrl, uploadToStorage, validateScanAttachmentFile } from '../../repo/storageRepo'
 
 type ScanModalProps = {
   open: boolean
@@ -18,7 +20,7 @@ type ScanModalProps = {
   onSubmit: (
     payload: Omit<Scan, 'id' | 'createdAt' | 'updatedAt'>,
     options?: { setPrimaryDentist?: boolean },
-  ) => void
+  ) => boolean
 }
 
 type FormState = {
@@ -49,7 +51,7 @@ const emptyForm: FormState = {
   attachments: [],
 }
 
-function makeAttachment(
+function makeLocalAttachment(
   file: File,
   partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>,
 ): ScanAttachment {
@@ -95,6 +97,7 @@ export default function ScanModal({
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState('')
   const [setPrimaryDentist, setSetPrimaryDentist] = useState(false)
+  const [draftId, setDraftId] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -121,6 +124,7 @@ export default function ScanModal({
     setForm({ ...emptyForm, scanDate: new Date().toISOString().slice(0, 10) })
     setError('')
     setSetPrimaryDentist(false)
+    setDraftId(`draft_${Date.now()}`)
   }, [open, mode, initialScan])
 
   const stlWarning = useMemo(() => {
@@ -143,7 +147,42 @@ export default function ScanModal({
 
   if (!open) return null
 
-  const setSingle = (file: File, partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>) => {
+  const buildAttachment = async (
+    file: File,
+    partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>,
+  ): Promise<ScanAttachment | null> => {
+    const valid = validateScanAttachmentFile(file, partial.kind)
+    if (!valid.ok) {
+      setError(valid.error)
+      return null
+    }
+    if (DATA_MODE !== 'supabase') return makeLocalAttachment(file, partial)
+    if (!form.clinicId) return makeLocalAttachment(file, partial)
+
+    const scanId = mode === 'edit' && initialScan ? initialScan.id : draftId || 'draft_upload'
+    const filePath = buildScanAttachmentPath({
+      clinicId: form.clinicId,
+      scanId,
+      kind: partial.kind,
+      fileName: file.name,
+    })
+    const upload = await uploadToStorage(filePath, file)
+    if (!upload.ok) {
+      setError(upload.error)
+      return null
+    }
+    const signed = await createSignedUrl(filePath, 300)
+    return {
+      ...makeLocalAttachment(file, partial),
+      url: signed.ok ? signed.url : undefined,
+      filePath,
+      isLocal: false,
+    }
+  }
+
+  const setSingle = async (file: File, partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>) => {
+    const nextAttachment = await buildAttachment(file, partial)
+    if (!nextAttachment) return
     setForm((current) => ({
       ...current,
       attachments: [
@@ -156,13 +195,15 @@ export default function ScanModal({
               item.arch === partial.arch
             ),
         ),
-        makeAttachment(file, partial),
+        nextAttachment,
       ],
     }))
   }
 
-  const addMany = (files: FileList, partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>) => {
-    const next = Array.from(files).map((file) => makeAttachment(file, partial))
+  const addMany = async (files: FileList, partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>) => {
+    const nextWithNull = await Promise.all(Array.from(files).map((file) => buildAttachment(file, partial)))
+    const next = nextWithNull.filter((item): item is ScanAttachment => Boolean(item))
+    if (next.length === 0) return
     setForm((current) => ({ ...current, attachments: [...current.attachments, ...next] }))
   }
 
@@ -176,7 +217,7 @@ export default function ScanModal({
       return
     }
 
-    onSubmit({
+    const saved = onSubmit({
       patientName: form.patientName.trim(),
       patientId: form.patientId,
       dentistId: form.dentistId,
@@ -191,7 +232,9 @@ export default function ScanModal({
       status: mode === 'edit' && initialScan ? initialScan.status : 'pendente',
       linkedCaseId: mode === 'edit' && initialScan ? initialScan.linkedCaseId : undefined,
     }, { setPrimaryDentist })
-    onClose()
+    if (saved) {
+      onClose()
+    }
   }
 
   const bySlot = (slotId: string) => form.attachments.find((item) => item.slotId === slotId)
@@ -259,7 +302,7 @@ export default function ScanModal({
             )}
             <div className="mt-2 flex items-center gap-2">
               <ImageCaptureInput
-                onFileSelected={(file) => setSingle(file, { kind: slot.kind, slotId: slot.id })}
+                onFileSelected={(file) => void setSingle(file, { kind: slot.kind, slotId: slot.id })}
                 accept="image/*"
               />
               <button type="button" className="text-xs font-semibold text-red-600" onClick={() => remove(att.id)}>
@@ -270,7 +313,7 @@ export default function ScanModal({
         ) : (
           <div className="mt-2">
             <ImageCaptureInput
-              onFileSelected={(file) => setSingle(file, { kind: slot.kind, slotId: slot.id })}
+              onFileSelected={(file) => void setSingle(file, { kind: slot.kind, slotId: slot.id })}
               accept="image/*"
             />
           </div>
@@ -296,7 +339,7 @@ export default function ScanModal({
               {filePicker('Substituir', '.stl,.obj,.ply', (event) => {
                 const file = event.target.files?.[0]
                 if (!file) return
-                setSingle(file, { kind: 'scan3d', arch })
+                void setSingle(file, { kind: 'scan3d', arch })
               }, true)}
               <button type="button" className="text-xs font-semibold text-red-600" onClick={() => remove(att.id)}>
                 Remover
@@ -308,7 +351,7 @@ export default function ScanModal({
             {filePicker('Adicionar', '.stl,.obj,.ply', (event) => {
               const file = event.target.files?.[0]
               if (!file) return
-              setSingle(file, { kind: 'scan3d', arch })
+              void setSingle(file, { kind: 'scan3d', arch })
             })}
           </div>
         )}
@@ -340,7 +383,7 @@ export default function ScanModal({
               className="hidden"
               multiple
               accept={accept}
-              onChange={(event) => event.target.files && addMany(event.target.files, { kind, rxType })}
+              onChange={(event) => event.target.files && void addMany(event.target.files, { kind, rxType })}
             />
           </label>
         </div>
@@ -552,7 +595,7 @@ export default function ScanModal({
           <div className="mt-2">
             <label className="inline-flex h-8 cursor-pointer items-center rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white transition hover:bg-brand-700">
               Adicionar
-              <input type="file" className="hidden" multiple onChange={(event) => event.target.files && addMany(event.target.files, { kind: 'projeto' })} />
+              <input type="file" className="hidden" multiple onChange={(event) => event.target.files && void addMany(event.target.files, { kind: 'projeto' })} />
             </label>
           </div>
         </div>

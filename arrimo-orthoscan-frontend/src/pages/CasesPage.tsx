@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import AppShell from '../layouts/AppShell'
 import Badge from '../components/Badge'
 import Card from '../components/Card'
+import type { Case } from '../types/Case'
 import type { CasePhase } from '../types/Case'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
@@ -23,6 +24,19 @@ const phaseToneMap: Record<CasePhase, 'neutral' | 'info' | 'success'> = {
   contrato_aprovado: 'info',
   em_producao: 'info',
   finalizado: 'success',
+}
+
+function caseStatusBadge(item: Case) {
+  if (item.phase === 'finalizado' || item.status === 'finalizado') {
+    return { label: 'Finalizado', tone: 'success' as const }
+  }
+  if ((item.deliveryLots?.length ?? 0) > 0 && !item.installation?.installedAt) {
+    return { label: 'Pronto para entrega', tone: 'info' as const }
+  }
+  if (item.installation?.installedAt) {
+    return { label: 'Em tratamento', tone: 'info' as const }
+  }
+  return { label: phaseLabelMap[item.phase], tone: phaseToneMap[item.phase] }
 }
 
 export default function CasesPage() {
@@ -61,6 +75,7 @@ export default function CasesPage() {
                   const dentist = item.dentistId ? dentistsById.get(item.dentistId) : undefined
                   const dentistPrefix = dentist?.gender === 'feminino' ? 'Dra.' : dentist ? 'Dr.' : ''
                   const hasArchCounts = typeof item.totalTraysUpper === 'number' || typeof item.totalTraysLower === 'number'
+                  const badge = caseStatusBadge(item)
                   return (
                     <tr key={item.id} className="bg-white">
                       <td className="px-5 py-4">
@@ -77,7 +92,7 @@ export default function CasesPage() {
                       </td>
                       <td className="px-5 py-4 text-sm text-slate-700">{item.changeEveryDays}</td>
                       <td className="px-5 py-4">
-                        <Badge tone={phaseToneMap[item.phase]}>{phaseLabelMap[item.phase]}</Badge>
+                        <Badge tone={badge.tone}>{badge.label}</Badge>
                       </td>
                       <td className="px-5 py-4">
                         <Link

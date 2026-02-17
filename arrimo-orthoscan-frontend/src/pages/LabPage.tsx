@@ -135,24 +135,30 @@ export default function LabPage() {
   }, [db, currentUser])
   const caseById = useMemo(() => new Map(db.cases.map((item) => [item.id, item])), [db.cases])
   const visibleCases = useMemo(() => listCasesForUser(db, currentUser), [db, currentUser])
-  const casesReadyForDelivery = useMemo(
+  const readyDeliveryItems = useMemo(
     () =>
-      new Set(
-        items
-          .filter((item) => item.caseId && (item.requestKind ?? 'producao') === 'producao' && item.status === 'prontas' && !isReworkItem(item))
-          .map((item) => item.caseId as string),
+      items.filter(
+        (item) =>
+          item.caseId &&
+          (item.requestKind ?? 'producao') === 'producao' &&
+          item.status === 'prontas' &&
+          !isReworkItem(item),
       ),
     [items],
   )
+  const casesReadyForDelivery = useMemo(
+    () => new Set(readyDeliveryItems.map((item) => item.caseId as string)),
+    [readyDeliveryItems],
+  )
   const deliveryCaseOptions = useMemo(
     () =>
-      visibleCases
-        .filter((item) => casesReadyForDelivery.has(item.id))
+      readyDeliveryItems
+        .filter((item) => item.caseId && visibleCases.some((current) => current.id === item.caseId))
         .map((item) => ({
           id: item.id,
-          patientName: item.treatmentCode ? `${item.patientName} (${item.treatmentCode})` : item.patientName,
+          label: `${item.patientName} (${item.requestCode ?? 'OS sem codigo'})`,
         })),
-    [casesReadyForDelivery, visibleCases],
+    [readyDeliveryItems, visibleCases],
   )
   const casesWithAlerts = useMemo(
     () =>
@@ -188,6 +194,8 @@ export default function LabPage() {
   }, [alertsOnly, casesWithAlerts, items, overdueOnly, priority, search, status])
   const isDeliveredToProfessional = useCallback((item: LabItem) => {
     if (!item.caseId) return false
+    // Itens ainda em fluxo operacional (aguardando/producao/CQ) devem permanecer visiveis na esteira.
+    if (item.status !== 'prontas') return false
     const caseItem = caseById.get(item.caseId)
     const hasAnyDeliveryLot = (caseItem?.deliveryLots?.length ?? 0) > 0
     // Oculta apenas a OS base (sem revisao) apos primeira entrega.
@@ -271,7 +279,7 @@ export default function LabPage() {
   const caseLabel = (item: LabItem) => {
     const caseItem = item.caseId ? caseById.get(item.caseId) : undefined
     const treatment = caseItem?.treatmentCode
-    if (item.requestCode && treatment) return `${item.requestCode} (${treatment})`
+    if (item.requestCode) return item.requestCode
     return item.requestCode ?? treatment
   }
 
@@ -550,7 +558,13 @@ export default function LabPage() {
             addToast({ type: 'error', title: 'Entrega de lote', message: 'Selecione um caso.' })
             return
           }
-          const caseItem = caseById.get(deliveryCaseId)
+          const selectedReadyItem = readyDeliveryItems.find((item) => item.id === deliveryCaseId)
+          if (!selectedReadyItem?.caseId) {
+            addToast({ type: 'error', title: 'Entrega de lote', message: 'Selecione uma OS pronta valida.' })
+            return
+          }
+          const selectedCaseId = selectedReadyItem.caseId
+          const caseItem = caseById.get(selectedCaseId)
           if (!caseItem) {
             addToast({ type: 'error', title: 'Entrega de lote', message: 'Caso nao encontrado.' })
             return
@@ -581,7 +595,7 @@ export default function LabPage() {
           }
 
           for (const op of ops) {
-            const result = registerCaseDeliveryLot(deliveryCaseId, {
+            const result = registerCaseDeliveryLot(selectedCaseId, {
               arch: op.arch,
               fromTray: op.fromTray,
               toTray: op.toTray,
@@ -609,7 +623,7 @@ export default function LabPage() {
           <Card className="w-full max-w-md">
             <h3 className="text-lg font-semibold text-slate-900">Gerar OS antecipada</h3>
             <p className="mt-1 text-sm text-slate-500">
-              {advanceTarget.patientName} - Placa #{advanceTarget.trayNumber}
+              {advanceTarget.patientName} - {advanceTarget.requestCode ?? `Placa #${advanceTarget.trayNumber}`}
             </p>
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div>

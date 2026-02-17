@@ -6,6 +6,7 @@ import Badge from '../Badge'
 import Button from '../Button'
 import Card from '../Card'
 import ImageCaptureInput from '../files/ImageCaptureInput'
+import { createSignedUrl } from '../../repo/storageRepo'
 
 type ScanDetailsModalProps = {
   open: boolean
@@ -47,6 +48,7 @@ function itemStatusTone(status?: 'ok' | 'erro') {
 }
 
 function fileAvailability(item: ScanAttachment) {
+  if (item.filePath) return null
   if (item.isLocal && !item.url) return 'arquivo local (reenvie para abrir)'
   if (!item.url) return 'Arquivo cadastrado (sem link).'
   return null
@@ -124,6 +126,17 @@ export default function ScanDetailsModal({
     setNote('')
   }
 
+  const openAttachment = async (item: ScanAttachment) => {
+    if (item.url) {
+      window.open(item.url, '_blank', 'noreferrer')
+      return
+    }
+    if (!item.filePath) return
+    const signed = await createSignedUrl(item.filePath, 300)
+    if (!signed.ok) return
+    window.open(signed.url, '_blank', 'noreferrer')
+  }
+
   const renderFileItem = (item: ScanAttachment) => {
     const attachedDate = item.attachedAt ?? item.createdAt
     const availability = fileAvailability(item)
@@ -143,10 +156,10 @@ export default function ScanDetailsModal({
           <span className={itemStatusTone(item.status)}>{item.status === 'erro' ? 'ERRO' : 'OK'}</span>
         </div>
         <div className="mt-2 flex items-center gap-3">
-          {item.url ? (
-            <a href={item.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-700">
+          {item.url || item.filePath ? (
+            <button type="button" className="text-xs font-semibold text-brand-700" onClick={() => void openAttachment(item)}>
               Abrir
-            </a>
+            </button>
           ) : (
             <span className="text-xs text-slate-500">{availability}</span>
           )}

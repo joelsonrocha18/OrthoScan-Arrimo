@@ -189,6 +189,7 @@ export default function LabItemModal({
         return
       }
       addToast({ type: 'success', title: 'Solicitacao salva' })
+      onClose()
       return
     }
 
@@ -213,6 +214,7 @@ export default function LabItemModal({
       return
     }
     addToast({ type: 'success', title: 'Solicitacao salva' })
+    onClose()
   }
 
   const handleDelete = () => {
@@ -252,7 +254,7 @@ export default function LabItemModal({
             <label className="mb-1 block text-sm font-medium text-slate-700">Vinculo do caso</label>
             <p className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700">
               {selectedCase
-                ? `Caso vinculado: ${selectedCase.patientName} (${selectedCase.treatmentCode ?? selectedCase.id.slice(-6)})`
+                ? `Guia atual: ${item?.requestCode ?? selectedCase.treatmentCode ?? selectedCase.id.slice(-6)} | Caso vinculado: ${selectedCase.patientName} (${selectedCase.treatmentCode ?? selectedCase.id.slice(-6)})`
                 : 'Caso vinculado: item legado sem caseId'}
             </p>
             {selectedCase ? (

@@ -10,8 +10,8 @@ type SessionProfile = {
 }
 
 function readActor() {
-  const userId = localStorage.getItem(SESSION_USER_KEY) ?? undefined
-  const rawProfile = localStorage.getItem(SESSION_PROFILE_KEY)
+  const userId = sessionStorage.getItem(SESSION_USER_KEY) ?? localStorage.getItem(SESSION_USER_KEY) ?? undefined
+  const rawProfile = sessionStorage.getItem(SESSION_PROFILE_KEY) ?? localStorage.getItem(SESSION_PROFILE_KEY)
   if (!rawProfile) return { userId }
   try {
     const profile = JSON.parse(rawProfile) as SessionProfile

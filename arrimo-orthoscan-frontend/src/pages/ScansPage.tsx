@@ -8,6 +8,7 @@ import Badge from '../components/Badge'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import { can } from '../auth/permissions'
+import { DATA_MODE } from '../data/dataMode'
 import {
   addScanAttachment,
   approveScan,
@@ -23,6 +24,7 @@ import type { Scan, ScanAttachment } from '../types/Scan'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
 import { listScansForUser } from '../auth/scope'
+import { buildScanAttachmentPath, createSignedUrl, uploadToStorage, validateScanAttachmentFile } from '../repo/storageRepo'
 
 function archTone(arch: Scan['arch']) {
   if (arch === 'ambos') return 'info' as const
@@ -79,7 +81,7 @@ export default function ScansPage() {
     addToast({ type: 'info', title: 'Scan reprovado' })
   }
 
-  const addAttachment = (
+  const addAttachment = async (
     scanId: string,
     payload: {
       file: File
@@ -95,6 +97,40 @@ export default function ScansPage() {
       addToast({ type: 'error', title: 'Sem permissao para adicionar anexos' })
       return
     }
+    const validation = validateScanAttachmentFile(payload.file, payload.kind)
+    if (!validation.ok) {
+      addToast({ type: 'error', title: validation.error })
+      return
+    }
+    const targetScan = db.scans.find((item) => item.id === scanId)
+    let filePath: string | undefined
+    let url: string | undefined
+    let isLocal = true
+
+    if (DATA_MODE === 'supabase') {
+      const clinicId = targetScan?.clinicId || currentUser?.linkedClinicId
+      if (!clinicId) {
+        addToast({ type: 'error', title: 'Nao foi possivel determinar a clinica para upload.' })
+        return
+      }
+      filePath = buildScanAttachmentPath({
+        clinicId,
+        scanId,
+        kind: payload.kind,
+        fileName: payload.file.name,
+      })
+      const upload = await uploadToStorage(filePath, payload.file)
+      if (!upload.ok) {
+        addToast({ type: 'error', title: upload.error })
+        return
+      }
+      const signed = await createSignedUrl(filePath, 300)
+      url = signed.ok ? signed.url : undefined
+      isLocal = false
+    } else {
+      url = URL.createObjectURL(payload.file)
+    }
+
     const result = addScanAttachment(scanId, {
       name: payload.file.name,
       kind: payload.kind,
@@ -103,8 +139,9 @@ export default function ScansPage() {
       arch: payload.arch,
       mime: payload.file.type,
       size: payload.file.size,
-      url: URL.createObjectURL(payload.file),
-      isLocal: true,
+      url,
+      filePath,
+      isLocal,
       note: payload.note,
       attachedAt: payload.attachedAt,
     })
@@ -246,7 +283,7 @@ export default function ScansPage() {
         onSubmit={(payload, options) => {
           if (!canWrite) {
             addToast({ type: 'error', title: 'Sem permissao para criar exames' })
-            return
+            return false
           }
           createScan(payload)
           if (options?.setPrimaryDentist && payload.patientId && payload.dentistId) {
@@ -256,6 +293,7 @@ export default function ScansPage() {
             }
           }
           addToast({ type: 'success', title: 'Exame salvo' })
+          return true
         }}
       />
 

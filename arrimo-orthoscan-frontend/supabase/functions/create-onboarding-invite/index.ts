@@ -18,18 +18,36 @@ const APP_ROLES = new Set([
   'receptionist',
 ])
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  // `x-user-jwt` carries the authenticated user's access token (ES256) because the Functions gateway
-  // rejects it in the standard `Authorization` header as "Invalid JWT". We keep `Authorization` as anon.
-  'Access-Control-Allow-Headers': 'authorization, x-user-jwt, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+function resolveAllowedOrigin(_req: Request) {
+  const configured = (Deno.env.get('ALLOWED_ORIGIN') ?? '').trim()
+  if (configured) return configured
+  const siteUrl = (Deno.env.get('SITE_URL') ?? '').trim()
+  if (!siteUrl) return 'null'
+  try {
+    return new URL(siteUrl).origin
+  } catch {
+    return 'null'
+  }
 }
 
-function json(body: unknown, status = 200) {
+function corsHeaders(req: Request) {
+  const allowedOrigin = resolveAllowedOrigin(req)
+  const requestOrigin = req.headers.get('origin') ?? ''
+  const origin = requestOrigin && requestOrigin === allowedOrigin ? requestOrigin : allowedOrigin
+  return {
+    'Access-Control-Allow-Origin': origin,
+    // `x-user-jwt` carries the authenticated user's access token (ES256) because the Functions gateway
+    // rejects it in the standard `Authorization` header as "Invalid JWT". We keep `Authorization` as anon.
+    'Access-Control-Allow-Headers': 'authorization, x-user-jwt, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin',
+  }
+}
+
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
   })
 }
 
@@ -46,8 +64,8 @@ async function sha256Hex(value: string) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return json({ ok: false, error: 'Method not allowed' }, 405)
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) })
+  if (req.method !== 'POST') return json(req, { ok: false, error: 'Method not allowed' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   // Use our own secret, since some Supabase-provided env keys are not available/consistent across plans.
@@ -55,7 +73,7 @@ Deno.serve(async (req) => {
   const siteUrl = Deno.env.get('SITE_URL') ?? ''
 
   if (!supabaseUrl || !serviceRoleKey || !siteUrl) {
-    return json({ ok: false, error: 'Missing SUPABASE_URL, SERVICE_ROLE_KEY or SITE_URL.' }, 500)
+    return json(req, { ok: false, error: 'Missing SUPABASE_URL, SERVICE_ROLE_KEY or SITE_URL.' }, 500)
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
@@ -67,10 +85,10 @@ Deno.serve(async (req) => {
 
   const payload = (await req.json()) as Payload
   if (!payload.fullName?.trim() || !payload.role?.trim() || !payload.clinicId?.trim()) {
-    return json({ ok: false, error: 'Missing fullName, role or clinicId.' }, 400)
+    return json(req, { ok: false, error: 'Missing fullName, role or clinicId.' }, 400)
   }
   if (!APP_ROLES.has(payload.role)) {
-    return json({ ok: false, error: 'Invalid role.' }, 400)
+    return json(req, { ok: false, error: 'Invalid role.' }, 400)
   }
 
   const {
@@ -78,7 +96,7 @@ Deno.serve(async (req) => {
     error: actorError,
   } = await supabase.auth.getUser(userJwt)
 
-  if (actorError || !actor) return json({ ok: false, error: 'Unauthorized.' }, 401)
+  if (actorError || !actor) return json(req, { ok: false, error: 'Unauthorized.' }, 401)
 
   const { data: actorProfile } = await supabase
     .from('profiles')
@@ -88,13 +106,24 @@ Deno.serve(async (req) => {
 
   const actorRole = actorProfile?.role ?? 'dentist_client'
   if (!['master_admin', 'dentist_admin'].includes(actorRole)) {
-    return json({ ok: false, error: 'Forbidden.' }, 403)
+    return json(req, { ok: false, error: 'Forbidden.' }, 403)
   }
   if (actorRole === 'dentist_admin' && actorProfile?.clinic_id !== payload.clinicId) {
-    return json({ ok: false, error: 'Clinic mismatch.' }, 403)
+    return json(req, { ok: false, error: 'Clinic mismatch.' }, 403)
   }
   if (actorRole === 'dentist_admin' && ['master_admin', 'dentist_admin'].includes(payload.role)) {
-    return json({ ok: false, error: 'Role not allowed for actor.' }, 403)
+    return json(req, { ok: false, error: 'Role not allowed for actor.' }, 403)
+  }
+
+  const inviteWindowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { count: recentInvites } = await supabase
+    .from('security_audit_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_type', 'onboarding_invite_created')
+    .eq('actor_user_id', actor.id)
+    .gte('created_at', inviteWindowStart)
+  if ((recentInvites ?? 0) >= 20) {
+    return json(req, { ok: false, error: 'Rate limit exceeded. Try again later.' }, 429)
   }
 
   const token = randomToken()
@@ -118,7 +147,7 @@ Deno.serve(async (req) => {
     .single()
 
   if (insertError || !invite) {
-    return json({ ok: false, error: insertError?.message ?? 'Invite insert failed.' }, 400)
+    return json(req, { ok: false, error: insertError?.message ?? 'Invite insert failed.' }, 400)
   }
 
   const inviteLink = `${siteUrl.replace(/\/$/, '')}/complete-signup?token=${token}`
@@ -134,5 +163,5 @@ Deno.serve(async (req) => {
     },
   })
 
-  return json({ ok: true, inviteId: invite.id, inviteLink })
+  return json(req, { ok: true, inviteId: invite.id, inviteLink })
 })

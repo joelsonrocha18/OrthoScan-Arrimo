@@ -14,6 +14,7 @@ export type ScanAttachment = {
   mime?: string
   size?: number
   url?: string
+  filePath?: string
   isLocal?: boolean
   status?: 'ok' | 'erro'
   attachedAt?: string

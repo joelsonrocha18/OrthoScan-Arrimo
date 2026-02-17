@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import Badge from '../components/Badge'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import FilePickerWithCamera from '../components/files/FilePickerWithCamera'
@@ -12,11 +11,21 @@ import { useDb } from '../lib/useDb'
 import { can } from '../auth/permissions'
 import { listPatientsForUser } from '../auth/scope'
 import { createPatient, getPatient, restorePatient, softDeletePatient, updatePatient } from '../repo/patientRepo'
-import { addPatientDoc, listPatientDocs, markPatientDocAsError, restoreDocStatus } from '../repo/patientDocsRepo'
+import {
+  addPatientDoc,
+  deletePatientDoc,
+  listPatientDocs,
+  markPatientDocAsError,
+  resolvePatientDocUrl,
+  restoreDocStatus,
+  updatePatientDoc,
+} from '../repo/patientDocsRepo'
 import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
 import { updateScan } from '../data/scanRepo'
 import { updateCase } from '../data/caseRepo'
 import { getCurrentUser } from '../lib/auth'
+import DocumentsList from '../components/documents/DocumentsList'
+import { validatePatientDocFile } from '../repo/storageRepo'
 
 type PatientForm = {
   name: string
@@ -101,6 +110,7 @@ export default function PatientDetailPage() {
   const canWrite = can(currentUser, 'patients.write')
   const canDelete = can(currentUser, 'patients.delete')
   const canDocsWrite = can(currentUser, 'docs.write')
+  const canDocsAdmin = currentUser?.role === 'master_admin' || currentUser?.role === 'dentist_admin' || currentUser?.role === 'receptionist'
   const isNew = params.id === 'new'
   const existing = useMemo(() => (!isNew && params.id ? getPatient(params.id) : null), [isNew, params.id])
   const scopedPatients = useMemo(() => listPatientsForUser(db, currentUser), [db, currentUser])
@@ -109,12 +119,14 @@ export default function PatientDetailPage() {
   const [error, setError] = useState('')
   const [docModalOpen, setDocModalOpen] = useState(false)
   const [docForm, setDocForm] = useState<DocumentForm>(emptyDocForm)
+  const [docEditOpen, setDocEditOpen] = useState(false)
+  const [docEditId, setDocEditId] = useState<string>('')
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
 
   const dentists = useMemo(() => db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt), [db.dentists])
   const clinics = useMemo(() => db.clinics.filter((item) => !item.deletedAt), [db.clinics])
-  const docs = useMemo(() => (existing ? listPatientDocs(existing.id) : []), [existing])
+  const [docs, setDocs] = useState<PatientDocument[]>([])
 
   const scans = useMemo(() => {
     if (!existing) return []
@@ -162,6 +174,21 @@ export default function PatientDetailPage() {
       notes: existing.notes ?? '',
     })
   }, [existing])
+
+  useEffect(() => {
+    let active = true
+    if (!existing) {
+      setDocs([])
+      return
+    }
+    listPatientDocs(existing.id).then((items) => {
+      if (!active) return
+      setDocs(items)
+    })
+    return () => {
+      active = false
+    }
+  }, [existing, db.patientDocuments, db.clinics, db.scans])
 
   useEffect(() => {
     const cep = normalizeCep(form.address.cep)
@@ -309,7 +336,7 @@ export default function PatientDetailPage() {
     }
   }
 
-  const submitDoc = () => {
+  const submitDoc = async () => {
     if (!existing) return
     if (!canDocsWrite) {
       setError('Sem permissao para anexar documentos.')
@@ -319,7 +346,14 @@ export default function PatientDetailPage() {
       setError('Informe o titulo do documento.')
       return
     }
-    addPatientDoc({
+    if (docForm.file) {
+      const valid = validatePatientDocFile(docForm.file)
+      if (!valid.ok) {
+        setError(valid.error)
+        return
+      }
+    }
+    const result = await addPatientDoc({
       patientId: existing.id,
       title: docForm.title,
       category: docForm.category,
@@ -327,12 +361,91 @@ export default function PatientDetailPage() {
       createdAt: docForm.date,
       file: docForm.file ?? undefined,
     })
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
     setDocForm({ ...emptyDocForm, date: new Date().toISOString().slice(0, 10) })
     setDocModalOpen(false)
+    setError('')
+    const items = await listPatientDocs(existing.id)
+    setDocs(items)
   }
 
   const acceptDocs =
     '.pdf,.jpg,.jpeg,.png,.heic,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*'
+
+  const openDoc = async (doc: PatientDocument) => {
+    const resolved = await resolvePatientDocUrl(doc)
+    if (!resolved.ok) return
+    window.open(resolved.url, '_blank', 'noreferrer')
+  }
+
+  const downloadDoc = async (doc: PatientDocument) => {
+    const resolved = await resolvePatientDocUrl(doc)
+    if (!resolved.ok) return
+    const anchor = document.createElement('a')
+    anchor.href = resolved.url
+    anchor.download = doc.fileName || 'arquivo'
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+  }
+
+  const beginEditDoc = (doc: PatientDocument) => {
+    setDocEditId(doc.id)
+    setDocForm({
+      title: doc.title,
+      category: doc.category,
+      note: doc.note ?? '',
+      date: doc.createdAt.slice(0, 10),
+      file: null,
+    })
+    setDocEditOpen(true)
+  }
+
+  const submitDocEdit = async () => {
+    if (!docEditId) return
+    if (!canDocsAdmin) {
+      setError('Sem permissao para editar documentos.')
+      return
+    }
+    if (!docForm.title.trim()) {
+      setError('Informe o titulo do documento.')
+      return
+    }
+
+    const result = await updatePatientDoc(docEditId, {
+      title: docForm.title,
+      category: docForm.category,
+      note: docForm.note,
+      createdAt: docForm.date ? new Date(docForm.date).toISOString() : undefined,
+    })
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setError('')
+    setDocEditOpen(false)
+    setDocEditId('')
+    setDocForm({ ...emptyDocForm, date: new Date().toISOString().slice(0, 10) })
+    if (existing) {
+      const items = await listPatientDocs(existing.id)
+      setDocs(items)
+    }
+  }
+
+  const deleteDoc = async (doc: PatientDocument) => {
+    if (!canDocsAdmin) return
+    const ok = window.confirm(`Excluir o documento "${doc.title}"? Essa acao nao pode ser desfeita.`)
+    if (!ok) return
+    const result = await deletePatientDoc(doc.id)
+    if (!result.ok) setError(result.error)
+    if (existing) {
+      const items = await listPatientDocs(existing.id)
+      setDocs(items)
+    }
+  }
 
   return (
     <AppShell breadcrumb={['Inicio', 'Pacientes', isNew ? 'Novo' : existing?.name ?? 'Detalhe']}>
@@ -549,56 +662,36 @@ export default function PatientDetailPage() {
             </div>
             {canDocsWrite ? <Button onClick={() => setDocModalOpen(true)}>Adicionar documento</Button> : null}
           </div>
-          <div className="mt-4 space-y-3">
-            {docs.map((doc) => (
-              <div key={doc.id} className="rounded-lg border border-slate-200 px-3 py-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium text-slate-900">{doc.title}</p>
-                    <p className="text-xs text-slate-500">
-                      {doc.category} • {new Date(doc.createdAt).toLocaleDateString('pt-BR')} • {doc.fileName}
-                    </p>
-                    {doc.note ? <p className="text-xs text-slate-500">Obs: {doc.note}</p> : null}
-                    {doc.status === 'erro' ? <p className="text-xs text-red-700">Erro: {doc.errorNote || '-'}</p> : null}
-                  </div>
-                  <Badge tone={doc.status === 'erro' ? 'danger' : 'success'}>
-                    {doc.status === 'erro' ? 'ERRO' : 'OK'}
-                  </Badge>
-                </div>
-                <div className="mt-2 flex items-center gap-3">
-                  {doc.url ? (
-                    <a href={doc.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-700">
-                      Abrir
-                    </a>
-                  ) : (
-                    <span className="text-xs text-slate-500">Arquivo local (reenvie para abrir)</span>
-                  )}
-                  {doc.status === 'erro' ? (
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-brand-700"
-                      onClick={() => (canDocsWrite ? restoreDocStatus(doc.id) : undefined)}
-                    >
-                      Remover erro
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-red-700"
-                      onClick={() => {
-                        if (!canDocsWrite) return
-                        const reason = window.prompt('Motivo do erro:')
-                        if (!reason?.trim()) return
-                        markPatientDocAsError(doc.id, reason)
-                      }}
-                    >
-                      Marcar como erro
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-            {docs.length === 0 ? <p className="text-sm text-slate-500">Nenhum documento anexado.</p> : null}
+          <div className="mt-4">
+            <DocumentsList
+              items={docs}
+              canEdit={canDocsAdmin}
+              canDelete={canDocsAdmin}
+              canFlagError={canDocsWrite}
+              onOpen={openDoc}
+              onDownload={downloadDoc}
+              onEdit={beginEditDoc}
+              onDelete={deleteDoc}
+              onRestore={async (doc) => {
+                if (!canDocsWrite) return
+                await restoreDocStatus(doc.id)
+                if (existing) {
+                  const items = await listPatientDocs(existing.id)
+                  setDocs(items)
+                }
+              }}
+              onMarkError={async (doc) => {
+                if (!canDocsWrite) return
+                const reason = window.prompt('Motivo do erro:')
+                if (!reason?.trim()) return
+                await markPatientDocAsError(doc.id, reason)
+                if (existing) {
+                  const items = await listPatientDocs(existing.id)
+                  setDocs(items)
+                }
+              }}
+            />
+            {docs.length === 0 ? <p className="mt-3 text-sm text-slate-500">Nenhum documento anexado.</p> : null}
           </div>
         </Card>
       </section>
@@ -680,6 +773,80 @@ export default function PatientDetailPage() {
                 Cancelar
               </Button>
               <Button onClick={submitDoc}>Salvar documento</Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {docEditOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+          <Card className="w-full max-w-xl">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">Editar documento</h2>
+                <p className="mt-1 text-sm text-slate-500">Atualize titulo, categoria, data e observacao.</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDocEditOpen(false)
+                  setDocEditId('')
+                  setDocForm({ ...emptyDocForm, date: new Date().toISOString().slice(0, 10) })
+                }}
+              >
+                Fechar
+              </Button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-slate-700">Titulo</label>
+                <Input value={docForm.title} onChange={(event) => setDocForm((c) => ({ ...c, title: event.target.value }))} />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Categoria</label>
+                <select
+                  value={docForm.category}
+                  onChange={(event) => setDocForm((c) => ({ ...c, category: event.target.value as PatientDocument['category'] }))}
+                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                >
+                  <option value="identificacao">Identificacao</option>
+                  <option value="contrato">Contrato</option>
+                  <option value="consentimento">Consentimento</option>
+                  <option value="exame">Exame</option>
+                  <option value="foto">Foto</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Data</label>
+                <Input type="date" value={docForm.date} onChange={(event) => setDocForm((c) => ({ ...c, date: event.target.value }))} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-slate-700">Observacao</label>
+                <textarea
+                  rows={3}
+                  value={docForm.note}
+                  onChange={(event) => setDocForm((c) => ({ ...c, note: event.target.value }))}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                />
+                <p className="mt-2 text-xs text-slate-500">Troca de arquivo ainda nao suportada neste modo.</p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setDocEditOpen(false)
+                  setDocEditId('')
+                  setDocForm({ ...emptyDocForm, date: new Date().toISOString().slice(0, 10) })
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={submitDocEdit}>Salvar alteracoes</Button>
             </div>
           </Card>
         </div>

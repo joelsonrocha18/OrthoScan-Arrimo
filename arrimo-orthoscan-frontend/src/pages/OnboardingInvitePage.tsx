@@ -63,8 +63,8 @@ export default function OnboardingInvitePage() {
       setError('Informe seu email.')
       return
     }
-    if (!password.trim() || password.trim().length < 8) {
-      setError('Senha deve ter ao menos 8 caracteres.')
+    if (!password.trim() || password.trim().length < 10) {
+      setError('Senha deve ter ao menos 10 caracteres.')
       return
     }
     if (password !== confirmPassword) {
@@ -138,4 +138,3 @@ export default function OnboardingInvitePage() {
     </div>
   )
 }
-

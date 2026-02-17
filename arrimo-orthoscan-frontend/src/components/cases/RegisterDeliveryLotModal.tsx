@@ -5,7 +5,7 @@ import Input from '../Input'
 
 type RegisterDeliveryLotModalProps = {
   open: boolean
-  caseOptions?: Array<{ id: string; patientName: string }>
+  caseOptions?: Array<{ id: string; label: string }>
   selectedCaseId?: string
   onCaseChange?: (caseId: string) => void
   onClose: () => void
@@ -48,7 +48,7 @@ export default function RegisterDeliveryLotModal({
                 <option value="">Selecione um caso</option>
                 {caseOptions.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.patientName}
+                    {item.label}
                   </option>
                 ))}
               </select>

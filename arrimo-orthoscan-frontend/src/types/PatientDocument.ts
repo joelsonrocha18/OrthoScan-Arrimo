@@ -7,6 +7,7 @@ export type PatientDocument = {
   note?: string
   isLocal: boolean
   url?: string
+  filePath?: string
   fileName: string
   mimeType?: string
   status: 'ok' | 'erro'

@@ -181,6 +181,7 @@ export function createCaseFromScan(
     arch: att.arch,
     isLocal: att.isLocal,
     url: att.url,
+    filePath: att.filePath,
     status: att.status ?? 'ok',
     attachedAt: att.attachedAt ?? att.createdAt,
     note: att.note,

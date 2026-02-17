@@ -95,6 +95,7 @@ export type Case = {
     arch?: 'superior' | 'inferior' | 'mordida'
     isLocal?: boolean
     url?: string
+    filePath?: string
     status?: 'ok' | 'erro'
     attachedAt?: string
     note?: string

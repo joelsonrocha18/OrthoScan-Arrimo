@@ -178,6 +178,21 @@ function dedupeProgrammedReplenishments(db: ReturnType<typeof loadDb>) {
   return true
 }
 
+function removeLegacyAutoReworkItems(db: ReturnType<typeof loadDb>) {
+  const before = db.labItems.length
+  db.labItems = db.labItems.filter((item) => {
+    if (item.requestKind !== 'reconfeccao') return true
+    const note = (item.notes ?? '').toLowerCase()
+    const isLegacyAuto = note.includes('reconfeccao automatica por defeito identificado')
+    if (!isLegacyAuto) return true
+    const linkedCase = item.caseId ? db.cases.find((current) => current.id === item.caseId) : null
+    if (!linkedCase) return false
+    const tray = linkedCase.trays.find((current) => current.trayNumber === item.trayNumber)
+    return tray?.state === 'rework'
+  })
+  return db.labItems.length !== before
+}
+
 export function canMoveToStatus(current: LabStatus, next: LabStatus) {
   const currentIndex = statusFlow.indexOf(current)
   const nextIndex = statusFlow.indexOf(next)
@@ -205,7 +220,8 @@ export function listLabItems() {
   const coded = ensureLabRequestCodes(db)
   const created = ensureProgrammedReplenishments(db)
   const deduped = dedupeProgrammedReplenishments(db)
-  const changed = coded || created || deduped
+  const cleaned = removeLegacyAutoReworkItems(db)
+  const changed = coded || created || deduped || cleaned
   if (changed) {
     saveDb(db)
   }
@@ -331,7 +347,7 @@ export function updateLabItem(id: string, patch: Partial<LabItem>) {
       updatedAt: now,
     }
 
-    const defectDetected = item.status !== 'controle_qualidade' && nextStatus === 'controle_qualidade'
+    const defectDetected = false
     if (defectDetected && linkedCase) {
       const baseCode = caseCode(linkedCase)
       const revision = nextRequestRevision(db, baseCode)
@@ -415,7 +431,7 @@ export function moveLabItem(id: string, status: LabStatus) {
 
     const now = nowIso()
     changed = { ...item, status, updatedAt: now }
-    const defectDetected = item.status !== 'controle_qualidade' && status === 'controle_qualidade'
+    const defectDetected = false
     if (defectDetected && linkedCase) {
       const baseCode = caseCode(linkedCase)
       const revision = nextRequestRevision(db, baseCode)
@@ -582,7 +598,8 @@ export function createAdvanceLabOrder(
     planningDefinedAt: now,
     plannedDate: today,
     dueDate,
-    status: 'em_producao',
+    // OS antecipada entra na esteira para inicio manual da producao.
+    status: 'aguardando_iniciar',
     priority: 'Urgente',
     notes: `OS antecipada gerada manualmente a partir de ${source.requestCode ?? source.id}.`,
     createdAt: now,

@@ -6,16 +6,34 @@ type Payload = {
   password: string
 }
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+function resolveAllowedOrigin(_req: Request) {
+  const configured = (Deno.env.get('ALLOWED_ORIGIN') ?? '').trim()
+  if (configured) return configured
+  const siteUrl = (Deno.env.get('SITE_URL') ?? '').trim()
+  if (!siteUrl) return 'null'
+  try {
+    return new URL(siteUrl).origin
+  } catch {
+    return 'null'
+  }
 }
 
-function json(body: unknown, status = 200) {
+function corsHeaders(req: Request) {
+  const allowedOrigin = resolveAllowedOrigin(req)
+  const requestOrigin = req.headers.get('origin') ?? ''
+  const origin = requestOrigin && requestOrigin === allowedOrigin ? requestOrigin : allowedOrigin
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    Vary: 'Origin',
+  }
+}
+
+function json(req: Request, body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json' },
   })
 }
 
@@ -26,13 +44,13 @@ async function sha256Hex(value: string) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return json({ ok: false, error: 'Method not allowed' }, 405)
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) })
+  if (req.method !== 'POST') return json(req, { ok: false, error: 'Method not allowed' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   if (!supabaseUrl || !serviceRoleKey) {
-    return json({ ok: false, error: 'Missing SUPABASE_URL or SERVICE_ROLE_KEY.' }, 500)
+    return json(req, { ok: false, error: 'Missing SUPABASE_URL or SERVICE_ROLE_KEY.' }, 500)
   }
 
   const payload = (await req.json()) as Payload
@@ -41,10 +59,10 @@ Deno.serve(async (req) => {
   const token = payload.token?.trim()
 
   if (!token || !email || !password) {
-    return json({ ok: false, error: 'Token, email e senha sao obrigatorios.' }, 400)
+    return json(req, { ok: false, error: 'Token, email e senha sao obrigatorios.' }, 400)
   }
-  if (password.length < 8) {
-    return json({ ok: false, error: 'Senha deve ter ao menos 8 caracteres.' }, 400)
+  if (password.length < 10) {
+    return json(req, { ok: false, error: 'Senha deve ter ao menos 10 caracteres.' }, 400)
   }
 
   const tokenHash = await sha256Hex(token)
@@ -56,11 +74,11 @@ Deno.serve(async (req) => {
     .eq('token_hash', tokenHash)
     .maybeSingle()
 
-  if (inviteError) return json({ ok: false, error: inviteError.message }, 400)
-  if (!invite) return json({ ok: false, error: 'Token invalido.' }, 404)
+  if (inviteError) return json(req, { ok: false, error: inviteError.message }, 400)
+  if (!invite) return json(req, { ok: false, error: 'Token invalido.' }, 404)
 
-  if (invite.used_at) return json({ ok: false, error: 'Token ja utilizado.' }, 400)
-  if (new Date(invite.expires_at).getTime() <= Date.now()) return json({ ok: false, error: 'Token expirado.' }, 400)
+  if (invite.used_at) return json(req, { ok: false, error: 'Token ja utilizado.' }, 400)
+  if (new Date(invite.expires_at).getTime() <= Date.now()) return json(req, { ok: false, error: 'Token expirado.' }, 400)
 
   const { data: created, error: createAuthError } = await supabase.auth.admin.createUser({
     email,
@@ -69,7 +87,7 @@ Deno.serve(async (req) => {
   })
 
   if (createAuthError || !created?.user) {
-    return json({ ok: false, error: createAuthError?.message ?? 'Falha ao criar usuario.' }, 400)
+    return json(req, { ok: false, error: createAuthError?.message ?? 'Falha ao criar usuario.' }, 400)
   }
 
   const userId = created.user.id
@@ -90,7 +108,7 @@ Deno.serve(async (req) => {
 
   if (profileError) {
     await supabase.auth.admin.deleteUser(userId)
-    return json({ ok: false, error: profileError.message }, 400)
+    return json(req, { ok: false, error: profileError.message }, 400)
   }
 
   const { data: consumeRows, error: consumeError } = await supabase
@@ -102,7 +120,7 @@ Deno.serve(async (req) => {
 
   if (consumeError || !consumeRows || consumeRows.length === 0) {
     await supabase.auth.admin.deleteUser(userId)
-    return json({ ok: false, error: 'Nao foi possivel consumir o token.' }, 409)
+    return json(req, { ok: false, error: 'Nao foi possivel consumir o token.' }, 409)
   }
 
   await supabase.from('security_audit_logs').insert({
@@ -116,5 +134,5 @@ Deno.serve(async (req) => {
     },
   })
 
-  return json({ ok: true })
+  return json(req, { ok: true })
 })

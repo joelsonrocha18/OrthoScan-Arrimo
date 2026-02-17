@@ -126,6 +126,20 @@ export default function LoginPage() {
               Cadastre-se
             </Link>
           </p>
+
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs">
+            <Link to="/legal/terms" className="font-semibold text-slate-300 hover:text-white">
+              Termos
+            </Link>
+            <span className="text-slate-700">|</span>
+            <Link to="/legal/privacy" className="font-semibold text-slate-300 hover:text-white">
+              Privacidade
+            </Link>
+            <span className="text-slate-700">|</span>
+            <Link to="/legal/lgpd" className="font-semibold text-slate-300 hover:text-white">
+              LGPD
+            </Link>
+          </div>
         </Card>
       </div>
     </div>

@@ -11,7 +11,11 @@ import ClinicsPage from './pages/ClinicsPage'
 import DiagnosticsPage from './pages/DiagnosticsPage'
 import MigrationPage from './pages/MigrationPage'
 import LabPage from './pages/LabPage'
+import HelpPage from './pages/HelpPage'
 import LoginPage from './pages/LoginPage'
+import LegalLgpdPage from './pages/LegalLgpdPage'
+import LegalPrivacyPage from './pages/LegalPrivacyPage'
+import LegalTermsPage from './pages/LegalTermsPage'
 import OnboardingInvitePage from './pages/OnboardingInvitePage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import PatientDetailPage from './pages/PatientDetailPage'
@@ -62,6 +66,9 @@ export default function App() {
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/legal/privacy" element={<LegalPrivacyPage />} />
+          <Route path="/legal/terms" element={<LegalTermsPage />} />
+          <Route path="/legal/lgpd" element={<LegalLgpdPage />} />
           <Route path="/complete-signup" element={<OnboardingInvitePage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route element={<ProtectedRoute permission="dashboard.read" />}>
@@ -88,6 +95,9 @@ export default function App() {
           </Route>
           <Route element={<ProtectedRoute permission="lab.read" />}>
             <Route path="/app/lab" element={<LabPage />} />
+          </Route>
+          <Route element={<ProtectedRoute permission="dashboard.read" />}>
+            <Route path="/app/help" element={<HelpPage />} />
           </Route>
           <Route element={<ProtectedRoute permission="settings.read" />}>
             <Route path="/app/settings" element={<SettingsPage />} />

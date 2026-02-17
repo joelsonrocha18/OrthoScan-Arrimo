@@ -46,8 +46,8 @@ export default function ResetPasswordPage() {
       setError('Token obrigatorio.')
       return
     }
-    if (!password.trim() || password.length < 8) {
-      setError('Senha deve ter ao menos 8 caracteres.')
+    if (!password.trim() || password.length < 10) {
+      setError('Senha deve ter ao menos 10 caracteres.')
       return
     }
     if (password !== confirm) {

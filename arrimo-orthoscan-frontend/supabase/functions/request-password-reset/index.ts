@@ -63,6 +63,21 @@ Deno.serve(async (req) => {
     .maybeSingle()
   if (profileError || !profile?.user_id) return json({ ok: true })
 
+  const resetWindowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const { count: recentResets } = await supabase
+    .from('password_reset_tokens')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', profile.user_id)
+    .gte('created_at', resetWindowStart)
+  if ((recentResets ?? 0) >= 3) {
+    await supabase.from('security_audit_logs').insert({
+      event_type: 'password_reset_rate_limited',
+      target_user_id: profile.user_id,
+      metadata: { email: payload.email },
+    })
+    return json({ ok: true, warning: 'Muitas solicitacoes recentes. Tente novamente em alguns minutos.' })
+  }
+
   const rawToken = `${crypto.randomUUID()}${crypto.randomUUID().replaceAll('-', '')}`
   const tokenHash = await sha256(rawToken)
   const expiresAt = new Date(Date.now() + 1000 * 60 * 30).toISOString()

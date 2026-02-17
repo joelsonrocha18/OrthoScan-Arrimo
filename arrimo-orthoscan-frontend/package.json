@@ -38,6 +38,7 @@
         "test": "vitest",
         "test:ui": "vitest --ui",
         "test:e2e": "playwright test",
+        "preflight:prod": "node ./scripts/preflightProd.mjs",
         "desktop:icon": "node ./desktop/make-icon.cjs",
         "desktop:dev": "node ./desktop/start-dev.cjs",
         "desktop:build": "set ELECTRON_BUILD=1&& npm run build && electron-builder --win",
