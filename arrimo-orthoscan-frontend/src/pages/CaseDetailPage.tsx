@@ -128,8 +128,11 @@ function timelineStateForTray(
   deliveredLower: number,
 ): TrayState {
   if (tray.state === 'rework') return 'rework'
-  const deliveredPair = Math.max(0, Math.min(deliveredUpper, deliveredLower))
-  if (tray.trayNumber <= deliveredPair) return 'entregue'
+  const deliveredCount =
+    deliveredUpper > 0 && deliveredLower > 0
+      ? Math.max(0, Math.min(deliveredUpper, deliveredLower))
+      : Math.max(deliveredUpper, deliveredLower, 0)
+  if (tray.trayNumber <= deliveredCount) return 'entregue'
   if (tray.state === 'entregue') return 'pendente'
   return tray.state
 }
@@ -240,8 +243,20 @@ export default function CaseDetailPage() {
   )
   const scopedCases = useMemo(() => listCasesForUser(db, currentUser), [db, currentUser])
 
-  const totalUpper = currentCase?.totalTraysUpper ?? currentCase?.totalTrays ?? 0
-  const totalLower = currentCase?.totalTraysLower ?? currentCase?.totalTrays ?? 0
+  const totalUpper = useMemo(() => {
+    if (!currentCase) return 0
+    if (typeof currentCase.totalTraysUpper === 'number') return Math.max(0, currentCase.totalTraysUpper)
+    if (currentCase.arch === 'inferior') return 0
+    return Math.max(0, currentCase.totalTrays)
+  }, [currentCase])
+  const totalLower = useMemo(() => {
+    if (!currentCase) return 0
+    if (typeof currentCase.totalTraysLower === 'number') return Math.max(0, currentCase.totalTraysLower)
+    if (currentCase.arch === 'superior') return 0
+    return Math.max(0, currentCase.totalTrays)
+  }, [currentCase])
+  const hasUpperArch = totalUpper > 0
+  const hasLowerArch = totalLower > 0
   const deliveredUpper = currentCase?.installation?.deliveredUpper ?? 0
   const deliveredLower = currentCase?.installation?.deliveredLower ?? 0
   const deliveredToDentist = useMemo(() => deliveredToDentistByArch(currentCase), [currentCase])
@@ -306,11 +321,18 @@ export default function CaseDetailPage() {
   }, [changeSchedule, totalLower])
   const scheduleSummary = useMemo(() => countScheduleStates(changeSchedule), [changeSchedule])
   const inProductionCount = useMemo(() => scheduleSummary.em_producao + scheduleSummary.controle_qualidade, [scheduleSummary])
-  const readyCount = useMemo(
-    () => Math.max(0, Math.min(readyToDeliverPatient.upper, readyToDeliverPatient.lower)),
-    [readyToDeliverPatient.lower, readyToDeliverPatient.upper],
-  )
-  const deliveredPairCount = useMemo(() => Math.max(0, Math.min(progressUpper.delivered, progressLower.delivered)), [progressLower.delivered, progressUpper.delivered])
+  const readyCount = useMemo(() => {
+    if (hasUpperArch && hasLowerArch) return Math.max(0, Math.min(readyToDeliverPatient.upper, readyToDeliverPatient.lower))
+    if (hasUpperArch) return Math.max(0, readyToDeliverPatient.upper)
+    if (hasLowerArch) return Math.max(0, readyToDeliverPatient.lower)
+    return 0
+  }, [hasLowerArch, hasUpperArch, readyToDeliverPatient.lower, readyToDeliverPatient.upper])
+  const deliveredScheduleCount = useMemo(() => {
+    if (hasUpperArch && hasLowerArch) return Math.max(0, Math.min(progressUpper.delivered, progressLower.delivered))
+    if (hasUpperArch) return Math.max(0, progressUpper.delivered)
+    if (hasLowerArch) return Math.max(0, progressLower.delivered)
+    return 0
+  }, [hasLowerArch, hasUpperArch, progressLower.delivered, progressUpper.delivered])
   const linkedLabItems = useMemo(
     () => (currentCase ? db.labItems.filter((item) => item.caseId === currentCase.id) : []),
     [currentCase, db.labItems],
@@ -659,13 +681,13 @@ export default function CaseDetailPage() {
 
   const saveInstallation = () => {
     if (!canWrite) return
-    const upperCount = Number(installationDeliveredUpper)
-    const lowerCount = Number(installationDeliveredLower)
+    const upperCount = hasUpperArch ? Number(installationDeliveredUpper) : 0
+    const lowerCount = hasLowerArch ? Number(installationDeliveredLower) : 0
     if (!Number.isFinite(upperCount) || !Number.isFinite(lowerCount) || upperCount < 0 || lowerCount < 0) {
       addToast({ type: 'error', title: 'Instalacao', message: 'Informe quantidades validas por arcada.' })
       return
     }
-    if (Math.trunc(upperCount) > readyToDeliverPatient.upper) {
+    if (hasUpperArch && Math.trunc(upperCount) > readyToDeliverPatient.upper) {
       addToast({
         type: 'error',
         title: 'Instalacao',
@@ -673,7 +695,7 @@ export default function CaseDetailPage() {
       })
       return
     }
-    if (Math.trunc(lowerCount) > readyToDeliverPatient.lower) {
+    if (hasLowerArch && Math.trunc(lowerCount) > readyToDeliverPatient.lower) {
       addToast({
         type: 'error',
         title: 'Instalacao',
@@ -786,8 +808,15 @@ export default function CaseDetailPage() {
             </p>
           ) : null}
           <p className="mt-2 text-sm font-medium text-slate-600">
-            Planejamento: Superior {currentCase.totalTraysUpper ?? '-'} | Inferior {currentCase.totalTraysLower ?? '-'} |
-            Troca {currentCase.changeEveryDays} dias | Attachments: {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
+            Planejamento:{' '}
+            {hasUpperArch && hasLowerArch
+              ? `Superior ${totalUpper} | Inferior ${totalLower}`
+              : hasUpperArch
+                ? `Superior ${totalUpper}`
+                : hasLowerArch
+                  ? `Inferior ${totalLower}`
+                  : '-'}{' '}
+            | Troca {currentCase.changeEveryDays} dias | Attachments: {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
           </p>
           <div className="mt-3 flex items-center gap-3">
             <Badge tone={phaseToneMap[currentCase.phase]}>{phaseLabelMap[currentCase.phase]}</Badge>
@@ -812,32 +841,43 @@ export default function CaseDetailPage() {
         </div>
       </section>
 
-      <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card>
-          <p className="text-sm text-slate-500">Progresso - Superior</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {patientProgressUpper.delivered}/{patientProgressUpper.total}
-          </p>
-          <div className="mt-3 h-2 rounded-full bg-slate-200">
-            <div className="h-2 rounded-full bg-brand-500" style={{ width: `${patientProgressUpper.percent}%` }} />
-          </div>
-        </Card>
+      <section className={`mt-6 grid grid-cols-1 gap-4 ${hasUpperArch && hasLowerArch ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+        {hasUpperArch ? (
+          <Card>
+            <p className="text-sm text-slate-500">Progresso - Superior</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">
+              {patientProgressUpper.delivered}/{patientProgressUpper.total}
+            </p>
+            <div className="mt-3 h-2 rounded-full bg-slate-200">
+              <div className="h-2 rounded-full bg-brand-500" style={{ width: `${patientProgressUpper.percent}%` }} />
+            </div>
+          </Card>
+        ) : null}
 
-        <Card>
-          <p className="text-sm text-slate-500">Progresso - Inferior</p>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">
-            {patientProgressLower.delivered}/{patientProgressLower.total}
-          </p>
-          <div className="mt-3 h-2 rounded-full bg-slate-200">
-            <div className="h-2 rounded-full bg-brand-500" style={{ width: `${patientProgressLower.percent}%` }} />
-          </div>
-        </Card>
+        {hasLowerArch ? (
+          <Card>
+            <p className="text-sm text-slate-500">Progresso - Inferior</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-900">
+              {patientProgressLower.delivered}/{patientProgressLower.total}
+            </p>
+            <div className="mt-3 h-2 rounded-full bg-slate-200">
+              <div className="h-2 rounded-full bg-brand-500" style={{ width: `${patientProgressLower.percent}%` }} />
+            </div>
+          </Card>
+        ) : null}
 
         <Card>
           <p className="text-sm text-slate-500">Resumo</p>
           <p className="mt-2 text-sm text-slate-700">Em producao/CQ: {inProductionCount}</p>
           <p className="mt-1 text-sm text-slate-700">Prontas: {readyCount}</p>
-          <p className="mt-1 text-sm text-slate-700">Entregues: Sup {progressUpper.delivered} | Inf {progressLower.delivered}</p>
+          <p className="mt-1 text-sm text-slate-700">
+            Entregues:{' '}
+            {hasUpperArch && hasLowerArch
+              ? `Sup ${progressUpper.delivered} | Inf ${progressLower.delivered}`
+              : hasUpperArch
+                ? `Sup ${progressUpper.delivered}`
+                : `Inf ${progressLower.delivered}`}
+          </p>
         </Card>
       </section>
 
@@ -919,13 +959,22 @@ export default function CaseDetailPage() {
           <div className="mt-3 grid gap-3">
             {currentCase.installation ? (
               <p className="text-sm text-slate-700">
-                Registro atual: {new Date(`${currentCase.installation.installedAt.slice(0, 10)}T00:00:00`).toLocaleDateString('pt-BR')} | Sup{' '}
-                {currentCase.installation.deliveredUpper ?? 0} | Inf {currentCase.installation.deliveredLower ?? 0}
+                Registro atual: {new Date(`${currentCase.installation.installedAt.slice(0, 10)}T00:00:00`).toLocaleDateString('pt-BR')} |{' '}
+                {hasUpperArch && hasLowerArch
+                  ? `Sup ${currentCase.installation.deliveredUpper ?? 0} | Inf ${currentCase.installation.deliveredLower ?? 0}`
+                  : hasUpperArch
+                    ? `Sup ${currentCase.installation.deliveredUpper ?? 0}`
+                    : `Inf ${currentCase.installation.deliveredLower ?? 0}`}
               </p>
             ) : null}
             {(readyToDeliverPatient.upper > 0 || readyToDeliverPatient.lower > 0) ? (
               <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                Prontas para entrega ao paciente (saldo do profissional): Sup {readyToDeliverPatient.upper} | Inf {readyToDeliverPatient.lower}
+                Prontas para entrega ao paciente (saldo do profissional):{' '}
+                {hasUpperArch && hasLowerArch
+                  ? `Sup ${readyToDeliverPatient.upper} | Inf ${readyToDeliverPatient.lower}`
+                  : hasUpperArch
+                    ? `Sup ${readyToDeliverPatient.upper}`
+                    : `Inf ${readyToDeliverPatient.lower}`}
               </p>
             ) : (
               <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -951,27 +1000,31 @@ export default function CaseDetailPage() {
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
               />
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Entrega paciente - Superior</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={totalUpper}
-                  value={installationDeliveredUpper}
-                  onChange={(event) => setInstallationDeliveredUpper(event.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Entrega paciente - Inferior</label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={totalLower}
-                  value={installationDeliveredLower}
-                  onChange={(event) => setInstallationDeliveredLower(event.target.value)}
-                />
-              </div>
+            <div className={`grid grid-cols-1 gap-3 ${hasUpperArch && hasLowerArch ? 'sm:grid-cols-2' : ''}`}>
+              {hasUpperArch ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Entrega paciente - Superior</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={totalUpper}
+                    value={installationDeliveredUpper}
+                    onChange={(event) => setInstallationDeliveredUpper(event.target.value)}
+                  />
+                </div>
+              ) : null}
+              {hasLowerArch ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Entrega paciente - Inferior</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={totalLower}
+                    value={installationDeliveredLower}
+                    onChange={(event) => setInstallationDeliveredLower(event.target.value)}
+                  />
+                </div>
+              ) : null}
             </div>
             <div>
               <Button
@@ -1001,7 +1054,12 @@ export default function CaseDetailPage() {
           <h2 className="text-lg font-semibold text-slate-900">Reposicao prevista</h2>
           <div className="mt-3 space-y-2 text-sm text-slate-700">
             <p>
-              Entregue ao paciente: Superior {progressUpper.delivered}/{progressUpper.total} | Inferior {progressLower.delivered}/{progressLower.total}
+              Entregue ao paciente:{' '}
+              {hasUpperArch && hasLowerArch
+                ? `Superior ${progressUpper.delivered}/${progressUpper.total} | Inferior ${progressLower.delivered}/${progressLower.total}`
+                : hasUpperArch
+                  ? `Superior ${progressUpper.delivered}/${progressUpper.total}`
+                  : `Inferior ${progressLower.delivered}/${progressLower.total}`}
             </p>
             <p>Total geral planejado: {Math.max(progressUpper.total, progressLower.total)}</p>
             <p>Proxima placa necessaria: {supplySummary?.nextTray ? `#${supplySummary.nextTray}` : 'Nenhuma (caso completo)'}</p>
@@ -1067,8 +1125,12 @@ export default function CaseDetailPage() {
               <span className="font-medium">Troca a cada (dias):</span> {currentCase.changeEveryDays}
             </p>
             <p>
-              <span className="font-medium">Placas:</span> Superior: {currentCase.totalTraysUpper ?? '-'} | Inferior:{' '}
-              {currentCase.totalTraysLower ?? '-'}
+              <span className="font-medium">Placas:</span>{' '}
+              {hasUpperArch && hasLowerArch
+                ? `Superior: ${totalUpper} | Inferior: ${totalLower}`
+                : hasUpperArch
+                  ? `Superior: ${totalUpper}`
+                  : `Inferior: ${totalLower}`}
             </p>
             <p>
               <span className="font-medium">Placa de attachments:</span> {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
@@ -1082,8 +1144,8 @@ export default function CaseDetailPage() {
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Arquivos do scan</h2>
           <div className="mt-3 space-y-4">
-            {renderScanFileGroup('Scan 3D - Superior', groupedScanFiles.scan3d.superior)}
-            {renderScanFileGroup('Scan 3D - Inferior', groupedScanFiles.scan3d.inferior)}
+            {hasUpperArch ? renderScanFileGroup('Scan 3D - Superior', groupedScanFiles.scan3d.superior) : null}
+            {hasLowerArch ? renderScanFileGroup('Scan 3D - Inferior', groupedScanFiles.scan3d.inferior) : null}
             {renderScanFileGroup('Scan 3D - Mordida', groupedScanFiles.scan3d.mordida)}
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Fotos intraorais</p>
@@ -1131,15 +1193,15 @@ export default function CaseDetailPage() {
                   <th className="px-3 py-2 font-semibold">Placa</th>
                   <th className="px-3 py-2 font-semibold">Troca prevista</th>
                   <th className="px-3 py-2 font-semibold">Data real de troca</th>
-                  <th className="px-3 py-2 font-semibold">Superior</th>
-                  <th className="px-3 py-2 font-semibold">Inferior</th>
+                  {hasUpperArch ? <th className="px-3 py-2 font-semibold">Superior</th> : null}
+                  {hasLowerArch ? <th className="px-3 py-2 font-semibold">Inferior</th> : null}
                   <th className="px-3 py-2 font-semibold">Data de entrega</th>
                 </tr>
               </thead>
               <tbody>
                 {changeSchedule.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-4 text-slate-500">
+                    <td colSpan={hasUpperArch && hasLowerArch ? 6 : 5} className="px-3 py-4 text-slate-500">
                       Registre a instalacao para gerar agenda de trocas.
                     </td>
                   </tr>
@@ -1156,10 +1218,10 @@ export default function CaseDetailPage() {
                           disabled={!canWrite}
                         />
                       </td>
-                      <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.superiorState)}`}>{scheduleStateLabel(row.superiorState)}</td>
-                      <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.inferiorState)}`}>{scheduleStateLabel(row.inferiorState)}</td>
+                      {hasUpperArch ? <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.superiorState)}`}>{scheduleStateLabel(row.superiorState)}</td> : null}
+                      {hasLowerArch ? <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.inferiorState)}`}>{scheduleStateLabel(row.inferiorState)}</td> : null}
                       <td className="px-3 py-2 text-slate-700">
-                        {row.trayNumber <= deliveredPairCount
+                        {row.trayNumber <= deliveredScheduleCount
                           ? (() => {
                               const deliveredAt = patientDeliveryDateByTray.get(row.trayNumber) ?? fallbackPatientDeliveryDate
                               return deliveredAt ? new Date(`${deliveredAt}T00:00:00`).toLocaleDateString('pt-BR') : '-'
@@ -1193,7 +1255,7 @@ export default function CaseDetailPage() {
                 type="button"
                 onClick={canWrite ? () => openTrayModal(tray) : undefined}
                 disabled={!canWrite}
-                className={`h-10 rounded-lg text-xs font-semibold transition ${trayStateClasses[timelineStateForTray(tray, progressUpper.delivered, progressLower.delivered)]}`}
+                className={`h-10 rounded-lg text-xs font-semibold transition ${trayStateClasses[timelineStateForTray(tray, hasUpperArch ? progressUpper.delivered : 0, hasLowerArch ? progressLower.delivered : 0)]}`}
               >
                 {tray.trayNumber}
               </button>
