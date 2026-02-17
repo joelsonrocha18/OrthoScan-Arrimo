@@ -201,6 +201,7 @@ export default function CaseDetailPage() {
   const canWrite = can(currentUser, 'cases.write')
   const [selectedTray, setSelectedTray] = useState<CaseTray | null>(null)
   const [trayState, setSelectedTrayState] = useState<TrayState>('pendente')
+  const [reworkArch, setReworkArch] = useState<'superior' | 'inferior' | 'ambos'>('ambos')
   const [trayNote, setTrayNote] = useState('')
   const [budgetValue, setBudgetValue] = useState('')
   const [budgetNotes, setBudgetNotes] = useState('')
@@ -394,6 +395,7 @@ export default function CaseDetailPage() {
     if (!canWrite) return
     setSelectedTray(tray)
     setSelectedTrayState(tray.state)
+    setReworkArch(currentCase.arch ?? 'ambos')
     setTrayNote(tray.notes ?? '')
   }
 
@@ -432,7 +434,7 @@ export default function CaseDetailPage() {
           const created = addLabItem({
             caseId: currentCase.id,
             requestKind: 'reconfeccao',
-            arch: currentCase.arch ?? 'ambos',
+            arch: reworkArch,
             plannedUpperQty: 0,
             plannedLowerQty: 0,
             patientName: currentCase.patientName,
@@ -457,7 +459,7 @@ export default function CaseDetailPage() {
           const production = addLabItem({
             caseId: currentCase.id,
             requestKind: 'producao',
-            arch: currentCase.arch ?? 'ambos',
+            arch: reworkArch,
             plannedUpperQty: 0,
             plannedLowerQty: 0,
             patientName: currentCase.patientName,
@@ -1257,6 +1259,20 @@ export default function CaseDetailPage() {
                   <option value="rework">Rework</option>
                 </select>
               </div>
+              {trayState === 'rework' ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Arcada do rework</label>
+                  <select
+                    value={reworkArch}
+                    onChange={(event) => setReworkArch(event.target.value as 'superior' | 'inferior' | 'ambos')}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  >
+                    <option value="inferior">Inferior</option>
+                    <option value="superior">Superior</option>
+                    <option value="ambos">Ambas</option>
+                  </select>
+                </div>
+              ) : null}
 
               {linkedLabItems.some((item) => item.trayNumber === selectedTray.trayNumber) ? (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
