@@ -6,7 +6,7 @@ import Button from '../components/Button'
 import Card from '../components/Card'
 import ImageCaptureInput from '../components/files/ImageCaptureInput'
 import Input from '../components/Input'
-import { addAttachment, clearCaseScanFileError, markCaseScanFileError, registerCaseInstallation, setTrayState, updateCase } from '../data/caseRepo'
+import { addAttachment, clearCaseScanFileError, getCase, markCaseScanFileError, registerCaseInstallation, setTrayState, updateCase } from '../data/caseRepo'
 import { addLabItem, generateLabOrder } from '../data/labRepo'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
@@ -429,6 +429,10 @@ export default function CaseDetailPage() {
             item.status !== 'prontas',
         )
         const today = new Date().toISOString().slice(0, 10)
+        const reasonText = trayNote.trim()
+        const reworkReason = reasonText.length > 0
+          ? reasonText
+          : `Rework solicitado via timeline da placa #${selectedTray.trayNumber}.`
 
         if (!hasOpenRework) {
           const created = addLabItem({
@@ -443,7 +447,7 @@ export default function CaseDetailPage() {
             dueDate: trayInCase.dueDate ?? today,
             status: 'aguardando_iniciar',
             priority: 'Urgente',
-            notes: `Reconfeccao solicitada via timeline da placa #${selectedTray.trayNumber}.`,
+            notes: reworkReason,
           })
           if (!created.ok) {
             addToast({ type: 'error', title: 'Reconfeccao', message: created.error })
@@ -468,7 +472,7 @@ export default function CaseDetailPage() {
             dueDate: trayInCase.dueDate ?? today,
             status: 'aguardando_iniciar',
             priority: 'Urgente',
-            notes: `OS de producao para rework da placa #${selectedTray.trayNumber}.`,
+            notes: `OS de producao para rework da placa #${selectedTray.trayNumber}. Motivo: ${reworkReason}`,
           })
           if (!production.ok) {
             addToast({ type: 'error', title: 'Rework', message: production.error })
@@ -483,10 +487,32 @@ export default function CaseDetailPage() {
         if (!hasOpenRework || !hasOpenReworkProduction) {
           addToast({ type: 'success', title: 'OS de rework geradas', message: 'Reconfeccao e confeccao adicionadas na esteira.' })
         }
+
+        // Ao marcar rework, devolve a placa para o banco (debita entrega ao paciente).
+        if (currentCase.installation) {
+          const currentUpper = currentCase.installation.deliveredUpper ?? 0
+          const currentLower = currentCase.installation.deliveredLower ?? 0
+          const affectUpper = (reworkArch === 'superior' || reworkArch === 'ambos') && selectedTray.trayNumber <= currentUpper
+          const affectLower = (reworkArch === 'inferior' || reworkArch === 'ambos') && selectedTray.trayNumber <= currentLower
+          if (affectUpper || affectLower) {
+            const updated = updateCase(currentCase.id, {
+              installation: {
+                ...currentCase.installation,
+                deliveredUpper: Math.max(0, currentUpper - (affectUpper ? 1 : 0)),
+                deliveredLower: Math.max(0, currentLower - (affectLower ? 1 : 0)),
+              },
+            })
+            if (!updated) {
+              addToast({ type: 'error', title: 'Rework', message: 'Nao foi possivel debitar a entrega ao paciente.' })
+              return
+            }
+          }
+        }
       }
     }
 
-    const nextTrays = currentCase.trays.map((item) =>
+    const latestCase = getCase(currentCase.id) ?? currentCase
+    const nextTrays = latestCase.trays.map((item) =>
       item.trayNumber === selectedTray.trayNumber ? { ...item, notes: trayNote.trim() || undefined } : item,
     )
     updateCase(currentCase.id, { trays: nextTrays })

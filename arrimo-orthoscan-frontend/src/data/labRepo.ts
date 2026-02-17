@@ -261,6 +261,14 @@ export function addLabItem(item: Omit<LabItem, 'id' | 'createdAt' | 'updatedAt'>
   const normalizedUpper = Math.trunc(item.plannedUpperQty ?? 0)
   const normalizedLower = Math.trunc(item.plannedLowerQty ?? 0)
   const baseCode = linkedCase ? caseCode(linkedCase) : `OS-${Date.now()}`
+  const resolvedRequestCode = (() => {
+    if (item.requestCode && item.requestCode.trim().length > 0) return item.requestCode
+    if (!linkedCase) return baseCode
+    const kind = item.requestKind ?? 'producao'
+    const hasBase = db.labItems.some((other) => other.caseId === linkedCase.id && other.requestCode === baseCode)
+    if (kind === 'producao' && !hasBase) return baseCode
+    return `${baseCode}/${nextRequestRevision(db, baseCode)}`
+  })()
   const resolvedUpper = normalizedUpper
   const resolvedLower = normalizedLower
   const planDefined = hasProductionPlan({ plannedUpperQty: resolvedUpper, plannedLowerQty: resolvedLower })
@@ -268,7 +276,7 @@ export function addLabItem(item: Omit<LabItem, 'id' | 'createdAt' | 'updatedAt'>
   const newItem: LabItem = {
     ...item,
     arch: item.arch ?? 'ambos',
-    requestCode: item.requestCode ?? baseCode,
+    requestCode: resolvedRequestCode,
     requestKind: item.requestKind ?? 'producao',
     expectedReplacementDate: item.expectedReplacementDate ?? item.dueDate,
     plannedUpperQty: resolvedUpper,

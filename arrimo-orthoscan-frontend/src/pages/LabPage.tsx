@@ -83,13 +83,7 @@ function minusDays(dateIso: string, days: number) {
 }
 
 function isReworkItem(item: LabItem) {
-  const note = (item.notes ?? '').toLowerCase()
-  return (
-    item.requestKind === 'reconfeccao' ||
-    note.includes('rework') ||
-    note.includes('defeito') ||
-    note.includes('reconfecc')
-  )
+  return item.requestKind === 'reconfeccao'
 }
 
 function hasRevisionSuffix(code?: string) {
