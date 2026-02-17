@@ -222,6 +222,7 @@ export default function DentistDetailPage() {
       return
     }
     setError('')
+    navigate('/app/dentists', { replace: true })
   }
 
   const handleRestore = () => {

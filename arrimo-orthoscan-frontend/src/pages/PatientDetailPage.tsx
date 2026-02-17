@@ -314,7 +314,13 @@ export default function PatientDetailPage() {
     if (!canDelete) return
     const confirmed = window.confirm('Tem certeza que deseja excluir este paciente?')
     if (!confirmed) return
-    softDeletePatient(existing.id)
+    const result = softDeletePatient(existing.id)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setError('')
+    navigate('/app/patients', { replace: true })
   }
 
   const handleRestore = () => {
