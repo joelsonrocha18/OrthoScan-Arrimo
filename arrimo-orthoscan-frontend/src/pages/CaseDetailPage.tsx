@@ -201,7 +201,6 @@ export default function CaseDetailPage() {
   const canWrite = can(currentUser, 'cases.write')
   const [selectedTray, setSelectedTray] = useState<CaseTray | null>(null)
   const [trayState, setSelectedTrayState] = useState<TrayState>('pendente')
-  const [reworkArch, setReworkArch] = useState<'superior' | 'inferior' | 'ambos'>('ambos')
   const [trayNote, setTrayNote] = useState('')
   const [budgetValue, setBudgetValue] = useState('')
   const [budgetNotes, setBudgetNotes] = useState('')
@@ -395,7 +394,6 @@ export default function CaseDetailPage() {
     if (!canWrite) return
     setSelectedTray(tray)
     setSelectedTrayState(tray.state)
-    setReworkArch(currentCase.arch ?? 'ambos')
     setTrayNote(tray.notes ?? '')
   }
 
@@ -410,7 +408,6 @@ export default function CaseDetailPage() {
       return
     }
 
-    let keepModalOpen = false
     if (trayState !== trayInCase.state) {
       const stateResult = setTrayState(currentCase.id, selectedTray.trayNumber, trayState)
       if (!stateResult.ok) {
@@ -435,7 +432,7 @@ export default function CaseDetailPage() {
           const created = addLabItem({
             caseId: currentCase.id,
             requestKind: 'reconfeccao',
-            arch: reworkArch,
+            arch: currentCase.arch ?? 'ambos',
             plannedUpperQty: 0,
             plannedLowerQty: 0,
             patientName: currentCase.patientName,
@@ -454,14 +451,13 @@ export default function CaseDetailPage() {
             addToast({ type: 'error', title: 'Reconfeccao', message: created.sync.message })
             return
           }
-          keepModalOpen = true
         }
 
         if (!hasOpenReworkProduction) {
           const production = addLabItem({
             caseId: currentCase.id,
             requestKind: 'producao',
-            arch: reworkArch,
+            arch: currentCase.arch ?? 'ambos',
             plannedUpperQty: 0,
             plannedLowerQty: 0,
             patientName: currentCase.patientName,
@@ -480,7 +476,6 @@ export default function CaseDetailPage() {
             addToast({ type: 'error', title: 'Rework', message: production.sync.message })
             return
           }
-          keepModalOpen = true
         }
 
         if (!hasOpenRework || !hasOpenReworkProduction) {
@@ -494,9 +489,7 @@ export default function CaseDetailPage() {
     )
     updateCase(currentCase.id, { trays: nextTrays })
     addToast({ type: 'success', title: 'Placa atualizada' })
-    if (!keepModalOpen) {
-      setSelectedTray(null)
-    }
+    setSelectedTray(null)
   }
 
   const handleAttachmentSave = () => {
@@ -777,75 +770,77 @@ export default function CaseDetailPage() {
         </Card>
       </section>
 
-      <section className="mt-6">
-        <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Fluxo do Tratamento</h2>
-          <p className="mt-1 text-sm text-slate-500">Fase atual: {phaseLabelMap[currentCase.phase]}</p>
+      {!hasProductionOrder ? (
+        <section className="mt-6">
+          <Card>
+            <h2 className="text-lg font-semibold text-slate-900">Fluxo do Tratamento</h2>
+            <p className="mt-1 text-sm text-slate-500">Fase atual: {phaseLabelMap[currentCase.phase]}</p>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-sm font-semibold text-slate-800">Etapa 1 - Planejamento</p>
-              <Button className="mt-2" size="sm" onClick={concludePlanning} disabled={currentCase.phase !== 'planejamento' || !canWrite}>
-                Concluir planejamento
-              </Button>
-            </div>
+            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="text-sm font-semibold text-slate-800">Etapa 1 - Planejamento</p>
+                <Button className="mt-2" size="sm" onClick={concludePlanning} disabled={currentCase.phase !== 'planejamento' || !canWrite}>
+                  Concluir planejamento
+                </Button>
+              </div>
 
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-sm font-semibold text-slate-800">Etapa 2 - Orcamento</p>
-              <div className="mt-2 grid gap-2">
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="Valor do orcamento"
-                  value={budgetValue}
-                  onChange={(event) => setBudgetValue(event.target.value)}
-                />
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="text-sm font-semibold text-slate-800">Etapa 2 - Orcamento</p>
+                <div className="mt-2 grid gap-2">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Valor do orcamento"
+                    value={budgetValue}
+                    onChange={(event) => setBudgetValue(event.target.value)}
+                  />
+                  <textarea
+                    rows={2}
+                    placeholder="Observacoes do orcamento"
+                    value={budgetNotes}
+                    onChange={(event) => setBudgetNotes(event.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  />
+                  <Button size="sm" onClick={closeBudget} disabled={currentCase.phase !== 'orcamento' || !canWrite}>
+                    Fechar orcamento
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="text-sm font-semibold text-slate-800">Etapa 3 - Contrato</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Status: {currentCase.contract?.status ?? 'pendente'}
+                  {currentCase.contract?.approvedAt ? ` | Aprovado em ${new Date(currentCase.contract.approvedAt).toLocaleString('pt-BR')}` : ''}
+                </p>
                 <textarea
                   rows={2}
-                  placeholder="Observacoes do orcamento"
-                  value={budgetNotes}
-                  onChange={(event) => setBudgetNotes(event.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  placeholder="Observacoes do contrato"
+                  value={contractNotes}
+                  onChange={(event) => setContractNotes(event.target.value)}
+                  className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
                 />
-                <Button size="sm" onClick={closeBudget} disabled={currentCase.phase !== 'orcamento' || !canWrite}>
-                  Fechar orcamento
+                <Button className="mt-2" size="sm" onClick={approveContract} disabled={currentCase.phase !== 'contrato_pendente' || !canWrite}>
+                  Aprovar contrato
+                </Button>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="text-sm font-semibold text-slate-800">Etapa 4 - Ordem de Servico (LAB)</p>
+                <Button
+                  className="mt-2"
+                  size="sm"
+                  onClick={createLabOrder}
+                  disabled={!(currentCase.phase === 'contrato_aprovado' || currentCase.phase === 'em_producao') || !canWrite}
+                  title={currentCase.phase === 'contrato_aprovado' || currentCase.phase === 'em_producao' ? '' : 'Contrato precisa estar aprovado para gerar OS'}
+                >
+                  Gerar OS para o LAB
                 </Button>
               </div>
             </div>
-
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-sm font-semibold text-slate-800">Etapa 3 - Contrato</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Status: {currentCase.contract?.status ?? 'pendente'}
-                {currentCase.contract?.approvedAt ? ` | Aprovado em ${new Date(currentCase.contract.approvedAt).toLocaleString('pt-BR')}` : ''}
-              </p>
-              <textarea
-                rows={2}
-                placeholder="Observacoes do contrato"
-                value={contractNotes}
-                onChange={(event) => setContractNotes(event.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-              />
-              <Button className="mt-2" size="sm" onClick={approveContract} disabled={currentCase.phase !== 'contrato_pendente' || !canWrite}>
-                Aprovar contrato
-              </Button>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 p-3">
-              <p className="text-sm font-semibold text-slate-800">Etapa 4 - Ordem de Servico (LAB)</p>
-              <Button
-                className="mt-2"
-                size="sm"
-                onClick={createLabOrder}
-                disabled={!(currentCase.phase === 'contrato_aprovado' || currentCase.phase === 'em_producao') || !canWrite}
-                title={currentCase.phase === 'contrato_aprovado' || currentCase.phase === 'em_producao' ? '' : 'Contrato precisa estar aprovado para gerar OS'}
-              >
-                Gerar OS para o LAB
-              </Button>
-            </div>
-          </div>
-        </Card>
-      </section>
+          </Card>
+        </section>
+      ) : null}
 
       <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
@@ -1262,20 +1257,6 @@ export default function CaseDetailPage() {
                   <option value="rework">Rework</option>
                 </select>
               </div>
-              {trayState === 'rework' ? (
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Arcada do rework</label>
-                  <select
-                    value={reworkArch}
-                    onChange={(event) => setReworkArch(event.target.value as 'superior' | 'inferior' | 'ambos')}
-                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-                  >
-                    <option value="inferior">Inferior</option>
-                    <option value="superior">Superior</option>
-                    <option value="ambos">Ambas</option>
-                  </select>
-                </div>
-              ) : null}
 
               {linkedLabItems.some((item) => item.trayNumber === selectedTray.trayNumber) ? (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
