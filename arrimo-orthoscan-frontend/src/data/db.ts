@@ -12,6 +12,8 @@ import { EXTRA_SLOTS, INTRA_SLOTS } from '../mocks/photoSlots'
 
 export const DB_KEY = 'arrimo_orthoscan_db_v1'
 const DB_MODE_KEY = 'arrimo_orthoscan_seed_mode_v1'
+const HOTFIX_RESET_JOELSON_TREATMENT_KEY = 'arrimo_hotfix_reset_joelson_treatment_v1'
+const HOTFIX_RESET_JOELSON_TARGET = 'JOELSON DOS ANJOS ROCHA'
 const SEED_MODE = ((import.meta.env.VITE_LOCAL_SEED as string | undefined) ?? 'full') as 'full' | 'empty'
 const MASTER_EMAIL = (import.meta.env.VITE_LOCAL_MASTER_EMAIL as string | undefined)?.trim()
 const LOCAL_DEFAULT_PASSWORD = (import.meta.env.VITE_LOCAL_PASSWORD as string | undefined)?.trim()
@@ -146,6 +148,14 @@ function patientIdFromName(name: string) {
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
   return `pat_${normalized || 'sem_nome'}`
+}
+
+function normalizeName(name: string) {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
 }
 
 function isArrimoClinic(clinic?: Pick<Clinic, 'id' | 'tradeName'> | null) {
@@ -966,6 +976,46 @@ function normalizeDb(raw: unknown): AppDb {
   }
 }
 
+function applyHotfixResetJoelsonTreatment(db: AppDb): AppDb {
+  if (typeof window === 'undefined') return db
+  if (localStorage.getItem(HOTFIX_RESET_JOELSON_TREATMENT_KEY) === 'done') return db
+
+  const target = db.cases.find(
+    (item) => normalizeName(item.patientName) === normalizeName(HOTFIX_RESET_JOELSON_TARGET),
+  )
+  if (!target) return db
+
+  const resetTrays = buildPendingTrays(target.scanDate, target.totalTrays, target.changeEveryDays).map((tray) => ({
+    ...tray,
+    deliveredAt: undefined,
+    notes: undefined,
+  }))
+  const nextStatus: CaseStatus = 'planejamento'
+  const nextPhase: CasePhase = target.contract?.status === 'aprovado' ? 'contrato_aprovado' : 'planejamento'
+
+  const nextCases = db.cases.map((item) =>
+    item.id === target.id
+      ? {
+          ...item,
+          trays: resetTrays,
+          deliveryLots: [],
+          installation: undefined,
+          status: nextStatus,
+          phase: nextPhase,
+          updatedAt: nowIso(),
+        }
+      : item,
+  )
+  const nextLabItems = db.labItems.filter((item) => item.caseId !== target.id)
+
+  localStorage.setItem(HOTFIX_RESET_JOELSON_TREATMENT_KEY, 'done')
+  return {
+    ...db,
+    cases: nextCases,
+    labItems: nextLabItems,
+  }
+}
+
 export function ensureSeed() {
   const mode = effectiveSeedMode()
   const raw = localStorage.getItem(DB_KEY)
@@ -976,7 +1026,7 @@ export function ensureSeed() {
   }
 
   try {
-    const normalized = normalizeDb(JSON.parse(raw) as unknown)
+    const normalized = applyHotfixResetJoelsonTreatment(normalizeDb(JSON.parse(raw) as unknown))
     if (mode === 'empty') {
       const nextDb: AppDb = {
         ...normalized,
