@@ -138,13 +138,17 @@ export default function LabPage() {
   const readyDeliveryItems = useMemo(
     () =>
       items.filter(
-        (item) =>
-          item.caseId &&
-          (item.requestKind ?? 'producao') === 'producao' &&
-          item.status === 'prontas' &&
-          !isReworkItem(item),
+        (item) => {
+          if (!item.caseId) return false
+          if ((item.requestKind ?? 'producao') !== 'producao') return false
+          if (item.status !== 'prontas') return false
+          if (isReworkItem(item)) return false
+          const caseItem = caseById.get(item.caseId)
+          const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
+          return tray?.state === 'pronta'
+        },
       ),
-    [items],
+    [caseById, items],
   )
   const casesReadyForDelivery = useMemo(
     () => new Set(readyDeliveryItems.map((item) => item.caseId as string)),
