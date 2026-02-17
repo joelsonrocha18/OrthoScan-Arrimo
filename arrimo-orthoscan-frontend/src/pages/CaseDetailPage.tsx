@@ -292,7 +292,10 @@ export default function CaseDetailPage() {
   }, [changeSchedule, totalLower])
   const scheduleSummary = useMemo(() => countScheduleStates(changeSchedule), [changeSchedule])
   const inProductionCount = useMemo(() => scheduleSummary.em_producao + scheduleSummary.controle_qualidade, [scheduleSummary])
-  const readyCount = useMemo(() => scheduleSummary.prontas, [scheduleSummary])
+  const readyCount = useMemo(
+    () => Math.max(0, Math.min(readyToDeliverPatient.upper, readyToDeliverPatient.lower)),
+    [readyToDeliverPatient.lower, readyToDeliverPatient.upper],
+  )
   const deliveredPairCount = useMemo(() => Math.max(0, Math.min(progressUpper.delivered, progressLower.delivered)), [progressLower.delivered, progressUpper.delivered])
   const linkedLabItems = useMemo(
     () => (currentCase ? db.labItems.filter((item) => item.caseId === currentCase.id) : []),
