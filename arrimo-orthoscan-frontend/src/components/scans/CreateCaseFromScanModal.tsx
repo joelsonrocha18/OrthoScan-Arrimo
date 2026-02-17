@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Scan } from '../../types/Scan'
 import Button from '../Button'
 import Card from '../Card'
@@ -24,6 +24,24 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
   const [attachmentBondingTray, setAttachmentBondingTray] = useState(false)
   const [planningNote, setPlanningNote] = useState('')
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!open || !scan) return
+    if (scan.arch === 'superior') {
+      setUpper('24')
+      setLower('')
+    } else if (scan.arch === 'inferior') {
+      setUpper('')
+      setLower('20')
+    } else {
+      setUpper('24')
+      setLower('20')
+    }
+    setChangeEveryDays('7')
+    setAttachmentBondingTray(false)
+    setPlanningNote('')
+    setError('')
+  }, [open, scan])
 
   if (!open || !scan) return null
 
@@ -67,11 +85,38 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
       <Card className="w-full max-w-lg">
         <h3 className="text-xl font-semibold text-slate-900">Criar Caso a partir do Scan</h3>
-        <p className="mt-1 text-sm text-slate-500">Planejamento inicial de placas para superior/inferior.</p>
-        <p className="mt-1 text-xs text-slate-500">Superior e inferior podem ter quantidades diferentes.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          {scan.arch === 'ambos'
+            ? 'Planejamento inicial de placas para superior/inferior.'
+            : `Planejamento inicial de placas para arcada ${scan.arch}.`}
+        </p>
+        {scan.arch === 'ambos' ? (
+          <p className="mt-1 text-xs text-slate-500">Superior e inferior podem ter quantidades diferentes.</p>
+        ) : null}
 
         <div className="mt-4 grid gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {scan.arch === 'ambos' ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Total de placas Superior</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={upper}
+                  onChange={(event) => setUpper(event.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Total de placas Inferior</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={lower}
+                  onChange={(event) => setLower(event.target.value)}
+                />
+              </div>
+            </div>
+          ) : scan.arch === 'superior' ? (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Total de placas Superior</label>
               <Input
@@ -79,9 +124,9 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
                 min={0}
                 value={upper}
                 onChange={(event) => setUpper(event.target.value)}
-                disabled={scan.arch === 'inferior'}
               />
             </div>
+          ) : (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Total de placas Inferior</label>
               <Input
@@ -89,10 +134,9 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
                 min={0}
                 value={lower}
                 onChange={(event) => setLower(event.target.value)}
-                disabled={scan.arch === 'superior'}
               />
             </div>
-          </div>
+          )}
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Troca a cada (dias)</label>
