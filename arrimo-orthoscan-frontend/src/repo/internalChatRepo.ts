@@ -4,6 +4,7 @@ export type InternalChatMessage = {
   id: string
   sender_user_id: string
   sender_name: string
+  sender_role: string
   body: string
   room_key: string
   room_label: string
@@ -14,7 +15,7 @@ export async function listInternalChatMessages(roomKey: string, limit = 80) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.', data: [] as InternalChatMessage[] }
   const { data, error } = await supabase
     .from('internal_chat_messages')
-    .select('id, sender_user_id, sender_name, body, room_key, room_label, created_at')
+    .select('id, sender_user_id, sender_name, sender_role, body, room_key, room_label, created_at')
     .eq('room_key', roomKey)
     .order('created_at', { ascending: true })
     .limit(limit)
@@ -22,11 +23,12 @@ export async function listInternalChatMessages(roomKey: string, limit = 80) {
   return { ok: true as const, data: (data ?? []) as InternalChatMessage[] }
 }
 
-export async function sendInternalChatMessage(payload: { senderUserId: string; senderName: string; body: string; roomKey: string; roomLabel: string }) {
+export async function sendInternalChatMessage(payload: { senderUserId: string; senderName: string; senderRole: string; body: string; roomKey: string; roomLabel: string }) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
   const { error } = await supabase.from('internal_chat_messages').insert({
     sender_user_id: payload.senderUserId,
     sender_name: payload.senderName,
+    sender_role: payload.senderRole,
     body: payload.body,
     room_key: payload.roomKey,
     room_label: payload.roomLabel,

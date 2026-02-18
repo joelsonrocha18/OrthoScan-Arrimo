@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, Send, Users } from 'lucide-react'
 import { profileLabel } from '../auth/permissions'
-import { listCasesForUser } from '../auth/scope'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
 import { DATA_MODE } from '../data/dataMode'
 import { supabase } from '../lib/supabaseClient'
 import {
   listInternalChatMessages,
-  listInternalChatUnreadCounts,
   markInternalChatRoomRead,
   sendInternalChatMessage,
   type InternalChatMessage,
@@ -38,41 +36,31 @@ export default function InternalChatWidget() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<InternalChatMessage[]>([])
-  const [selectedRoom, setSelectedRoom] = useState('global')
-  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
+  const [unreadCount, setUnreadCount] = useState(0)
   const [presence, setPresence] = useState<Record<string, PresenceEntry>>({})
   const listRef = useRef<HTMLDivElement | null>(null)
 
   const isSupabaseMode = DATA_MODE === 'supabase' && Boolean(supabase)
   const displayName = (currentUser?.name ?? currentUser?.email ?? '').trim() || 'Usuario'
   const myUserId = currentUser?.id ?? ''
-  const cases = useMemo(() => listCasesForUser(db, currentUser), [db, currentUser])
-  const rooms = useMemo(() => {
-    const caseRooms = cases
-      .filter((item) => item.treatmentCode)
-      .slice(0, 10)
-      .map((item) => ({
-        key: `case:${item.id}`,
-        label: item.treatmentCode!,
-      }))
-    return [{ key: 'global', label: 'Geral' }, ...caseRooms]
-  }, [cases])
+  const roomKey = 'global'
+  const isExternal = currentUser?.role === 'dentist_client' || currentUser?.role === 'clinic_client'
+  const isArrimoRole = (role?: string) => role === 'master_admin' || role === 'dentist_admin' || role === 'lab_tech' || role === 'receptionist'
+  const canSeeMessage = (item: InternalChatMessage) => {
+    if (!isExternal) return true
+    if (item.sender_user_id === myUserId) return true
+    return isArrimoRole(item.sender_role)
+  }
+  const canSeePresence = (role?: string, userId?: string) => {
+    if (!isExternal) return true
+    if (userId === myUserId) return true
+    return isArrimoRole(role)
+  }
 
   useEffect(() => {
     if (!open || !listRef.current) return
     listRef.current.scrollTop = listRef.current.scrollHeight
   }, [messages, open])
-
-  useEffect(() => {
-    if (!rooms.some((item) => item.key === selectedRoom)) {
-      setSelectedRoom('global')
-    }
-  }, [rooms, selectedRoom])
-
-  const selectedRoomMeta = useMemo(
-    () => rooms.find((item) => item.key === selectedRoom) ?? { key: 'global', label: 'Geral' },
-    [rooms, selectedRoom],
-  )
 
   const beepNewMessage = () => {
     try {
@@ -103,16 +91,16 @@ export default function InternalChatWidget() {
     let isMounted = true
     setLoading(true)
     setError(null)
-    void listInternalChatMessages(selectedRoomMeta.key).then(async (result) => {
+    void listInternalChatMessages(roomKey).then(async (result) => {
       if (!isMounted) return
       if (!result.ok) {
         setError(result.error)
       } else {
-        setMessages(result.data)
+        setMessages(result.data.filter(canSeeMessage))
         const lastMessageDate = result.data[result.data.length - 1]?.created_at
         if (open) {
-          await markInternalChatRoomRead({ userId: currentUser.id, roomKey: selectedRoomMeta.key, readAt: lastMessageDate })
-          setUnreadCounts((current) => ({ ...current, [selectedRoomMeta.key]: 0 }))
+          await markInternalChatRoomRead({ userId: currentUser.id, roomKey, readAt: lastMessageDate })
+          setUnreadCount(0)
         }
       }
       setLoading(false)
@@ -120,17 +108,11 @@ export default function InternalChatWidget() {
     return () => {
       isMounted = false
     }
-  }, [currentUser, isSupabaseMode, open, selectedRoomMeta.key])
+  }, [currentUser, isSupabaseMode, open])
 
   useEffect(() => {
     const sb = supabase
     if (!isSupabaseMode || !currentUser || !sb) return
-
-    let isMounted = true
-    void listInternalChatUnreadCounts({ userId: currentUser.id, roomKeys: rooms.map((item) => item.key) }).then((result) => {
-      if (!isMounted || !result.ok) return
-      setUnreadCounts(result.data)
-    })
 
     const messagesChannel = sb
       .channel('internal-chat-stream')
@@ -139,18 +121,16 @@ export default function InternalChatWidget() {
         { event: 'INSERT', schema: 'public', table: 'internal_chat_messages' },
         (payload) => {
           const row = payload.new as InternalChatMessage
-          const roomKey = row.room_key || 'global'
+          if (row.room_key !== roomKey) return
+          if (!canSeeMessage(row)) return
           const isMine = row.sender_user_id === currentUser.id
-          const isCurrentRoom = roomKey === selectedRoomMeta.key
-          if (isCurrentRoom) {
-            setMessages((current) => [...current, row].slice(-200))
-          }
-          if (!isMine && (!open || !isCurrentRoom || document.visibilityState !== 'visible')) {
-            setUnreadCounts((current) => ({ ...current, [roomKey]: (current[roomKey] ?? 0) + 1 }))
+          setMessages((current) => [...current, row].slice(-200))
+          if (!isMine && (!open || document.visibilityState !== 'visible')) {
+            setUnreadCount((current) => current + 1)
             beepNewMessage()
-          } else if (open && isCurrentRoom) {
+          } else if (open) {
             void markInternalChatRoomRead({ userId: currentUser.id, roomKey, readAt: row.created_at })
-            setUnreadCounts((current) => ({ ...current, [roomKey]: 0 }))
+            setUnreadCount(0)
           }
         },
       )
@@ -163,7 +143,7 @@ export default function InternalChatWidget() {
         const next: Record<string, PresenceEntry> = {}
         Object.entries(state).forEach(([key, values]) => {
           const entry = values?.[0]
-          if (entry) {
+          if (entry && canSeePresence(entry.role, entry.userId || key)) {
             next[key] = {
               userId: entry.userId || key,
               name: entry.name || 'Usuario',
@@ -186,14 +166,12 @@ export default function InternalChatWidget() {
       })
 
     return () => {
-      isMounted = false
       void sb.removeChannel(messagesChannel)
       void sb.removeChannel(presenceChannel)
     }
-  }, [currentUser, displayName, isSupabaseMode, open, rooms, selectedRoomMeta.key])
+  }, [currentUser, displayName, isSupabaseMode, open])
 
   const onlineUsers = useMemo(() => Object.values(presence).sort((a, b) => a.name.localeCompare(b.name)), [presence])
-  const totalUnread = useMemo(() => Object.values(unreadCounts).reduce((sum, value) => sum + value, 0), [unreadCounts])
 
   const handleSend = async () => {
     const body = message.trim()
@@ -202,9 +180,10 @@ export default function InternalChatWidget() {
     const result = await sendInternalChatMessage({
       senderUserId: currentUser.id,
       senderName: displayName,
+      senderRole: currentUser.role,
       body,
-      roomKey: selectedRoomMeta.key,
-      roomLabel: selectedRoomMeta.label,
+      roomKey,
+      roomLabel: 'Geral',
     })
     if (!result.ok) {
       setError(result.error)
@@ -224,7 +203,7 @@ export default function InternalChatWidget() {
       >
         <MessageCircle className="h-4 w-4" />
         Chat interno
-        {totalUnread > 0 ? <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] leading-none">{totalUnread}</span> : null}
+        {unreadCount > 0 ? <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[11px] leading-none">{unreadCount}</span> : null}
       </button>
       {open ? (
         <div className="fixed bottom-20 right-5 z-40 w-[420px] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white shadow-2xl">
@@ -234,31 +213,6 @@ export default function InternalChatWidget() {
               <Users className="h-3.5 w-3.5" />
               {onlineUsers.length} online
             </p>
-          </div>
-          <div className="max-h-20 overflow-x-auto border-b border-slate-200 px-3 py-2">
-            <div className="flex min-w-max gap-2">
-              {rooms.map((room) => {
-                const active = room.key === selectedRoomMeta.key
-                const unread = unreadCounts[room.key] ?? 0
-                return (
-                  <button
-                    key={room.key}
-                    type="button"
-                    onClick={() => {
-                      setSelectedRoom(room.key)
-                      setUnreadCounts((current) => ({ ...current, [room.key]: 0 }))
-                      if (currentUser) {
-                        void markInternalChatRoomRead({ userId: currentUser.id, roomKey: room.key })
-                      }
-                    }}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${active ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-700'}`}
-                  >
-                    {room.label}
-                    {unread > 0 ? <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] ${active ? 'bg-white text-brand-600' : 'bg-red-500 text-white'}`}>{unread}</span> : null}
-                  </button>
-                )
-              })}
-            </div>
           </div>
           <div className="max-h-20 overflow-y-auto border-b border-slate-200 px-4 py-2">
             <div className="flex flex-wrap gap-2">
@@ -294,7 +248,7 @@ export default function InternalChatWidget() {
                     void handleSend()
                   }
                 }}
-                placeholder={`Mensagem em ${selectedRoomMeta.label}...`}
+                placeholder="Mensagem no chat interno..."
                 className="h-10 flex-1 rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500"
               />
               <button
