@@ -7,6 +7,7 @@ type RegisterDeliveryLotModalProps = {
   open: boolean
   caseOptions?: Array<{ id: string; label: string }>
   selectedCaseId?: string
+  isSelectedRework?: boolean
   onCaseChange?: (caseId: string) => void
   onClose: () => void
   onConfirm: (payload: {
@@ -21,6 +22,7 @@ export default function RegisterDeliveryLotModal({
   open,
   caseOptions,
   selectedCaseId,
+  isSelectedRework = false,
   onCaseChange,
   onClose,
   onConfirm,
@@ -59,13 +61,30 @@ export default function RegisterDeliveryLotModal({
             <Input type="date" value={deliveredToDoctorAt} onChange={(event) => setDeliveredToDoctorAt(event.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
+            {isSelectedRework ? (
+              <div className="col-span-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                Rework selecionado: a entrega sera registrada automaticamente pela placa solicitada.
+              </div>
+            ) : null}
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Qtd Superior</label>
-              <Input type="number" min={0} value={upperQty} onChange={(event) => setUpperQty(event.target.value)} />
+              <Input
+                type="number"
+                min={0}
+                value={upperQty}
+                disabled={isSelectedRework}
+                onChange={(event) => setUpperQty(event.target.value)}
+              />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Qtd Inferior</label>
-              <Input type="number" min={0} value={lowerQty} onChange={(event) => setLowerQty(event.target.value)} />
+              <Input
+                type="number"
+                min={0}
+                value={lowerQty}
+                disabled={isSelectedRework}
+                onChange={(event) => setLowerQty(event.target.value)}
+              />
             </div>
           </div>
           <div>

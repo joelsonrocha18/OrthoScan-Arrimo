@@ -163,6 +163,14 @@ export default function LabPage() {
         })),
     [readyDeliveryItems, visibleCases],
   )
+  const selectedDeliveryItem = useMemo(
+    () => readyDeliveryItems.find((item) => item.id === deliveryCaseId),
+    [deliveryCaseId, readyDeliveryItems],
+  )
+  const selectedDeliveryIsRework = useMemo(
+    () => !!selectedDeliveryItem && (isReworkItem(selectedDeliveryItem) || isReworkProductionItem(selectedDeliveryItem)),
+    [selectedDeliveryItem],
+  )
   const casesWithAlerts = useMemo(
     () =>
       new Set(
@@ -565,6 +573,7 @@ export default function LabPage() {
         open={deliveryOpen}
         caseOptions={deliveryCaseOptions}
         selectedCaseId={deliveryCaseId}
+        isSelectedRework={selectedDeliveryIsRework}
         onCaseChange={setDeliveryCaseId}
         onClose={() => setDeliveryOpen(false)}
         onConfirm={(payload) => {
