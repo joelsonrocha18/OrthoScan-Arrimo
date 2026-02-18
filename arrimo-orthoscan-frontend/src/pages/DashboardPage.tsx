@@ -13,9 +13,11 @@
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
+import { listCasesForUser, listLabItemsForUser, listPatientsForUser, listScansForUser } from '../auth/scope'
 import Card from '../components/Card'
 import AppShell from '../layouts/AppShell'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
+import { getCurrentUser } from '../lib/auth'
 import { useDb } from '../lib/useDb'
 
 type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success'
@@ -80,8 +82,13 @@ function KpiCard(props: { title: string; value: string; meta: string; tone?: Ton
 
 export default function DashboardPage() {
   const { db } = useDb()
+  const currentUser = getCurrentUser(db)
+  const visiblePatients = listPatientsForUser(db, currentUser)
+  const visibleScans = listScansForUser(db, currentUser)
+  const visibleCases = listCasesForUser(db, currentUser)
+  const visibleLabItems = listLabItemsForUser(db, currentUser)
 
-  const scansRecentItems = db.scans
+  const scansRecentItems = visibleScans
     .slice()
     .sort((a, b) => (b.scanDate || '').localeCompare(a.scanDate || ''))
   const scansRecent = scansRecentItems.length
@@ -89,17 +96,17 @@ export default function DashboardPage() {
   const planningPending = planningPendingItems.length
   const plansDone = Math.max(0, scansRecent - planningPending)
 
-  const budgetsOpenItems = db.cases.filter((caseItem) => caseItem.phase === 'orcamento')
-  const contractsToCloseItems = db.cases.filter((caseItem) => caseItem.phase === 'contrato_pendente')
+  const budgetsOpenItems = visibleCases.filter((caseItem) => caseItem.phase === 'orcamento')
+  const contractsToCloseItems = visibleCases.filter((caseItem) => caseItem.phase === 'contrato_pendente')
 
-  const queueItems = db.labItems.filter((item) => item.status === 'aguardando_iniciar')
-  const inProductionItems = db.labItems.filter((item) => item.status === 'em_producao' || item.status === 'controle_qualidade')
-  const caseById = new Map(db.cases.map((caseItem) => [caseItem.id, caseItem]))
+  const queueItems = visibleLabItems.filter((item) => item.status === 'aguardando_iniciar')
+  const inProductionItems = visibleLabItems.filter((item) => item.status === 'em_producao' || item.status === 'controle_qualidade')
+  const caseById = new Map(visibleCases.map((caseItem) => [caseItem.id, caseItem]))
   const isReworkItem = (notes?: string, requestKind?: string) => {
     const note = (notes ?? '').toLowerCase()
     return requestKind === 'reconfeccao' || note.includes('rework') || note.includes('defeito') || note.includes('reconfecc')
   }
-  const readyToDeliverItems = db.labItems.filter((item) => {
+  const readyToDeliverItems = visibleLabItems.filter((item) => {
     if (!item.caseId) return false
     if ((item.requestKind ?? 'producao') !== 'producao') return false
     if (item.status !== 'prontas') return false
@@ -108,16 +115,15 @@ export default function DashboardPage() {
     const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
     return tray?.state === 'pronta'
   })
-  const reworkItems = db.labItems.filter((item) => item.requestKind === 'reconfeccao' && item.status !== 'prontas')
+  const reworkItems = visibleLabItems.filter((item) => item.requestKind === 'reconfeccao' && item.status !== 'prontas')
 
-  const inTreatmentCases = db.cases.filter((caseItem) => caseItem.phase !== 'finalizado' && caseItem.status !== 'finalizado')
-  const completedCases = db.cases.filter((caseItem) => caseItem.phase === 'finalizado' || caseItem.status === 'finalizado')
+  const completedCases = visibleCases.filter((caseItem) => caseItem.phase === 'finalizado' || caseItem.status === 'finalizado')
 
   const planningPendingTone: Tone = planningPending > 0 ? (planningPending >= 10 ? 'danger' : 'warning') : 'success'
   const reworksTone: Tone = reworkItems.length > 0 ? 'danger' : 'neutral'
 
-  const hasCases = db.cases.length > 0
-  const closedContractCases = db.cases.filter((caseItem) => {
+  const hasCases = visibleCases.length > 0
+  const closedContractCases = visibleCases.filter((caseItem) => {
     const contractClosed = caseItem.contract?.status === 'aprovado'
     const phaseClosed = caseItem.phase === 'contrato_aprovado' || caseItem.phase === 'em_producao' || caseItem.phase === 'finalizado'
     return contractClosed || phaseClosed
@@ -262,7 +268,7 @@ export default function DashboardPage() {
 
         <section className="mt-8">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard title="Pacientes em tratamento" value={String(inTreatmentCases.length)} meta="Ativos" tone="neutral" icon={<UsersRound className="h-4 w-4" />} />
+            <KpiCard title="Pacientes em tratamento" value={String(visiblePatients.length)} meta="Ativos" tone="neutral" icon={<UsersRound className="h-4 w-4" />} />
             <KpiCard title="Casos concluídos" value={String(completedCases.length)} meta="Finalizados" tone="neutral" icon={<PackageCheck className="h-4 w-4" />} />
             <Card className="border border-slate-800/70 bg-slate-950/40 p-5 shadow-none backdrop-blur sm:col-span-2">
               <div className="flex items-start justify-between gap-4">

@@ -73,13 +73,12 @@ const rolePermissions: Record<Role, Permission[]> = {
   master_admin: allPermissions,
   dentist_admin: allPermissions.filter(
     (perm) =>
-      (!perm.endsWith('.delete') || perm === 'users.delete') &&
-      perm !== 'patients.delete' &&
+      (!perm.endsWith('.delete') || perm === 'users.delete' || perm === 'patients.delete') &&
       perm !== 'dentists.delete' &&
       perm !== 'clinics.delete',
   ),
-  dentist_client: ['dashboard.read', 'patients.read', 'scans.read', 'cases.read', 'docs.read', 'docs.write'],
-  clinic_client: ['dashboard.read', 'patients.read', 'scans.read', 'cases.read', 'docs.read', 'docs.write'],
+  dentist_client: ['dashboard.read', 'patients.read', 'patients.write', 'scans.read', 'cases.read', 'docs.read'],
+  clinic_client: ['dashboard.read', 'patients.read', 'patients.write', 'scans.read', 'cases.read', 'docs.read'],
   lab_tech: ['lab.read', 'cases.read', 'scans.read'],
   receptionist: ['dashboard.read', 'patients.read', 'patients.write', 'scans.read', 'scans.write', 'cases.read', 'lab.read'],
 }
@@ -96,8 +95,8 @@ const profileLabels: Record<Role, string> = {
 const profileDescriptions: Record<Role, string> = {
   master_admin: 'Acesso total ao sistema e configuracoes avancadas.',
   dentist_admin: 'Gestao operacional da clinica com permissoes administrativas.',
-  dentist_client: 'Acesso ao acompanhamento clinico vinculado ao dentista.',
-  clinic_client: 'Acesso de leitura e acompanhamento da clinica vinculada.',
+  dentist_client: 'Perfil externo: visualiza e cadastra pacientes vinculados ao dentista.',
+  clinic_client: 'Perfil externo: visualiza e cadastra pacientes vinculados a clinica.',
   lab_tech: 'Execucao e acompanhamento do fluxo de laboratorio.',
   receptionist: 'Suporte de cadastro e atendimento operacional.',
 }

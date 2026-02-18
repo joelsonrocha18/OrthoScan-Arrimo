@@ -111,6 +111,9 @@ export default function PatientDetailPage() {
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'patients.write')
   const canDelete = can(currentUser, 'patients.delete')
+  const canDeleteByRole = currentUser?.role === 'master_admin' || currentUser?.role === 'dentist_admin'
+  const canDeletePatient = canDelete && canDeleteByRole
+  const isExternalUser = currentUser?.role === 'dentist_client' || currentUser?.role === 'clinic_client'
   const canDocsWrite = can(currentUser, 'docs.write')
   const canDocsAdmin = currentUser?.role === 'master_admin' || currentUser?.role === 'dentist_admin' || currentUser?.role === 'receptionist'
   const isNew = params.id === 'new'
@@ -269,6 +272,10 @@ export default function PatientDetailPage() {
       setError('Nome e obrigatorio.')
       return
     }
+    if (!form.birthDate) {
+      setError('Data de nascimento e obrigatoria.')
+      return
+    }
     if (form.phone.trim() && !isValidFixedPhone(form.phone)) {
       setError('Telefone fixo invalido.')
       return
@@ -281,7 +288,7 @@ export default function PatientDetailPage() {
     const payload: Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> = {
       name: form.name.trim(),
       cpf: form.cpf.trim() || undefined,
-      birthDate: form.birthDate || undefined,
+      birthDate: form.birthDate,
       gender: form.gender,
       phone: form.phone.trim() || undefined,
       whatsapp: form.whatsapp.trim() || undefined,
@@ -297,6 +304,22 @@ export default function PatientDetailPage() {
       primaryDentistId: form.primaryDentistId || undefined,
       clinicId: form.clinicId || undefined,
       notes: form.notes.trim() || undefined,
+    }
+
+    if (currentUser?.role === 'dentist_client') {
+      if (!currentUser.linkedDentistId) {
+        setError('Perfil externo sem dentista vinculado. Contate o administrador.')
+        return
+      }
+      payload.primaryDentistId = currentUser.linkedDentistId
+      payload.clinicId = currentUser.linkedClinicId || payload.clinicId
+    }
+    if (currentUser?.role === 'clinic_client') {
+      if (!currentUser.linkedClinicId) {
+        setError('Perfil externo sem clinica vinculada. Contate o administrador.')
+        return
+      }
+      payload.clinicId = currentUser.linkedClinicId
     }
 
     if (isNew) {
@@ -320,7 +343,10 @@ export default function PatientDetailPage() {
 
   const handleDelete = () => {
     if (!existing) return
-    if (!canDelete) return
+    if (!canDeletePatient) {
+      setError('Somente Master Admin ou Dentista Admin podem excluir paciente.')
+      return
+    }
     const confirmed = window.confirm('Tem certeza que deseja excluir este paciente?')
     if (!confirmed) return
     const result = softDeletePatient(existing.id)
@@ -334,7 +360,7 @@ export default function PatientDetailPage() {
 
   const handleRestore = () => {
     if (!existing) return
-    if (!canDelete) return
+    if (!canDeletePatient) return
     restorePatient(existing.id)
   }
 
@@ -492,7 +518,7 @@ export default function PatientDetailPage() {
               <Input value={form.cpf} onChange={(event) => setForm((c) => ({ ...c, cpf: formatCpf(event.target.value) }))} />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Data nascimento</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Data nascimento *</label>
               <Input type="date" value={form.birthDate} onChange={(event) => setForm((c) => ({ ...c, birthDate: event.target.value }))} />
             </div>
             <div>
@@ -571,6 +597,7 @@ export default function PatientDetailPage() {
               <select
                 value={form.clinicId}
                 onChange={(event) => setForm((c) => ({ ...c, clinicId: event.target.value }))}
+                disabled={isExternalUser}
                 className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
               >
                 <option value="">Nenhuma</option>
@@ -592,6 +619,7 @@ export default function PatientDetailPage() {
               <select
                 value={form.primaryDentistId}
                 onChange={(event) => setForm((c) => ({ ...c, primaryDentistId: event.target.value }))}
+                disabled={isExternalUser}
                 className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
               >
                 <option value="">Nao definido</option>
@@ -712,12 +740,12 @@ export default function PatientDetailPage() {
 
       <section className="mt-6 flex flex-wrap gap-2">
         {canWrite ? <Button onClick={savePatient}>Salvar</Button> : null}
-        {existing && !existing.deletedAt && canDelete ? (
+        {existing && !existing.deletedAt && canDeletePatient ? (
           <Button variant="ghost" className="text-red-600 hover:text-red-700" onClick={handleDelete}>
             Excluir
           </Button>
         ) : null}
-        {existing?.deletedAt && canDelete ? (
+        {existing?.deletedAt && canDeletePatient ? (
           <Button variant="secondary" onClick={handleRestore}>
             Restaurar
           </Button>

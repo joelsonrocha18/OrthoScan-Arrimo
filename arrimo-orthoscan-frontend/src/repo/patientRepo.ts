@@ -39,6 +39,7 @@ export function createPatient(payload: Omit<Patient, 'id' | 'createdAt' | 'updat
   const db = loadDb()
   const name = normalizeName(payload.name)
   if (!name) return { ok: false as const, error: 'Nome e obrigatorio.' }
+  if (!payload.birthDate) return { ok: false as const, error: 'Data de nascimento e obrigatoria.' }
 
   const now = nowIso()
   const next: Patient = {
@@ -66,6 +67,8 @@ export function updatePatient(id: string, patch: Partial<Patient>) {
   const db = loadDb()
   const current = db.patients.find((item) => item.id === id)
   if (!current) return { ok: false as const, error: 'Paciente nao encontrado.' }
+  const nextBirthDate = patch.birthDate ?? current.birthDate
+  if (!nextBirthDate) return { ok: false as const, error: 'Data de nascimento e obrigatoria.' }
 
   const next: Patient = {
     ...current,

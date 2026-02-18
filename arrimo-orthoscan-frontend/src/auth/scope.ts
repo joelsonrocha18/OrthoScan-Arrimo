@@ -16,17 +16,7 @@ export function listPatientsForUser(db: AppDb, user: User | null) {
     const dentistIds = dentistIdsForClinic(db, clinicId)
     const patientsByClinic = db.patients.filter((patient) => patient.clinicId === clinicId)
     const patientsByDentist = db.patients.filter((patient) => patient.primaryDentistId && dentistIds.has(patient.primaryDentistId))
-    const idsFromScans = db.scans
-      .filter((scan) => scan.clinicId === clinicId)
-      .map((scan) => scan.patientId)
-      .filter(Boolean) as string[]
-    const idsFromCases = db.cases
-      .filter((caseItem) => caseItem.clinicId === clinicId)
-      .map((caseItem) => caseItem.patientId)
-      .filter(Boolean) as string[]
-    const ids = new Set([...idsFromScans, ...idsFromCases])
-    const patientsByCase = db.patients.filter((patient) => patient.id && ids.has(patient.id))
-    return Array.from(new Set([...patientsByClinic, ...patientsByDentist, ...patientsByCase]))
+    return Array.from(new Set([...patientsByClinic, ...patientsByDentist]))
   }
   return db.patients
 }
