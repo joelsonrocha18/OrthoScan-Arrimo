@@ -57,6 +57,26 @@ function formatCep(value: string) {
   return p2 ? `${p1}-${p2}` : p1
 }
 
+function composeAddressLine(parts: { street: string; number: string; district: string; city: string; state: string }) {
+  return [parts.street, parts.number, parts.district, parts.city, parts.state]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(' | ')
+}
+
+function splitAddressLine(addressLine?: string) {
+  const raw = (addressLine ?? '').trim()
+  if (!raw) return { street: '', number: '', district: '', city: '', state: '' }
+  if (!raw.includes('|')) {
+    const oldParts = raw.split(' - ').map((part) => part.trim())
+    const [street = '', district = '', cityState = ''] = oldParts
+    const [city = '', state = ''] = cityState.split('/').map((part) => part.trim())
+    return { street, number: '', district, city, state }
+  }
+  const [street = '', number = '', district = '', city = '', state = ''] = raw.split('|').map((part) => part.trim())
+  return { street, number, district, city, state }
+}
+
 function downloadFile(fileName: string, content: string, mime = 'text/plain') {
   const blob = new Blob([content], { type: mime })
   const url = URL.createObjectURL(blob)
@@ -126,7 +146,7 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [passwordMode, setPasswordMode] = useState<PasswordMode>('auto')
   const [error, setError] = useState('')
-  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', cpf: '', cep: '', birthDate: '', phone: '', addressLine: '', role: 'receptionist' as Role, isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', cpf: '', cep: '', birthDate: '', phone: '', street: '', number: '', district: '', city: '', state: '', addressLine: '', role: 'receptionist' as Role, isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
   const [settingsState, setSettingsState] = useState(() => loadSystemSettings())
@@ -171,7 +191,7 @@ export default function SettingsPage() {
     setEditingUser(null)
     setModalTab('personal')
     setPasswordMode(isSupabaseMode ? 'manual' : 'auto')
-    setForm({ name: '', username: '', email: '', password: isSupabaseMode ? '' : generatePassword(), cpf: '', cep: '', birthDate: '', phone: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+    setForm({ name: '', username: '', email: '', password: isSupabaseMode ? '' : generatePassword(), cpf: '', cep: '', birthDate: '', phone: '', street: '', number: '', district: '', city: '', state: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
     setCepStatus('')
     setCepError('')
     setError('')
@@ -182,7 +202,8 @@ export default function SettingsPage() {
     setEditingUser(user)
     setModalTab('personal')
     setPasswordMode('manual')
-    setForm({ name: user.name, username: user.username ?? '', email: user.email, password: '', cpf: user.cpf ?? '', cep: user.cep ?? '', birthDate: user.birthDate ?? '', phone: user.phone ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
+    const addressParts = splitAddressLine(user.addressLine)
+    setForm({ name: user.name, username: user.username ?? '', email: user.email, password: '', cpf: user.cpf ?? '', cep: user.cep ?? '', street: addressParts.street, number: addressParts.number, district: addressParts.district, city: addressParts.city, state: addressParts.state, birthDate: user.birthDate ?? '', phone: user.phone ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
     setCepStatus('')
     setCepError('')
     setError('')
@@ -200,8 +221,14 @@ export default function SettingsPage() {
     setCepStatus('Buscando CEP...')
     try {
       const data = await fetchCep(form.cep)
-      const addressText = [data.street, data.district, `${data.city}/${data.state}`].filter(Boolean).join(' - ')
-      setForm((current) => ({ ...current, addressLine: addressText || current.addressLine, cep: formatCep(current.cep) }))
+      setForm((current) => ({
+        ...current,
+        cep: formatCep(current.cep),
+        street: data.street || current.street,
+        district: data.district || current.district,
+        city: data.city || current.city,
+        state: data.state || current.state,
+      }))
       setCepStatus('CEP localizado.')
     } catch (errorFetch) {
       const message = errorFetch instanceof Error ? errorFetch.message : 'Nao foi possivel localizar o CEP.'
@@ -271,7 +298,13 @@ export default function SettingsPage() {
       cep: form.cep.trim() || undefined,
       birthDate: form.birthDate || undefined,
       phone: form.phone.trim() || undefined,
-      addressLine: form.addressLine.trim() || undefined,
+      addressLine: composeAddressLine({
+        street: form.street,
+        number: form.number,
+        district: form.district,
+        city: form.city,
+        state: form.state,
+      }) || undefined,
       role: form.role,
       isActive: form.isActive,
       linkedDentistId: form.linkedDentistId || undefined,
@@ -511,7 +544,11 @@ export default function SettingsPage() {
               {cepStatus ? <p className="mt-1 text-xs text-slate-500">{cepStatus}</p> : null}
               {cepError ? <p className="mt-1 text-xs text-red-600">{cepError}</p> : null}
             </div>
-            <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Endereco completo</label><Input value={form.addressLine} onChange={(event) => setForm((c) => ({ ...c, addressLine: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Logradouro</label><Input value={form.street} onChange={(event) => setForm((c) => ({ ...c, street: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Numero</label><Input value={form.number} onChange={(event) => setForm((c) => ({ ...c, number: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Bairro</label><Input value={form.district} onChange={(event) => setForm((c) => ({ ...c, district: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Cidade</label><Input value={form.city} onChange={(event) => setForm((c) => ({ ...c, city: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Estado</label><Input value={form.state} onChange={(event) => setForm((c) => ({ ...c, state: event.target.value.toUpperCase().slice(0, 2) }))} /></div>
           </div> : null}
           {modalTab === 'access' ? <div className="mt-4 space-y-4">
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Usuario</label><Input aria-label="Usuario" value={form.username} placeholder="nome.sobrenome" onChange={(event) => setForm((c) => ({ ...c, username: event.target.value }))} /></div>
