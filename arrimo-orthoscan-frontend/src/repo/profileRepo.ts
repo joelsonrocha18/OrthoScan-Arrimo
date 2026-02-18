@@ -108,6 +108,40 @@ export async function inviteUser(payload: {
     body: payload,
     headers: { Authorization: `Bearer ${accessToken}`, apikey: anonKey, 'x-user-jwt': accessToken },
   })
-  if (error) return { ok: false as const, error: error.message }
+  if (error) {
+    let message = error.message || 'Falha ao criar usuario.'
+    const genericEdgeError = /non-2xx/i.test(message)
+    if (genericEdgeError) {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+        if (supabaseUrl) {
+          const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/invite-user`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+              apikey: anonKey,
+              'x-user-jwt': accessToken,
+            },
+            body: JSON.stringify(payload),
+          })
+          const raw = (await response.json().catch(() => null)) as { error?: string; message?: string } | null
+          const detailed = raw?.error ?? raw?.message
+          if (detailed && detailed.trim()) {
+            message = detailed
+          } else {
+            message = `Falha ao criar usuario (HTTP ${response.status}).`
+          }
+        }
+      } catch {
+        // keep generic message fallback
+      }
+    }
+    return { ok: false as const, error: message }
+  }
+  if (data && typeof data === 'object' && 'ok' in data && data.ok === false) {
+    const detailed = 'error' in data && typeof data.error === 'string' ? data.error : 'Falha ao criar usuario.'
+    return { ok: false as const, error: detailed }
+  }
   return { ok: true as const, data }
 }
