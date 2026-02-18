@@ -849,6 +849,8 @@ function migrateUser(raw: LegacyUser): User {
     password: raw.password,
     role: raw.role ?? 'receptionist',
     isActive: raw.isActive ?? true,
+    phone: raw.phone || undefined,
+    whatsapp: raw.whatsapp || undefined,
     linkedDentistId: raw.linkedDentistId,
     linkedClinicId: raw.linkedClinicId,
     createdAt: raw.createdAt ?? now,

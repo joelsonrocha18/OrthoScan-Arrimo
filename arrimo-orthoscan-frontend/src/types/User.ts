@@ -16,6 +16,7 @@ export type User = {
   cep?: string
   birthDate?: string
   phone?: string
+  whatsapp?: string
   addressLine?: string
   role: Role
   isActive: boolean

@@ -1,10 +1,11 @@
+import { isValidMobilePhone, onlyDigits } from './phone'
+
 export function normalizeWhatsapp(value: string) {
-  return value.replace(/\D/g, '')
+  return onlyDigits(value)
 }
 
 export function isValidWhatsapp(value: string) {
-  const digits = normalizeWhatsapp(value)
-  return digits.length === 10 || digits.length === 11
+  return isValidMobilePhone(value)
 }
 
 export function buildWhatsappUrl(value: string) {

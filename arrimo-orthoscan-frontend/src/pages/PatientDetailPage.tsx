@@ -22,6 +22,7 @@ import {
   updatePatientDoc,
 } from '../repo/patientDocsRepo'
 import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
+import { formatFixedPhone, formatMobilePhone, isValidFixedPhone, isValidMobilePhone } from '../lib/phone'
 import { updateScan } from '../data/scanRepo'
 import { updateCase } from '../data/caseRepo'
 import { getCurrentUser } from '../lib/auth'
@@ -268,6 +269,14 @@ export default function PatientDetailPage() {
       setError('Nome e obrigatorio.')
       return
     }
+    if (form.phone.trim() && !isValidFixedPhone(form.phone)) {
+      setError('Telefone fixo invalido.')
+      return
+    }
+    if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) {
+      setError('Celular/WhatsApp invalido.')
+      return
+    }
 
     const payload: Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> = {
       name: form.name.trim(),
@@ -500,11 +509,11 @@ export default function PatientDetailPage() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo</label>
-              <Input value={form.phone} onChange={(event) => setForm((c) => ({ ...c, phone: event.target.value }))} />
+              <Input value={form.phone} onChange={(event) => setForm((c) => ({ ...c, phone: formatFixedPhone(event.target.value) }))} />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">WhatsApp</label>
-              <Input value={form.whatsapp} onChange={(event) => setForm((c) => ({ ...c, whatsapp: event.target.value }))} />
+              <label className="mb-1 block text-sm font-medium text-slate-700">Celular (WhatsApp)</label>
+              <Input value={form.whatsapp} onChange={(event) => setForm((c) => ({ ...c, whatsapp: formatMobilePhone(event.target.value) }))} />
               <WhatsappLink value={form.whatsapp} className="mt-2 text-xs font-semibold" />
             </div>
             <div className="sm:col-span-2">

@@ -9,6 +9,7 @@ import type { DentistClinic } from '../types/DentistClinic'
 import { createDentist, getDentist, restoreDentist, softDeleteDentist, updateDentist } from '../data/dentistRepo'
 import { useDb } from '../lib/useDb'
 import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
+import { formatFixedPhone, formatMobilePhone, isValidFixedPhone, isValidMobilePhone } from '../lib/phone'
 import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 
@@ -163,6 +164,14 @@ export default function DentistDetailPage() {
       setError('Nome e obrigatorio.')
       return
     }
+    if (form.phone.trim() && !isValidFixedPhone(form.phone)) {
+      setError('Telefone fixo invalido.')
+      return
+    }
+    if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) {
+      setError('Celular/WhatsApp invalido.')
+      return
+    }
     const payload = {
       type: 'dentista' as const,
       name: form.name.trim(),
@@ -307,13 +316,13 @@ export default function DentistDetailPage() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo</label>
-              <Input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
+              <Input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: formatFixedPhone(event.target.value) }))} />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">WhatsApp</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Celular (WhatsApp)</label>
               <Input
                 value={form.whatsapp}
-                onChange={(event) => setForm((current) => ({ ...current, whatsapp: event.target.value }))}
+                onChange={(event) => setForm((current) => ({ ...current, whatsapp: formatMobilePhone(event.target.value) }))}
               />
               <WhatsappLink value={form.whatsapp} className="mt-2 text-xs font-semibold" />
             </div>

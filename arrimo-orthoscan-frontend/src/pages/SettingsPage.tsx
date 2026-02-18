@@ -7,12 +7,14 @@ import Badge from '../components/Badge'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
+import WhatsappLink from '../components/WhatsappLink'
 import { DATA_MODE } from '../data/dataMode'
 import { DB_KEY, resetDb } from '../data/db'
 import AppShell from '../layouts/AppShell'
 import { clearSession, getCurrentUser } from '../lib/auth'
 import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
 import { formatCnpj, isValidCnpj } from '../lib/cnpj'
+import { formatFixedPhone, formatMobilePhone, isValidFixedPhone, isValidMobilePhone } from '../lib/phone'
 import { addAuditEntry, applyTheme, loadSystemSettings, saveSystemSettings, type AppThemeMode, type LabCompanyProfile } from '../lib/systemSettings'
 import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUser } from '../repo/userRepo'
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
@@ -101,7 +103,8 @@ function mapProfilesToUsers(profiles: Awaited<ReturnType<typeof listProfiles>>):
       linkedClinicId: profile.clinic_id ?? undefined,
       linkedDentistId: profile.dentist_id ?? undefined,
       cpf: profile.cpf ?? undefined,
-      phone: profile.phone ?? undefined,
+      phone: undefined,
+      whatsapp: profile.phone ?? undefined,
       createdAt: profile.created_at ?? '',
       updatedAt: profile.updated_at ?? '',
     }))
@@ -146,7 +149,7 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [passwordMode, setPasswordMode] = useState<PasswordMode>('auto')
   const [error, setError] = useState('')
-  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', cpf: '', cep: '', birthDate: '', phone: '', street: '', number: '', district: '', city: '', state: '', addressLine: '', role: 'receptionist' as Role, isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', cpf: '', cep: '', birthDate: '', phone: '', whatsapp: '', street: '', number: '', district: '', city: '', state: '', addressLine: '', role: 'receptionist' as Role, isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
   const [settingsState, setSettingsState] = useState(() => loadSystemSettings())
@@ -191,7 +194,7 @@ export default function SettingsPage() {
     setEditingUser(null)
     setModalTab('personal')
     setPasswordMode(isSupabaseMode ? 'manual' : 'auto')
-    setForm({ name: '', username: '', email: '', password: isSupabaseMode ? '' : generatePassword(), cpf: '', cep: '', birthDate: '', phone: '', street: '', number: '', district: '', city: '', state: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+    setForm({ name: '', username: '', email: '', password: isSupabaseMode ? '' : generatePassword(), cpf: '', cep: '', birthDate: '', phone: '', whatsapp: '', street: '', number: '', district: '', city: '', state: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
     setCepStatus('')
     setCepError('')
     setError('')
@@ -203,7 +206,7 @@ export default function SettingsPage() {
     setModalTab('personal')
     setPasswordMode('manual')
     const addressParts = splitAddressLine(user.addressLine)
-    setForm({ name: user.name, username: user.username ?? '', email: user.email, password: '', cpf: user.cpf ?? '', cep: user.cep ?? '', street: addressParts.street, number: addressParts.number, district: addressParts.district, city: addressParts.city, state: addressParts.state, birthDate: user.birthDate ?? '', phone: user.phone ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
+    setForm({ name: user.name, username: user.username ?? '', email: user.email, password: '', cpf: user.cpf ?? '', cep: user.cep ?? '', street: addressParts.street, number: addressParts.number, district: addressParts.district, city: addressParts.city, state: addressParts.state, birthDate: user.birthDate ?? '', phone: user.phone ?? '', whatsapp: user.whatsapp ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
     setCepStatus('')
     setCepError('')
     setError('')
@@ -243,6 +246,8 @@ export default function SettingsPage() {
       if (!form.email.trim()) return setError('Email e obrigatorio.')
       if (!form.password.trim()) return setError('Senha e obrigatoria.')
       if (form.password.trim().length < 8) return setError('Senha deve ter no minimo 8 caracteres.')
+      if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
+      if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
       if (!INVITE_ROLE_LIST.includes(form.role)) {
         return setError('Perfil nao permitido para criacao neste modo.')
       }
@@ -260,7 +265,7 @@ export default function SettingsPage() {
         fullName: form.name.trim() || undefined,
         password: form.password.trim(),
         cpf: form.cpf.trim() || undefined,
-        phone: form.phone.trim() || undefined,
+        phone: form.whatsapp.trim() || undefined,
       })
       if (!result.ok) {
         return setError(result.error)
@@ -272,10 +277,12 @@ export default function SettingsPage() {
     }
 
     if (isSupabaseMode && editingUser) {
+      if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
+      if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
       const result = await updateProfile(editingUser.id, {
         full_name: form.name.trim() || null,
         cpf: form.cpf.trim() || null,
-        phone: form.phone.trim() || null,
+        phone: form.whatsapp.trim() || null,
         role: form.role,
         clinic_id: form.linkedClinicId.trim() || null,
         dentist_id: form.linkedDentistId.trim() || null,
@@ -290,6 +297,8 @@ export default function SettingsPage() {
 
     if (!form.name.trim() || !form.email.trim()) return setError('Nome e email sao obrigatorios.')
     if (!editingUser && !form.password.trim()) return setError('Senha e obrigatoria para novo usuario.')
+    if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
+    if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
     const basePayload = {
       name: form.name.trim(),
       username: form.username.trim() || undefined,
@@ -298,6 +307,7 @@ export default function SettingsPage() {
       cep: form.cep.trim() || undefined,
       birthDate: form.birthDate || undefined,
       phone: form.phone.trim() || undefined,
+      whatsapp: form.whatsapp.trim() || undefined,
       addressLine: composeAddressLine({
         street: form.street,
         number: form.number,
@@ -335,6 +345,14 @@ export default function SettingsPage() {
   const saveLab = () => {
     if (!labForm.tradeName.trim() || !labForm.legalName.trim() || !isValidCnpj(labForm.cnpj) || !labForm.email.trim() || !labForm.phone.trim() || !labForm.addressLine.trim()) {
       addToast({ type: 'error', title: 'Preencha os dados obrigatorios do laboratorio.' })
+      return
+    }
+    if (!isValidFixedPhone(labForm.phone)) {
+      addToast({ type: 'error', title: 'Telefone fixo do laboratorio invalido.' })
+      return
+    }
+    if (labForm.whatsapp.trim() && !isValidMobilePhone(labForm.whatsapp)) {
+      addToast({ type: 'error', title: 'Celular/WhatsApp do laboratorio invalido.' })
       return
     }
     const next = addAuditEntry({ ...settingsState, labCompany: { ...labForm, cnpj: formatCnpj(labForm.cnpj), updatedAt: new Date().toISOString() } }, { action: 'lab_profile_updated', actor: currentUser?.email, details: labForm.tradeName })
@@ -487,8 +505,8 @@ export default function SettingsPage() {
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Razao social *</label><Input value={labForm.legalName} onChange={(event) => setLabForm((c) => ({ ...c, legalName: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">CNPJ *</label><Input value={labForm.cnpj} onChange={(event) => setLabForm((c) => ({ ...c, cnpj: formatCnpj(event.target.value) }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Email empresarial *</label><Input type="email" value={labForm.email} onChange={(event) => setLabForm((c) => ({ ...c, email: event.target.value }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo *</label><Input value={labForm.phone} onChange={(event) => setLabForm((c) => ({ ...c, phone: event.target.value }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">WhatsApp</label><Input value={labForm.whatsapp} onChange={(event) => setLabForm((c) => ({ ...c, whatsapp: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo *</label><Input value={labForm.phone} onChange={(event) => setLabForm((c) => ({ ...c, phone: formatFixedPhone(event.target.value) }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Celular (WhatsApp)</label><Input value={labForm.whatsapp} onChange={(event) => setLabForm((c) => ({ ...c, whatsapp: formatMobilePhone(event.target.value) }))} /><WhatsappLink value={labForm.whatsapp} className="mt-2 text-xs font-semibold" /></div>
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Endereco completo *</label><Input value={labForm.addressLine} onChange={(event) => setLabForm((c) => ({ ...c, addressLine: event.target.value }))} /></div>
           </div>
           <div className="mt-4"><Button onClick={saveLab}>Salvar cadastro do laboratorio</Button></div>
@@ -530,7 +548,8 @@ export default function SettingsPage() {
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Nome completo</label><Input aria-label="Nome completo" value={form.name} onChange={(event) => setForm((c) => ({ ...c, name: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">CPF</label><Input value={form.cpf} placeholder="000.000.000-00" onChange={(event) => setForm((c) => ({ ...c, cpf: formatCpf(event.target.value) }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Data de nascimento</label><Input type="date" value={form.birthDate} onChange={(event) => setForm((c) => ({ ...c, birthDate: event.target.value }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo</label><Input value={form.phone} onChange={(event) => setForm((c) => ({ ...c, phone: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo</label><Input value={form.phone} onChange={(event) => setForm((c) => ({ ...c, phone: formatFixedPhone(event.target.value) }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Celular (WhatsApp)</label><Input value={form.whatsapp} onChange={(event) => setForm((c) => ({ ...c, whatsapp: formatMobilePhone(event.target.value) }))} /><WhatsappLink value={form.whatsapp} className="mt-2 text-xs font-semibold" /></div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">CEP</label>
               <div className="flex gap-2">

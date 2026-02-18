@@ -24,6 +24,7 @@ export function createUser(payload: {
   cep?: string
   birthDate?: string
   phone?: string
+  whatsapp?: string
   addressLine?: string
   role: Role
   isActive: boolean
@@ -48,6 +49,7 @@ export function createUser(payload: {
     cep: payload.cep?.trim() || undefined,
     birthDate: payload.birthDate || undefined,
     phone: payload.phone?.trim() || undefined,
+    whatsapp: payload.whatsapp?.trim() || undefined,
     addressLine: payload.addressLine?.trim() || undefined,
     role: payload.role,
     isActive: payload.isActive,
@@ -77,6 +79,7 @@ export function updateUser(id: string, patch: Partial<User>) {
     cep: patch.cep ? patch.cep.trim() : current.cep,
     username: patch.username ? patch.username.trim() : current.username,
     phone: patch.phone ? patch.phone.trim() : current.phone,
+    whatsapp: patch.whatsapp ? patch.whatsapp.trim() : current.whatsapp,
     addressLine: patch.addressLine ? patch.addressLine.trim() : current.addressLine,
     updatedAt: nowIso(),
   }
