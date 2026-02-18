@@ -4,6 +4,7 @@ import Badge from '../components/Badge'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
+import WhatsappLink from '../components/WhatsappLink'
 import AppShell from '../layouts/AppShell'
 import { useDb } from '../lib/useDb'
 import type { DentistClinic } from '../types/DentistClinic'
@@ -92,7 +93,8 @@ export default function DentistsPage() {
                 <tr>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Nome</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">CRO</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone fixo</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
                 </tr>
@@ -104,7 +106,8 @@ export default function DentistsPage() {
                     <tr key={item.id} className="bg-white">
                       <td className="px-5 py-4 text-sm font-medium text-slate-900">{item.name}</td>
                       <td className="px-5 py-4 text-sm text-slate-700">{item.cro || '-'}</td>
-                      <td className="px-5 py-4 text-sm text-slate-700">{item.phone || item.whatsapp || '-'}</td>
+                      <td className="px-5 py-4 text-sm text-slate-700">{item.phone || '-'}</td>
+                      <td className="px-5 py-4 text-sm text-slate-700">{item.whatsapp ? <WhatsappLink value={item.whatsapp} /> : '-'}</td>
                       <td className="px-5 py-4">
                         <Badge tone={status.tone}>{status.label}</Badge>
                       </td>
@@ -121,7 +124,7 @@ export default function DentistsPage() {
                 })}
                 {dentists.length === 0 ? (
                   <tr>
-                    <td className="px-5 py-8 text-sm text-slate-500" colSpan={5}>
+                    <td className="px-5 py-8 text-sm text-slate-500" colSpan={6}>
                       Nenhum registro encontrado.
                     </td>
                   </tr>

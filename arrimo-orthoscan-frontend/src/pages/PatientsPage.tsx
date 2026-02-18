@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
+import WhatsappLink from '../components/WhatsappLink'
 import AppShell from '../layouts/AppShell'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
@@ -67,7 +68,7 @@ export default function PatientsPage() {
                 <tr>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Nome</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Dentista responsavel</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone fixo</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
                 </tr>
@@ -82,7 +83,9 @@ export default function PatientsPage() {
                         : '-'}
                     </td>
                     <td className="px-5 py-4 text-sm text-slate-700">{item.phone || '-'}</td>
-                    <td className="px-5 py-4 text-sm text-slate-700">{item.whatsapp || '-'}</td>
+                    <td className="px-5 py-4 text-sm text-slate-700">
+                      {item.whatsapp ? <WhatsappLink value={item.whatsapp} /> : '-'}
+                    </td>
                     <td className="px-5 py-4">
                       <div className="flex gap-2">
                         <Link

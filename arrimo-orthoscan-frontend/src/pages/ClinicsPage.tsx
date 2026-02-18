@@ -4,6 +4,7 @@ import Badge from '../components/Badge'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
+import WhatsappLink from '../components/WhatsappLink'
 import AppShell from '../layouts/AppShell'
 import { useDb } from '../lib/useDb'
 import { can } from '../auth/permissions'
@@ -26,7 +27,8 @@ export default function ClinicsPage() {
           clinic.tradeName.toLowerCase().includes(q) ||
           (clinic.legalName ?? '').toLowerCase().includes(q) ||
           (clinic.cnpj ?? '').toLowerCase().includes(q) ||
-          (clinic.phone ?? '').toLowerCase().includes(q)
+          (clinic.phone ?? '').toLowerCase().includes(q) ||
+          (clinic.whatsapp ?? '').toLowerCase().includes(q)
         )
       })
       .sort((a, b) => a.tradeName.localeCompare(b.tradeName))
@@ -66,6 +68,8 @@ export default function ClinicsPage() {
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Nome Fantasia</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">CNPJ</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Cidade/UF</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone fixo</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ativo</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
                 </tr>
@@ -78,6 +82,8 @@ export default function ClinicsPage() {
                     <td className="px-5 py-4 text-sm text-slate-700">
                       {clinic.address?.city ? `${clinic.address.city}/${clinic.address.state ?? '-'}` : '-'}
                     </td>
+                    <td className="px-5 py-4 text-sm text-slate-700">{clinic.phone || '-'}</td>
+                    <td className="px-5 py-4 text-sm text-slate-700">{clinic.whatsapp ? <WhatsappLink value={clinic.whatsapp} /> : '-'}</td>
                     <td className="px-5 py-4">
                       <Badge tone={clinic.isActive ? 'success' : 'neutral'}>{clinic.isActive ? 'Ativo' : 'Inativo'}</Badge>
                     </td>
@@ -93,7 +99,7 @@ export default function ClinicsPage() {
                 ))}
                 {clinics.length === 0 ? (
                   <tr>
-                    <td className="px-5 py-8 text-sm text-slate-500" colSpan={5}>
+                    <td className="px-5 py-8 text-sm text-slate-500" colSpan={7}>
                       Nenhuma clinica encontrada.
                     </td>
                   </tr>

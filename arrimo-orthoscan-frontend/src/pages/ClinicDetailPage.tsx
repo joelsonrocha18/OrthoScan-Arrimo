@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
+import WhatsappLink from '../components/WhatsappLink'
 import AppShell from '../layouts/AppShell'
 import type { Clinic } from '../types/Clinic'
 import { createClinic, getClinic, restoreClinic, softDeleteClinic, updateClinic } from '../repo/clinicRepo'
@@ -129,11 +130,6 @@ export default function ClinicDetailPage() {
       active = false
     }
   }, [form.address.cep])
-
-  const normalizeWhatsapp = (value: string) => value.replace(/\D/g, '')
-  const whatsappDigits = normalizeWhatsapp(form.whatsapp || form.phone)
-  const whatsappValid = whatsappDigits.length === 10 || whatsappDigits.length === 11
-  const whatsappLink = whatsappValid ? `https://wa.me/55${whatsappDigits}` : ''
 
   if (!isNew && !existing) {
     return (
@@ -274,17 +270,13 @@ export default function ClinicDetailPage() {
           <h2 className="text-lg font-semibold text-slate-900">Contatos</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Telefone</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo</label>
               <Input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">WhatsApp</label>
               <Input value={form.whatsapp} onChange={(event) => setForm((current) => ({ ...current, whatsapp: event.target.value }))} />
-              {whatsappValid ? (
-                <a href={whatsappLink} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-brand-700">
-                  Abrir WhatsApp
-                </a>
-              ) : null}
+              <WhatsappLink value={form.whatsapp} className="mt-2 text-xs font-semibold" />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>

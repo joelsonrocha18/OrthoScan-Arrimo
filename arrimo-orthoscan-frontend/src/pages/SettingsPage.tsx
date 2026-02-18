@@ -487,7 +487,8 @@ export default function SettingsPage() {
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Razao social *</label><Input value={labForm.legalName} onChange={(event) => setLabForm((c) => ({ ...c, legalName: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">CNPJ *</label><Input value={labForm.cnpj} onChange={(event) => setLabForm((c) => ({ ...c, cnpj: formatCnpj(event.target.value) }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Email empresarial *</label><Input type="email" value={labForm.email} onChange={(event) => setLabForm((c) => ({ ...c, email: event.target.value }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone *</label><Input value={labForm.phone} onChange={(event) => setLabForm((c) => ({ ...c, phone: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo *</label><Input value={labForm.phone} onChange={(event) => setLabForm((c) => ({ ...c, phone: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">WhatsApp</label><Input value={labForm.whatsapp} onChange={(event) => setLabForm((c) => ({ ...c, whatsapp: event.target.value }))} /></div>
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Endereco completo *</label><Input value={labForm.addressLine} onChange={(event) => setLabForm((c) => ({ ...c, addressLine: event.target.value }))} /></div>
           </div>
           <div className="mt-4"><Button onClick={saveLab}>Salvar cadastro do laboratorio</Button></div>
@@ -529,7 +530,7 @@ export default function SettingsPage() {
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Nome completo</label><Input aria-label="Nome completo" value={form.name} onChange={(event) => setForm((c) => ({ ...c, name: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">CPF</label><Input value={form.cpf} placeholder="000.000.000-00" onChange={(event) => setForm((c) => ({ ...c, cpf: formatCpf(event.target.value) }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Data de nascimento</label><Input type="date" value={form.birthDate} onChange={(event) => setForm((c) => ({ ...c, birthDate: event.target.value }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone</label><Input value={form.phone} onChange={(event) => setForm((c) => ({ ...c, phone: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo</label><Input value={form.phone} onChange={(event) => setForm((c) => ({ ...c, phone: event.target.value }))} /></div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">CEP</label>
               <div className="flex gap-2">

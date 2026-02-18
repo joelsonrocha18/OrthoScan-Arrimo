@@ -4,6 +4,7 @@ import Button from '../components/Button'
 import Card from '../components/Card'
 import FilePickerWithCamera from '../components/files/FilePickerWithCamera'
 import Input from '../components/Input'
+import WhatsappLink from '../components/WhatsappLink'
 import AppShell from '../layouts/AppShell'
 import type { Patient } from '../types/Patient'
 import type { PatientDocument } from '../types/PatientDocument'
@@ -257,7 +258,6 @@ export default function PatientDetailPage() {
   const dentistPrefix = selectedDentist?.gender === 'feminino' ? 'Dra.' : selectedDentist ? 'Dr.' : ''
   const dentistWhatsappDigits = normalizeWhatsapp(selectedDentist?.whatsapp ?? '')
   const dentistWhatsappValid = dentistWhatsappDigits.length === 10 || dentistWhatsappDigits.length === 11
-  const dentistWhatsappLink = dentistWhatsappValid ? `https://wa.me/55${dentistWhatsappDigits}` : ''
 
   const savePatient = () => {
     if (!canWrite) {
@@ -499,12 +499,13 @@ export default function PatientDetailPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Telefone</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo</label>
               <Input value={form.phone} onChange={(event) => setForm((c) => ({ ...c, phone: event.target.value }))} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">WhatsApp</label>
               <Input value={form.whatsapp} onChange={(event) => setForm((c) => ({ ...c, whatsapp: event.target.value }))} />
+              <WhatsappLink value={form.whatsapp} className="mt-2 text-xs font-semibold" />
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
@@ -596,11 +597,7 @@ export default function PatientDetailPage() {
                   <p>
                     Responsavel: {dentistPrefix} {selectedDentist.name}
                   </p>
-                  {dentistWhatsappValid ? (
-                    <a href={dentistWhatsappLink} target="_blank" rel="noreferrer" className="text-xs font-semibold text-brand-700">
-                      Abrir WhatsApp do dentista
-                    </a>
-                  ) : null}
+                  {dentistWhatsappValid ? <WhatsappLink value={selectedDentist?.whatsapp} className="text-xs font-semibold" /> : null}
                 </div>
               ) : null}
             </div>
