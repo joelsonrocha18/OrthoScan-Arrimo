@@ -137,6 +137,14 @@ function timelineStateForTray(
   return tray.state
 }
 
+function hasRevisionSuffix(code?: string) {
+  return /\/\d+$/.test(code ?? '')
+}
+
+function isReworkProductionLabItem(item: { requestKind?: string; notes?: string }) {
+  return (item.requestKind ?? 'producao') === 'producao' && (item.notes ?? '').toLowerCase().includes('rework')
+}
+
 function buildChangeSchedule(
   installedAt: string | undefined,
   changeEveryDays: number,
@@ -169,21 +177,6 @@ function buildChangeSchedule(
     })
   }
   return schedule
-}
-
-function countScheduleStates(schedule: ReturnType<typeof buildChangeSchedule>) {
-  return schedule.reduce(
-    (acc, row) => {
-      const states = [row.superiorState, row.inferiorState]
-      acc.aguardando_iniciar += states.filter((state) => state === 'pendente').length
-      acc.em_producao += states.filter((state) => state === 'em_producao').length
-      acc.controle_qualidade += states.filter((state) => state === 'rework').length
-      acc.prontas += states.filter((state) => state === 'pronta').length
-      acc.entregues += states.filter((state) => state === 'entregue').length
-      return acc
-    },
-    { aguardando_iniciar: 0, em_producao: 0, controle_qualidade: 0, prontas: 0, entregues: 0 },
-  )
 }
 
 function fileAvailability(item: NonNullable<Case['scanFiles']>[number]) {
@@ -319,14 +312,6 @@ export default function CaseDetailPage() {
     const progressed = changeSchedule.filter((row) => row.trayNumber <= totalLower && row.changeDate <= todayIso).length
     return caseProgress(totalLower, progressed)
   }, [changeSchedule, totalLower])
-  const scheduleSummary = useMemo(() => countScheduleStates(changeSchedule), [changeSchedule])
-  const inProductionCount = useMemo(() => scheduleSummary.em_producao + scheduleSummary.controle_qualidade, [scheduleSummary])
-  const readyCount = useMemo(() => {
-    if (hasUpperArch && hasLowerArch) return Math.max(0, Math.min(readyToDeliverPatient.upper, readyToDeliverPatient.lower))
-    if (hasUpperArch) return Math.max(0, readyToDeliverPatient.upper)
-    if (hasLowerArch) return Math.max(0, readyToDeliverPatient.lower)
-    return 0
-  }, [hasLowerArch, hasUpperArch, readyToDeliverPatient.lower, readyToDeliverPatient.upper])
   const deliveredScheduleCount = useMemo(() => {
     if (hasUpperArch && hasLowerArch) return Math.max(0, Math.min(progressUpper.delivered, progressLower.delivered))
     if (hasUpperArch) return Math.max(0, progressUpper.delivered)
@@ -337,6 +322,59 @@ export default function CaseDetailPage() {
     () => (currentCase ? db.labItems.filter((item) => item.caseId === currentCase.id) : []),
     [currentCase, db.labItems],
   )
+  const deliveredToProfessionalByTray = useMemo(() => {
+    const map = new Map<number, number>()
+    ;(currentCase?.deliveryLots ?? []).forEach((lot) => {
+      for (let tray = lot.fromTray; tray <= lot.toTray; tray += 1) {
+        map.set(tray, (map.get(tray) ?? 0) + 1)
+      }
+    })
+    return map
+  }, [currentCase])
+  const readyLabItems = useMemo(
+    () =>
+      linkedLabItems.filter((item) => {
+        if (item.status !== 'prontas') return false
+        const tray = currentCase?.trays.find((row) => row.trayNumber === item.trayNumber)
+        const isRework = item.requestKind === 'reconfeccao' || isReworkProductionLabItem(item)
+        if (isRework) {
+          return tray?.state === 'rework' || tray?.state === 'pronta' || tray?.state === 'entregue'
+        }
+        return tray?.state === 'pronta'
+      }),
+    [currentCase, linkedLabItems],
+  )
+  const deliveredLabItemIds = useMemo(
+    () =>
+      new Set(
+        linkedLabItems
+          .filter((item) => {
+            if (item.status !== 'prontas') return false
+            if (readyLabItems.some((row) => row.id === item.id)) return false
+            const hasAnyDelivery = (currentCase?.deliveryLots?.length ?? 0) > 0
+            if ((item.requestKind ?? 'producao') === 'producao' && hasAnyDelivery && !hasRevisionSuffix(item.requestCode)) {
+              return true
+            }
+            const tray = currentCase?.trays.find((row) => row.trayNumber === item.trayNumber)
+            return tray?.state === 'entregue' || (deliveredToProfessionalByTray.get(item.trayNumber) ?? 0) > 0
+          })
+          .map((item) => item.id),
+      ),
+    [currentCase, deliveredToProfessionalByTray, linkedLabItems, readyLabItems],
+  )
+  const pipelineLabItems = useMemo(
+    () =>
+      linkedLabItems.filter((item) => !deliveredLabItemIds.has(item.id) && item.requestKind !== 'reconfeccao'),
+    [deliveredLabItemIds, linkedLabItems],
+  )
+  const inProductionCount = useMemo(
+    () => pipelineLabItems.filter((item) => item.status === 'em_producao' || item.status === 'controle_qualidade').length,
+    [pipelineLabItems],
+  )
+  const readyCount = useMemo(
+    () => readyLabItems.length,
+    [readyLabItems],
+  )
   const hasProductionOrder = useMemo(
     () => linkedLabItems.some((item) => (item.requestKind ?? 'producao') === 'producao'),
     [linkedLabItems],
@@ -344,14 +382,14 @@ export default function CaseDetailPage() {
   const hasDentistDelivery = useMemo(() => (currentCase?.deliveryLots?.length ?? 0) > 0, [currentCase])
   const labSummary = useMemo(
     () => ({
-      aguardando_iniciar: scheduleSummary.aguardando_iniciar,
-      em_producao: scheduleSummary.em_producao,
-      controle_qualidade: scheduleSummary.controle_qualidade,
-      prontas: scheduleSummary.prontas,
-      entregues: scheduleSummary.entregues,
+      aguardando_iniciar: pipelineLabItems.filter((item) => item.status === 'aguardando_iniciar').length,
+      em_producao: pipelineLabItems.filter((item) => item.status === 'em_producao').length,
+      controle_qualidade: pipelineLabItems.filter((item) => item.status === 'controle_qualidade').length,
+      prontas: readyLabItems.length,
+      entregues: deliveredLabItemIds.size,
       osItens: linkedLabItems.length,
     }),
-    [linkedLabItems.length, scheduleSummary],
+    [deliveredLabItemIds.size, linkedLabItems.length, pipelineLabItems, readyLabItems.length],
   )
   const groupedScanFiles = useMemo(() => {
     const scanFiles = currentCase?.scanFiles ?? []
