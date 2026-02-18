@@ -9,6 +9,7 @@ type InvitePayload = {
   password?: string
   cpf?: string
   phone?: string
+  userJwt?: string
 }
 
 const APP_ROLES = new Set([
@@ -65,15 +66,15 @@ Deno.serve(async (req) => {
     return json(req, { ok: false, error: 'Missing Supabase env vars.' }, 500)
   }
 
+  const payload = (await req.json()) as InvitePayload
   const authClient = createClient(supabaseUrl, anonKey)
   const admin = createClient(supabaseUrl, serviceRoleKey)
-  const userJwtRaw = req.headers.get('x-user-jwt') ?? req.headers.get('authorization') ?? ''
-  const userJwt = userJwtRaw.replace(/^Bearer\s+/i, '').trim()
+  const bodyJwt = typeof payload.userJwt === 'string' ? payload.userJwt.trim() : ''
+  const headerJwt = (req.headers.get('x-user-jwt') ?? '').replace(/^Bearer\s+/i, '').trim()
+  const userJwt = bodyJwt || headerJwt
   if (!userJwt) {
     return json(req, { ok: false, code: 'unauthorized', error: 'Unauthorized.' }, 401)
   }
-
-  const payload = (await req.json()) as InvitePayload
   if (!payload.email || !payload.role || !payload.clinicId) {
     return json(req, { ok: false, error: 'Missing payload fields.' }, 400)
   }

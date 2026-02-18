@@ -102,7 +102,7 @@ export async function inviteUser(payload: {
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
   if (!supabaseUrl) return { ok: false as const, error: 'Supabase URL ausente no build.' }
 
-  const requestBody = {
+  const requestBodyBase = {
     email: payload.email,
     role: payload.role,
     clinicId: payload.clinicId,
@@ -121,7 +121,7 @@ export async function inviteUser(payload: {
         'Content-Type': 'application/json',
         apikey: anonKey,
       },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify({ ...requestBodyBase, userJwt: token }),
     })
     const raw = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; code?: string; message?: string } | null
     return { response, raw }
@@ -143,7 +143,9 @@ export async function inviteUser(payload: {
   }
 
   if (!first.response.ok || (first.raw && first.raw.ok === false)) {
+    const normalizedMessage = (first.raw?.error ?? first.raw?.message ?? '').toLowerCase()
     const code = first.raw?.code
+      ?? (normalizedMessage.includes('invalid jwt') ? 'unauthorized' : undefined)
       ?? (first.response.status === 401 ? 'unauthorized' : first.response.status === 403 ? 'forbidden' : 'invite_failed')
     const detailed = first.raw?.error ?? first.raw?.message ?? `Falha ao criar usuario (HTTP ${first.response.status}).`
     return { ok: false as const, error: detailed, code }
