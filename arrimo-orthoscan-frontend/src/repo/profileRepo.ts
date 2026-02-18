@@ -116,7 +116,8 @@ export async function inviteUser(payload: {
     const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/invite-user`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${anonKey}`,
+        'x-user-jwt': token,
         'Content-Type': 'application/json',
         apikey: anonKey,
       },

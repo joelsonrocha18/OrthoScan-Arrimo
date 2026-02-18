@@ -51,7 +51,9 @@ describe('inviteUser refresh retry', () => {
 
     const firstCallHeaders = fetchMock.mock.calls[0][1]?.headers as Record<string, string>
     const secondCallHeaders = fetchMock.mock.calls[1][1]?.headers as Record<string, string>
-    expect(firstCallHeaders.Authorization).toBe('Bearer old_token')
-    expect(secondCallHeaders.Authorization).toBe('Bearer new_token')
+    expect(firstCallHeaders.Authorization).toBe('Bearer anon_key')
+    expect(secondCallHeaders.Authorization).toBe('Bearer anon_key')
+    expect(firstCallHeaders['x-user-jwt']).toBe('old_token')
+    expect(secondCallHeaders['x-user-jwt']).toBe('new_token')
   })
 })

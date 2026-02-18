@@ -67,8 +67,11 @@ Deno.serve(async (req) => {
 
   const authClient = createClient(supabaseUrl, anonKey)
   const admin = createClient(supabaseUrl, serviceRoleKey)
-  const userJwtRaw = req.headers.get('authorization') ?? req.headers.get('x-user-jwt') ?? ''
+  const userJwtRaw = req.headers.get('x-user-jwt') ?? req.headers.get('authorization') ?? ''
   const userJwt = userJwtRaw.replace(/^Bearer\s+/i, '').trim()
+  if (!userJwt) {
+    return json(req, { ok: false, code: 'unauthorized', error: 'Unauthorized.' }, 401)
+  }
 
   const payload = (await req.json()) as InvitePayload
   if (!payload.email || !payload.role || !payload.clinicId) {
