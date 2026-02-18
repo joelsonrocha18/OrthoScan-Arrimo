@@ -22,10 +22,10 @@ export default function Sidebar({ onLogout }: SidebarProps) {
     { to: '/app/scans', label: 'Exames', icon: ScanLine, permission: 'scans.read' as const },
     { to: '/app/cases', label: 'Tratamentos', icon: Shapes, permission: 'cases.read' as const },
     { to: '/app/dentists', label: 'Dentistas', icon: UserRound, permission: 'dentists.read' as const },
-    { to: '/app/clinics', label: 'Clinicas', icon: Building2, permission: 'clinics.read' as const },
+    { to: '/app/clinics', label: 'Clínicas', icon: Building2, permission: 'clinics.read' as const },
     { to: '/app/patients', label: 'Pacientes', icon: Users, permission: 'patients.read' as const },
-    { to: '/app/lab', label: 'Laboratorio', icon: FlaskConical, permission: 'lab.read' as const },
-    { to: '/app/settings', label: 'Configuracoes', icon: Settings, permission: 'settings.read' as const },
+    { to: '/app/lab', label: 'Laboratório', icon: FlaskConical, permission: 'lab.read' as const },
+    { to: '/app/settings', label: 'Configurações', icon: Settings, permission: 'settings.read' as const },
   ]
 
   return (

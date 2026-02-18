@@ -70,7 +70,7 @@ describe('System scenarios', () => {
     expect(updated.item.status).toBe('em_producao')
   })
 
-  it('creates programmed replenishment for partial delivery and allows manual advance OS', () => {
+  it('creates programmed replenishment for partial delivery and keeps manual advance OS in aguardando', () => {
     expect(setTrayState('qa_case_1', 1, 'em_producao').ok).toBe(true)
     expect(setTrayState('qa_case_1', 1, 'pronta').ok).toBe(true)
     const firstTray = setTrayState('qa_case_1', 1, 'entregue')
@@ -98,13 +98,13 @@ describe('System scenarios', () => {
     if (!advance.ok) return
     expect(advance.item.requestCode).toMatch(/^[AC]-\d{4}\/\d+$/)
     expect(advance.item.requestKind).toBe('producao')
-    expect(advance.item.status).toBe('em_producao')
+    expect(advance.item.status).toBe('aguardando_iniciar')
     const after = listLabItems()
     const sourceStillExists = after.some((item) => item.id === replenishment.id)
     expect(sourceStillExists).toBe(false)
   })
 
-  it('blocks regression after delivery and auto-creates rework OS when moving to CQ', () => {
+  it('blocks regression after delivery and does not auto-create rework OS when moving to CQ', () => {
     expect(setTrayState('qa_case_1', 1, 'em_producao').ok).toBe(true)
     expect(setTrayState('qa_case_1', 1, 'pronta').ok).toBe(true)
     const delivered = setTrayState('qa_case_1', 1, 'entregue')
@@ -138,8 +138,7 @@ describe('System scenarios', () => {
         item.status === 'aguardando_iniciar' &&
         (item.notes ?? '').toLowerCase().includes('reconfeccao automatica'),
     )
-    expect(rework).toBeTruthy()
-    expect(rework?.status).toBe('aguardando_iniciar')
+    expect(rework).toBeUndefined()
   })
 
   it('enforces sequence: dentist delivery requires LAB OS first', () => {

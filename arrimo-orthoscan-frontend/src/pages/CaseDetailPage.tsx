@@ -19,7 +19,7 @@ import { listCasesForUser } from '../auth/scope'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
-  orcamento: 'Orcamento',
+  orcamento: 'Orçamento',
   contrato_pendente: 'Contrato pendente',
   contrato_aprovado: 'Contrato aprovado',
   em_producao: 'Em tratamento',
@@ -106,7 +106,7 @@ function scheduleStateForTray(
 
 function scheduleStateLabel(state: TrayState | 'nao_aplica') {
   if (state === 'nao_aplica') return '-'
-  if (state === 'em_producao') return 'Em producao'
+  if (state === 'em_producao') return 'Em produção'
   if (state === 'pronta') return 'Pronta'
   if (state === 'entregue') return 'Entregue'
   if (state === 'rework') return 'Rework'
@@ -413,8 +413,8 @@ export default function CaseDetailPage() {
     return (
       <AppShell breadcrumb={['Início', 'Tratamentos']}>
         <Card>
-          <h1 className="text-xl font-semibold text-slate-900">Caso nao encontrado</h1>
-          <p className="mt-2 text-sm text-slate-500">O caso solicitado nao existe ou foi removido.</p>
+          <h1 className="text-xl font-semibold text-slate-900">Caso não encontrado</h1>
+          <p className="mt-2 text-sm text-slate-500">O caso solicitado não existe ou foi removido.</p>
           <Button className="mt-4" onClick={() => navigate('/app/cases')}>
             Voltar
           </Button>
@@ -428,7 +428,7 @@ export default function CaseDetailPage() {
       <AppShell breadcrumb={['Inicio', 'Tratamentos']}>
         <Card>
           <h1 className="text-xl font-semibold text-slate-900">Sem acesso</h1>
-          <p className="mt-2 text-sm text-slate-500">Seu perfil nao permite visualizar este caso.</p>
+          <p className="mt-2 text-sm text-slate-500">Seu perfil não permite visualizar este caso.</p>
           <Button className="mt-4" onClick={() => navigate('/app/cases')}>
             Voltar
           </Button>
@@ -496,11 +496,11 @@ export default function CaseDetailPage() {
             notes: reworkReason,
           })
           if (!created.ok) {
-            addToast({ type: 'error', title: 'Reconfeccao', message: created.error })
+            addToast({ type: 'error', title: 'Reconfecção', message: created.error })
             return
           }
           if (!created.sync.ok) {
-            addToast({ type: 'error', title: 'Reconfeccao', message: created.sync.message })
+            addToast({ type: 'error', title: 'Reconfecção', message: created.sync.message })
             return
           }
         }
@@ -518,7 +518,7 @@ export default function CaseDetailPage() {
             dueDate: trayInCase.dueDate ?? today,
             status: 'aguardando_iniciar',
             priority: 'Urgente',
-            notes: `OS de producao para rework da placa #${selectedTray.trayNumber}. Motivo: ${reworkReason}`,
+            notes: `OS de produção para rework da placa #${selectedTray.trayNumber}. Motivo: ${reworkReason}`,
           })
           if (!production.ok) {
             addToast({ type: 'error', title: 'Rework', message: production.error })
@@ -531,7 +531,7 @@ export default function CaseDetailPage() {
         }
 
         if (!hasOpenRework || !hasOpenReworkProduction) {
-          addToast({ type: 'success', title: 'OS de rework geradas', message: 'Reconfeccao e confeccao adicionadas na esteira.' })
+          addToast({ type: 'success', title: 'OS de rework geradas', message: 'Reconfecção e confecção adicionadas na esteira.' })
         }
 
         // Ao marcar rework, devolve a placa para o banco (debita entrega ao paciente).
@@ -549,7 +549,7 @@ export default function CaseDetailPage() {
               },
             })
             if (!updated) {
-              addToast({ type: 'error', title: 'Rework', message: 'Nao foi possivel debitar a entrega ao paciente.' })
+              addToast({ type: 'error', title: 'Rework', message: 'Não foi possível debitar a entrega ao paciente.' })
               return
             }
           }
@@ -607,7 +607,7 @@ export default function CaseDetailPage() {
     if (!canWrite) return
     const parsed = parseBrlCurrencyInput(budgetValue)
     if (!Number.isFinite(parsed) || parsed <= 0) {
-      addToast({ type: 'error', title: 'Orcamento', message: 'Informe um valor valido para o orcamento.' })
+      addToast({ type: 'error', title: 'Orçamento', message: 'Informe um valor válido para o orçamento.' })
       return
     }
     updateCase(currentCase.id, {
@@ -616,7 +616,7 @@ export default function CaseDetailPage() {
       budget: { value: parsed, notes: budgetNotes.trim() || undefined, createdAt: new Date().toISOString() },
       contract: { ...(currentCase.contract ?? { status: 'pendente' }), status: 'pendente', notes: contractNotes.trim() || undefined },
     })
-    addToast({ type: 'success', title: 'Orcamento fechado' })
+    addToast({ type: 'success', title: 'Orçamento fechado' })
   }
 
   const approveContract = () => {
@@ -632,7 +632,7 @@ export default function CaseDetailPage() {
 
   const handleDeleteCase = () => {
     if (!canDeleteCase) return
-    const confirmed = window.confirm('Tem certeza que deseja excluir este tratamento? Esta acao remove os itens LAB vinculados.')
+    const confirmed = window.confirm('Tem certeza que deseja excluir este tratamento? Esta ação remove os itens LAB vinculados.')
     if (!confirmed) return
     const result = deleteCase(currentCase.id)
     if (!result.ok) {
@@ -684,22 +684,22 @@ export default function CaseDetailPage() {
     const upperCount = hasUpperArch ? Number(installationDeliveredUpper) : 0
     const lowerCount = hasLowerArch ? Number(installationDeliveredLower) : 0
     if (!Number.isFinite(upperCount) || !Number.isFinite(lowerCount) || upperCount < 0 || lowerCount < 0) {
-      addToast({ type: 'error', title: 'Instalacao', message: 'Informe quantidades validas por arcada.' })
+      addToast({ type: 'error', title: 'Instalação', message: 'Informe quantidades válidas por arcada.' })
       return
     }
     if (hasUpperArch && Math.trunc(upperCount) > readyToDeliverPatient.upper) {
       addToast({
         type: 'error',
-        title: 'Instalacao',
-        message: `Superior disponivel para paciente: ${readyToDeliverPatient.upper} (entregue pelo LAB ao profissional e ainda nao consumido).`,
+        title: 'Instalação',
+        message: `Superior disponível para paciente: ${readyToDeliverPatient.upper} (entregue pelo LAB ao profissional e ainda não consumido).`,
       })
       return
     }
     if (hasLowerArch && Math.trunc(lowerCount) > readyToDeliverPatient.lower) {
       addToast({
         type: 'error',
-        title: 'Instalacao',
-        message: `Inferior disponivel para paciente: ${readyToDeliverPatient.lower} (entregue pelo LAB ao profissional e ainda nao consumido).`,
+        title: 'Instalação',
+        message: `Inferior disponível para paciente: ${readyToDeliverPatient.lower} (entregue pelo LAB ao profissional e ainda não consumido).`,
       })
       return
     }
@@ -710,10 +710,10 @@ export default function CaseDetailPage() {
       deliveredLower: Math.trunc(lowerCount),
     })
     if (!result.ok) {
-      addToast({ type: 'error', title: 'Instalacao', message: result.error })
+      addToast({ type: 'error', title: 'Instalação', message: result.error })
       return
     }
-    addToast({ type: 'success', title: 'Instalacao registrada' })
+    addToast({ type: 'success', title: 'Instalação registrada' })
   }
 
   const saveActualChangeDate = (trayNumber: number, changedAt: string) => {
@@ -732,7 +732,7 @@ export default function CaseDetailPage() {
       },
     })
     if (!updated) {
-      addToast({ type: 'error', title: 'Troca real', message: 'Nao foi possivel atualizar a data real de troca.' })
+      addToast({ type: 'error', title: 'Troca real', message: 'Não foi possível atualizar a data real de troca.' })
       return
     }
     addToast({ type: 'success', title: 'Troca real atualizada' })
@@ -804,7 +804,7 @@ export default function CaseDetailPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Paciente: {patientDisplayName}</h1>
           {currentCase.treatmentCode ? (
             <p className="mt-1 text-sm font-semibold text-slate-700">
-              Identificacao: {currentCase.treatmentCode} ({currentCase.treatmentOrigin === 'interno' ? 'Interno ARRIMO' : 'Externo'})
+              Identificação: {currentCase.treatmentCode} ({currentCase.treatmentOrigin === 'interno' ? 'Interno ARRIMO' : 'Externo'})
             </p>
           ) : null}
           <p className="mt-2 text-sm font-medium text-slate-600">
@@ -816,12 +816,12 @@ export default function CaseDetailPage() {
                 : hasLowerArch
                   ? `Inferior ${totalLower}`
                   : '-'}{' '}
-            | Troca {currentCase.changeEveryDays} dias | Attachments: {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
+            | Troca {currentCase.changeEveryDays} dias | Attachments: {currentCase.attachmentBondingTray ? 'Sim' : 'Não'}
           </p>
           <div className="mt-3 flex items-center gap-3">
             <Badge tone={phaseToneMap[currentCase.phase]}>{phaseLabelMap[currentCase.phase]}</Badge>
             <span className="text-xs text-slate-500">
-              Ultima atualizacao: {new Date(currentCase.updatedAt).toLocaleString('pt-BR')}
+              Última atualização: {new Date(currentCase.updatedAt).toLocaleString('pt-BR')}
             </span>
           </div>
         </div>
@@ -851,6 +851,7 @@ export default function CaseDetailPage() {
             <div className="mt-3 h-2 rounded-full bg-slate-200">
               <div className="h-2 rounded-full bg-brand-500" style={{ width: `${patientProgressUpper.percent}%` }} />
             </div>
+            <p className="mt-2 text-xs text-slate-500">Baseado na data real de troca do paciente.</p>
           </Card>
         ) : null}
 
@@ -863,12 +864,13 @@ export default function CaseDetailPage() {
             <div className="mt-3 h-2 rounded-full bg-slate-200">
               <div className="h-2 rounded-full bg-brand-500" style={{ width: `${patientProgressLower.percent}%` }} />
             </div>
+            <p className="mt-2 text-xs text-slate-500">Baseado na data real de troca do paciente.</p>
           </Card>
         ) : null}
 
         <Card>
           <p className="text-sm text-slate-500">Resumo</p>
-          <p className="mt-2 text-sm text-slate-700">Em producao/CQ: {inProductionCount}</p>
+          <p className="mt-2 text-sm text-slate-700">Em produção/CQ: {inProductionCount}</p>
           <p className="mt-1 text-sm text-slate-700">Prontas: {readyCount}</p>
           <p className="mt-1 text-sm text-slate-700">
             Entregues:{' '}
@@ -896,7 +898,7 @@ export default function CaseDetailPage() {
               </div>
 
               <div className="rounded-lg border border-slate-200 p-3">
-                <p className="text-sm font-semibold text-slate-800">Etapa 2 - Orcamento</p>
+                <p className="text-sm font-semibold text-slate-800">Etapa 2 - Orçamento</p>
                 <div className="mt-2 grid gap-2">
                   <Input
                     type="text"
@@ -907,7 +909,7 @@ export default function CaseDetailPage() {
                   />
                   <textarea
                     rows={2}
-                    placeholder="Observacoes do orcamento"
+                    placeholder="Observações do orçamento"
                     value={budgetNotes}
                     onChange={(event) => setBudgetNotes(event.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -926,7 +928,7 @@ export default function CaseDetailPage() {
                 </p>
                 <textarea
                   rows={2}
-                  placeholder="Observacoes do contrato"
+                  placeholder="Observações do contrato"
                   value={contractNotes}
                   onChange={(event) => setContractNotes(event.target.value)}
                   className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -992,7 +994,7 @@ export default function CaseDetailPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Observacao</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Observação</label>
               <textarea
                 rows={3}
                 value={installationNote}
@@ -1041,7 +1043,7 @@ export default function CaseDetailPage() {
               >
                 {currentCase.installation ? 'Registrar reposicao paciente' : 'Registrar inicio tratamento'}
               </Button>
-              {!hasProductionOrder ? <p className="mt-2 text-xs text-amber-700">Ordem de servico do LAB ainda nao gerada.</p> : null}
+              {!hasProductionOrder ? <p className="mt-2 text-xs text-amber-700">Ordem de serviço do LAB ainda não gerada.</p> : null}
               {!hasDentistDelivery ? <p className="mt-1 text-xs text-amber-700">Registre antes a entrega ao dentista.</p> : null}
             </div>
           </div>
@@ -1068,7 +1070,7 @@ export default function CaseDetailPage() {
               {supplySummary?.nextDueDate ? new Date(`${supplySummary.nextDueDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'}
             </p>
             {!currentCase.installation?.installedAt ? (
-              <p className="text-sm text-slate-500">Registre a instalacao para calcular reposicoes.</p>
+              <p className="text-sm text-slate-500">Registre a instalação para calcular reposições.</p>
             ) : null}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -1133,10 +1135,10 @@ export default function CaseDetailPage() {
                   : `Inferior: ${totalLower}`}
             </p>
             <p>
-              <span className="font-medium">Placa de attachments:</span> {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
+              <span className="font-medium">Placa de attachments:</span> {currentCase.attachmentBondingTray ? 'Sim' : 'Não'}
             </p>
             <p>
-              <span className="font-medium">Fonte:</span> {currentCase.sourceScanId ? `Scan ${currentCase.sourceScanId}` : 'Nao vinculado'}
+              <span className="font-medium">Fonte:</span> {currentCase.sourceScanId ? `Scan ${currentCase.sourceScanId}` : 'Não vinculado'}
             </p>
           </div>
         </Card>
@@ -1180,7 +1182,7 @@ export default function CaseDetailPage() {
           <h2 className="text-lg font-semibold text-slate-900">Produção (LAB)</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
             <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">Aguardando: {labSummary.aguardando_iniciar}</div>
-            <div className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">Em producao: {labSummary.em_producao}</div>
+            <div className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">Em produção: {labSummary.em_producao}</div>
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">CQ: {labSummary.controle_qualidade}</div>
             <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Prontas: {labSummary.prontas}</div>
             <div className="rounded-lg bg-emerald-100 px-3 py-2 text-sm text-emerald-800">Entregues: {labSummary.entregues}</div>
@@ -1202,7 +1204,7 @@ export default function CaseDetailPage() {
                 {changeSchedule.length === 0 ? (
                   <tr>
                     <td colSpan={hasUpperArch && hasLowerArch ? 6 : 5} className="px-3 py-4 text-slate-500">
-                      Registre a instalacao para gerar agenda de trocas.
+                      Registre a instalação para gerar agenda de trocas.
                     </td>
                   </tr>
                 ) : (
@@ -1243,7 +1245,7 @@ export default function CaseDetailPage() {
           <p className="mt-1 text-sm text-slate-500">Clique em uma placa para ver detalhes e alterar estado.</p>
           <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
             <span className="rounded px-2 py-1 bg-slate-100 text-slate-700">Pendente</span>
-            <span className="rounded px-2 py-1 bg-blue-100 text-blue-700">Em producao</span>
+            <span className="rounded px-2 py-1 bg-blue-100 text-blue-700">Em produção</span>
             <span className="rounded px-2 py-1 bg-brand-500 text-white">Pronta</span>
             <span className="rounded px-2 py-1 bg-emerald-100 text-emerald-700">Entregue</span>
             <span className="rounded px-2 py-1 bg-red-100 text-red-700">Rework</span>
@@ -1331,7 +1333,7 @@ export default function CaseDetailPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Observacao</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Observação</label>
                 <textarea
                   rows={3}
                   value={attachmentNote}
@@ -1384,7 +1386,7 @@ export default function CaseDetailPage() {
                   className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 >
                   <option value="pendente">Pendente</option>
-                  <option value="em_producao">Em producao</option>
+                  <option value="em_producao">Em produção</option>
                   <option value="pronta">Pronta</option>
                   <option value="entregue">Entregue</option>
                   <option value="rework">Rework</option>

@@ -153,7 +153,7 @@ export default function DashboardPage() {
     })),
     ...budgetsOpenItems.slice(0, 3).map((item) => ({
       key: `budget_${item.id}`,
-      title: `Orcamento em aberto: ${item.patientName}`,
+      title: `Orçamento em aberto: ${item.patientName}`,
       meta: 'Gerar/enviar proposta',
       osCode: item.treatmentCode ?? '-',
       tone: 'info' as const,
@@ -169,7 +169,7 @@ export default function DashboardPage() {
     })),
     ...reworkItems.slice(0, 3).map((item) => ({
       key: `rework_${item.id}`,
-      title: `Reposicao (refaccao): ${item.patientName}`,
+      title: `Reposição (reconfecção): ${item.patientName}`,
       meta: 'Prioridade alta',
       osCode: item.requestCode ?? (item.caseId ? caseById.get(item.caseId)?.treatmentCode : undefined) ?? '-',
       tone: 'danger' as const,
@@ -181,13 +181,13 @@ export default function DashboardPage() {
     overdueReplenishments > 0
       ? `${overdueReplenishments} atrasados`
       : dueSoonReplenishments > 0
-        ? `${dueSoonReplenishments} proximos`
+        ? `${dueSoonReplenishments} próximos`
         : 'Sem alertas'
 
   const nextActionsDescription =
     pendingActions.length > 0
-      ? `${pendingActions.length} acoes pendentes`
-      : 'Nenhuma acao pendente'
+      ? `${pendingActions.length} ações pendentes`
+      : 'Nenhuma ação pendente'
 
   return (
     <AppShell breadcrumb={['Inicio', 'Dashboard']}>
@@ -202,12 +202,12 @@ export default function DashboardPage() {
             <KpiCard
               title="Planejamentos pendentes"
               value={String(planningPending)}
-              meta={`${plansDone} concluidos`}
+              meta={`${plansDone} concluídos`}
               tone={planningPendingTone}
               icon={<ClipboardList className="h-4 w-4" />}
             />
             <KpiCard
-              title="Orcamentos em aberto"
+              title="Orçamentos em aberto"
               value={String(budgetsOpenItems.length)}
               meta="Planejamentos sem proposta"
               tone={budgetsOpenItems.length > 0 ? 'warning' : 'neutral'}
@@ -226,16 +226,16 @@ export default function DashboardPage() {
         <section className="mt-8">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              title="Fila de confeccao"
+              title="Fila de confecção"
               value={String(queueItems.length)}
-              meta="Aguardando inicio"
+              meta="Aguardando início"
               tone={queueItems.length > 0 ? 'warning' : 'neutral'}
               icon={<Factory className="h-4 w-4" />}
             />
             <KpiCard
-              title="Em producao"
+              title="Em produção"
               value={String(inProductionItems.length)}
-              meta="Impressao / termoformagem / CQ"
+              meta="Impressão / termoformagem / CQ"
               tone="info"
               icon={<Printer className="h-4 w-4" />}
             />
@@ -247,12 +247,12 @@ export default function DashboardPage() {
               icon={<Truck className="h-4 w-4" />}
             />
             <KpiCard
-              title="Reposicoes (saldo de placas)"
+              title="Reposições (saldo de placas)"
               value={String(hasCases ? remainingCases : reworkItems.length)}
               meta={
                 hasCases
                   ? `${remainingCases} pacientes | Sup ${remainingByArch.sup} | Inf ${remainingByArch.inf}`
-                  : `${reworkItems.length} reconfeccoes em aberto`
+                  : `${reworkItems.length} reconfecções em aberto`
               }
               tone={hasCases ? remainingTone : reworksTone}
               icon={<BadgeAlert className="h-4 w-4" />}
@@ -263,11 +263,11 @@ export default function DashboardPage() {
         <section className="mt-8">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard title="Pacientes em tratamento" value={String(inTreatmentCases.length)} meta="Ativos" tone="neutral" icon={<UsersRound className="h-4 w-4" />} />
-            <KpiCard title="Casos concluidos" value={String(completedCases.length)} meta="Finalizados" tone="neutral" icon={<PackageCheck className="h-4 w-4" />} />
+            <KpiCard title="Casos concluídos" value={String(completedCases.length)} meta="Finalizados" tone="neutral" icon={<PackageCheck className="h-4 w-4" />} />
             <Card className="border border-slate-800/70 bg-slate-950/40 p-5 shadow-none backdrop-blur sm:col-span-2">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-semibold text-slate-200">Proximas acoes</p>
+                  <p className="text-sm font-semibold text-slate-200">Próximas ações</p>
                   <p className="mt-1 text-sm text-slate-400">{nextActionsDescription}</p>
                 </div>
                 <div className="rounded-xl bg-slate-800 p-2 text-slate-200 ring-1 ring-slate-700">
@@ -278,11 +278,11 @@ export default function DashboardPage() {
                 <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Planejamento</p>
                   <p className="mt-1 text-sm font-semibold text-slate-100">{planningPending} pendentes</p>
-                  <p className="mt-1 text-xs text-slate-400">{plansDone} concluidos</p>
+                  <p className="mt-1 text-xs text-slate-400">{plansDone} concluídos</p>
                 </div>
                 <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Risco</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">Reposicoes</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">Reposições</p>
                   <p className="mt-1 text-xs text-slate-400">{riskLabel}</p>
                 </div>
               </div>
@@ -294,7 +294,7 @@ export default function DashboardPage() {
           <Card className="border border-slate-800/70 bg-slate-950/40 p-6 shadow-none backdrop-blur">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-slate-50">Acoes pendentes</h2>
+                <h2 className="text-lg font-semibold text-slate-50">Ações pendentes</h2>
                 <p className="mt-1 text-sm text-slate-400">Lista operacional de prioridades.</p>
               </div>
               <Link
@@ -307,7 +307,7 @@ export default function DashboardPage() {
 
             <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2">
               {pendingActions.length === 0 ? (
-                <p className="text-sm text-slate-400">Sem pendencias no momento.</p>
+                <p className="text-sm text-slate-400">Sem pendências no momento.</p>
               ) : (
                 pendingActions.map((item) => (
                   <Link
@@ -331,7 +331,7 @@ export default function DashboardPage() {
                               : 'rounded-full border border-slate-700 bg-slate-900/40 px-2 py-1 text-xs font-semibold text-slate-200'
                       }
                     >
-                      {item.tone === 'danger' ? 'Critico' : item.tone === 'warning' ? 'Pendente' : item.tone === 'info' ? 'A fazer' : 'Aguardando'}
+                      {item.tone === 'danger' ? 'Crítico' : item.tone === 'warning' ? 'Pendente' : item.tone === 'info' ? 'A fazer' : 'Aguardando'}
                     </span>
                   </Link>
                 ))

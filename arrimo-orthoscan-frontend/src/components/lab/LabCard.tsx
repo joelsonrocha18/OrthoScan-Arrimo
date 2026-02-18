@@ -75,7 +75,7 @@ export default function LabCard({
           Prazo: {formatDate(item.dueDate)}
         </p>
         <p className="text-slate-600">
-          Producao por arcada: Sup {item.plannedUpperQty ?? 0} | Inf {item.plannedLowerQty ?? 0}
+          Produção por arcada: Sup {item.plannedUpperQty ?? 0} | Inf {item.plannedLowerQty ?? 0}
         </p>
         {item.status === 'aguardando_iniciar' && (item.plannedUpperQty ?? 0) + (item.plannedLowerQty ?? 0) <= 0 ? (
           <Badge tone="danger" className="px-2 py-0.5 text-[10px]">Definir arcadas</Badge>

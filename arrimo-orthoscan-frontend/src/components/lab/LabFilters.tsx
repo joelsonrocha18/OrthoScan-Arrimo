@@ -55,7 +55,7 @@ export default function LabFilters({
         >
           <option value="todos">Prioridade: Todos</option>
           <option value="urgente">Urgente</option>
-          <option value="medio">Medio</option>
+          <option value="medio">Médio</option>
           <option value="baixo">Baixo</option>
         </select>
 
@@ -66,7 +66,7 @@ export default function LabFilters({
         >
           <option value="todos">Status: Todos</option>
           <option value="aguardando_iniciar">Aguardando iniciar</option>
-          <option value="em_producao">Em Producao</option>
+          <option value="em_producao">Em Produção</option>
           <option value="controle_qualidade">Controle de qualidade</option>
           <option value="prontas">Prontas</option>
         </select>

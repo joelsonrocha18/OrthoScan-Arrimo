@@ -17,7 +17,7 @@ import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUse
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
 import { createOnboardingInvite } from '../repo/onboardingRepo'
 import { listClinicsSupabase, listDentistsSupabase, type ClinicOption, type DentistOption } from '../repo/directoryRepo'
-import { listProfiles } from '../repo/profileRepo'
+import { listProfiles, setProfileActive, softDeleteProfile, updateProfile } from '../repo/profileRepo'
 import type { Role, User } from '../types/User'
 import { useDb } from '../lib/useDb'
 
@@ -47,6 +47,31 @@ function downloadFile(fileName: string, content: string, mime = 'text/plain') {
   anchor.click()
   document.body.removeChild(anchor)
   URL.revokeObjectURL(url)
+}
+
+function mapProfilesToUsers(profiles: Awaited<ReturnType<typeof listProfiles>>): User[] {
+  return profiles
+    .filter((profile) => profile.deleted_at == null)
+    .map((profile) => ({
+      id: profile.user_id,
+      name: (profile.full_name ?? '').trim() || (profile.login_email ?? '').trim() || profile.user_id,
+      email: (profile.login_email ?? '').trim(),
+      role: profile.role as Role,
+      isActive: Boolean(profile.is_active),
+      linkedClinicId: profile.clinic_id ?? undefined,
+      linkedDentistId: profile.dentist_id ?? undefined,
+      cpf: profile.cpf ?? undefined,
+      phone: profile.phone ?? undefined,
+      createdAt: profile.created_at ?? '',
+      updatedAt: profile.updated_at ?? '',
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+async function reloadSupabaseUsers(isSupabaseMode: boolean, onLoaded: (users: User[]) => void) {
+  if (!isSupabaseMode) return
+  const profiles = await listProfiles()
+  onLoaded(mapProfilesToUsers(profiles))
 }
 
 export default function SettingsPage() {
@@ -112,24 +137,9 @@ export default function SettingsPage() {
       setSupabaseUsers([])
       return
     }
-    // In Supabase mode, user management is based on profiles (server-side), not localStorage db.users.
-    listProfiles().then((profiles) => {
+    reloadSupabaseUsers(isSupabaseMode, (loadedUsers) => {
       if (!active) return
-      const mapped: User[] = profiles
-        .filter((profile) => profile.deleted_at == null)
-        .map((profile) => ({
-          id: profile.user_id,
-          name: (profile.full_name ?? '').trim() || (profile.login_email ?? '').trim() || profile.user_id,
-          email: (profile.login_email ?? '').trim(),
-          role: profile.role as Role,
-          isActive: Boolean(profile.is_active),
-          linkedClinicId: profile.clinic_id ?? undefined,
-          linkedDentistId: profile.dentist_id ?? undefined,
-          createdAt: profile.created_at ?? '',
-          updatedAt: profile.updated_at ?? '',
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-      setSupabaseUsers(mapped)
+      setSupabaseUsers(loadedUsers)
     })
     return () => {
       active = false
@@ -182,6 +192,23 @@ export default function SettingsPage() {
       }
       setInviteLink(result.inviteLink)
       addToast({ type: 'success', title: 'Convite gerado', message: 'Envie o link para o colaborador concluir cadastro.' })
+      return
+    }
+
+    if (isSupabaseMode && editingUser) {
+      const result = await updateProfile(editingUser.id, {
+        full_name: form.name.trim() || null,
+        cpf: form.cpf.trim() || null,
+        phone: form.phone.trim() || null,
+        role: form.role,
+        clinic_id: form.linkedClinicId.trim() || null,
+        dentist_id: form.linkedDentistId.trim() || null,
+        is_active: form.isActive,
+      })
+      if (!result.ok) return setError(result.error)
+      await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
+      setModalOpen(false)
+      addToast({ type: 'success', title: 'Usuario atualizado' })
       return
     }
 
@@ -296,8 +323,19 @@ export default function SettingsPage() {
                   <td className="px-5 py-4"><Badge tone={user.isActive ? 'success' : 'neutral'}>{user.isActive ? 'Ativo' : 'Inativo'}</Badge></td>
                   <td className="px-5 py-4 text-sm text-slate-700">{linkage(user)}</td>
                   <td className="px-5 py-4"><div className="flex flex-wrap gap-2">
-                    {canManageUsers && !isSupabaseMode ? <Button size="sm" variant="secondary" onClick={() => openEdit(user)} title="Editar"><PenLine className="h-4 w-4" /></Button> : null}
-                    {canManageUsers && !isSupabaseMode ? <Button size="sm" variant="ghost" onClick={() => setUserActive(user.id, !user.isActive)} title={user.isActive ? 'Desativar' : 'Ativar'}>{user.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button> : null}
+                    {canManageUsers ? <Button size="sm" variant="secondary" onClick={() => openEdit(user)} title="Editar"><PenLine className="h-4 w-4" /></Button> : null}
+                    {canManageUsers ? <Button size="sm" variant="ghost" onClick={async () => {
+                      if (DATA_MODE === 'supabase') {
+                        if (user.role === 'master_admin' && user.isActive && currentUser?.id !== user.id) {
+                          return addToast({ type: 'error', title: 'Nao e permitido desativar outro master admin.' })
+                        }
+                        const result = await setProfileActive(user.id, !user.isActive)
+                        if (!result.ok) return addToast({ type: 'error', title: result.error })
+                        await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
+                        return
+                      }
+                      setUserActive(user.id, !user.isActive)
+                    }} title={user.isActive ? 'Desativar' : 'Ativar'}>{user.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button> : null}
                     {canManageUsers ? <Button size="sm" variant="ghost" onClick={async () => {
                       if (DATA_MODE === 'supabase') {
                         const result = await requestPasswordReset({ email: user.email })
@@ -317,7 +355,16 @@ export default function SettingsPage() {
                       }
                       addToast({ type: 'info', title: `Acesso enviado para ${user.email}` })
                     }} title="Enviar acesso por email"><Mail className="h-4 w-4" /></Button> : null}
-                    {canDeleteUsers && !isSupabaseMode ? <Button size="sm" variant="ghost" className="text-red-600" onClick={() => softDeleteUser(user.id)} title="Excluir"><Trash2 className="h-4 w-4" /></Button> : null}
+                    {canDeleteUsers ? <Button size="sm" variant="ghost" className="text-red-600" onClick={async () => {
+                      if (DATA_MODE === 'supabase') {
+                        if (user.role === 'master_admin') return addToast({ type: 'error', title: 'Nao e permitido excluir o master admin.' })
+                        const result = await softDeleteProfile(user.id)
+                        if (!result.ok) return addToast({ type: 'error', title: result.error })
+                        await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
+                        return
+                      }
+                      softDeleteUser(user.id)
+                    }} title="Excluir"><Trash2 className="h-4 w-4" /></Button> : null}
                   </div></td>
                 </tr>)}
               </tbody>

@@ -1,6 +1,6 @@
 # QA Report
 
-Generated at: 2026-02-14T21:20:20.870Z
+Generated at: 2026-02-18T10:59:26.972Z
 
 ## Summary
 
@@ -39,5 +39,5 @@ Generated at: 2026-02-14T21:20:20.870Z
 
 ## Duration
 
-- Diagnostics duration: 126.04 s
-- E2E duration: 142.87 s
+- Diagnostics duration: 122.54 s
+- E2E duration: 117.47 s

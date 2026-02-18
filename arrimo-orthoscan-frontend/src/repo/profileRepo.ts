@@ -70,6 +70,19 @@ export async function restoreProfile(userId: string) {
   return { ok: true as const }
 }
 
+export async function updateProfile(
+  userId: string,
+  patch: Partial<Pick<ProfileRecord, 'full_name' | 'cpf' | 'phone' | 'role' | 'clinic_id' | 'dentist_id' | 'is_active'>>,
+) {
+  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const { error } = await supabase
+    .from('profiles')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('user_id', userId)
+  if (error) return { ok: false as const, error: error.message }
+  return { ok: true as const }
+}
+
 export async function inviteUser(payload: {
   email: string
   role: string

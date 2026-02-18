@@ -13,7 +13,7 @@ type LabKpiRowProps = {
 export default function LabKpiRow({ kpis }: LabKpiRowProps) {
   const items = [
     { label: 'Aguardando iniciar', value: kpis.aguardando_iniciar, danger: false },
-    { label: 'Em producao', value: kpis.em_producao, danger: false },
+    { label: 'Em produção', value: kpis.em_producao, danger: false },
     { label: 'Controle de qualidade', value: kpis.controle_qualidade, danger: false },
     { label: 'Prontas', value: kpis.prontas, danger: false },
     { label: 'Atrasados', value: kpis.atrasados, danger: true },

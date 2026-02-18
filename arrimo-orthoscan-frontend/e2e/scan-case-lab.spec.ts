@@ -55,7 +55,7 @@ test('scan to case to lab flow', async ({ page }) => {
 
   await page.goto('/app/lab')
   await expect(page.getByRole('heading', { level: 3, name: 'Aguardando iniciar' })).toBeVisible()
-  await expect(page.getByRole('heading', { level: 3, name: 'Em producao' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 3, name: 'Em produção' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 3, name: 'Controle de qualidade' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 3, name: 'Prontas' })).toBeVisible()
 })

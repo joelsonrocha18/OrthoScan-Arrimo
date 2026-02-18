@@ -10,10 +10,10 @@ import { listCasesForUser } from '../auth/scope'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
-  orcamento: 'Orcamento',
+  orcamento: 'Orçamento',
   contrato_pendente: 'Contrato pendente',
   contrato_aprovado: 'Contrato aprovado',
-  em_producao: 'Em producao',
+  em_producao: 'Em produção',
   finalizado: 'Finalizado',
 }
 
@@ -66,7 +66,7 @@ export default function CasesPage() {
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Placas</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Troca a cada (dias)</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">

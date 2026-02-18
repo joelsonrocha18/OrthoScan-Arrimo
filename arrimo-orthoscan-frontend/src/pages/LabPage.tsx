@@ -228,6 +228,7 @@ export default function LabPage() {
       )
       const caseScoped = new Map<string, LabItem>()
       const explicitRework: LabItem[] = []
+      const explicitReworkCaseIds = new Set<string>()
       const standalone: LabItem[] = []
       const score = (item: LabItem) => {
         if (item.requestKind === 'reposicao_programada' && item.status === 'aguardando_iniciar') return 4
@@ -239,6 +240,7 @@ export default function LabPage() {
       raw.forEach((item) => {
         if (item.requestKind === 'reconfeccao') {
           explicitRework.push(item)
+          if (item.caseId) explicitReworkCaseIds.add(item.caseId)
           return
         }
         if (!item.caseId) {
@@ -256,7 +258,10 @@ export default function LabPage() {
         }
       })
 
-      return [...explicitRework, ...caseScoped.values(), ...standalone]
+      const caseScopedWithoutExplicitRework = [...caseScoped.values()].filter(
+        (item) => !(item.caseId && explicitReworkCaseIds.has(item.caseId)),
+      )
+      return [...explicitRework, ...caseScopedWithoutExplicitRework, ...standalone]
     },
     [filteredItems, caseById, isDeliveredToProfessional],
   )
@@ -298,7 +303,7 @@ export default function LabPage() {
     notes?: string
     status: LabStatus
   }) => {
-    if (!canWrite) return { ok: false, message: 'Sem permissao para criar solicitacoes.' }
+    if (!canWrite) return { ok: false, message: 'Sem permissão para criar solicitações.' }
     const today = new Date().toISOString().slice(0, 10)
     const result = addLabItem({
       caseId: payload.caseId,
@@ -324,7 +329,7 @@ export default function LabPage() {
   }
 
   const handleSave = (id: string, patch: Partial<LabItem>) => {
-    if (!canWrite) return { ok: false, message: 'Sem permissao para editar solicitacoes.' }
+    if (!canWrite) return { ok: false, message: 'Sem permissão para editar solicitações.' }
     const result = updateLabItem(id, patch)
     if (result.error) {
       return { ok: false, message: result.error }
@@ -340,7 +345,7 @@ export default function LabPage() {
     if (!canWrite) return
     deleteLabItem(id)
     setModal({ open: false, mode: 'create', item: null })
-    addToast({ type: 'info', title: 'Solicitacao removida' })
+    addToast({ type: 'info', title: 'Solicitação removida' })
   }
 
   const nextRangeByArch = (
@@ -412,10 +417,10 @@ export default function LabPage() {
             Esteira
           </Button>
           <Button variant={boardTab === 'reconfeccao' ? 'primary' : 'secondary'} onClick={() => setBoardTab('reconfeccao')}>
-            Placas com defeito (reconfeccao)
+            Placas com defeito (reconfecção)
           </Button>
           <Button variant={boardTab === 'banco_restante' ? 'primary' : 'secondary'} onClick={() => setBoardTab('banco_restante')}>
-            Banco de reposicoes
+            Banco de reposições
           </Button>
         </div>
         {boardTab === 'esteira' ? (
@@ -474,10 +479,10 @@ export default function LabPage() {
                       <th className="px-3 py-2 font-semibold">Tratamento (Inf/Sup)</th>
                       <th className="px-3 py-2 font-semibold">Entregue (Inf/Sup)</th>
                       <th className="px-3 py-2 font-semibold">Restante (Inf/Sup)</th>
-                      <th className="px-3 py-2 font-semibold">Data instalacao</th>
-                      <th className="px-3 py-2 font-semibold">Previsao reposicao LAB</th>
+                      <th className="px-3 py-2 font-semibold">Data instalação</th>
+                      <th className="px-3 py-2 font-semibold">Previsão reposição LAB</th>
                       <th className="px-3 py-2 font-semibold">Status tratamento</th>
-                      <th className="px-3 py-2 font-semibold">Acoes</th>
+                      <th className="px-3 py-2 font-semibold">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -500,7 +505,7 @@ export default function LabPage() {
                             ? 'Pronto para entrega'
                           : installationDate
                             ? 'Em tratamento'
-                            : 'Aguardando instalacao'
+                            : 'Aguardando instalação'
 
                       return (
                         <tr key={item.id} className="border-t border-slate-100">
@@ -571,7 +576,7 @@ export default function LabPage() {
           const selectedCaseId = selectedReadyItem.caseId
           const caseItem = caseById.get(selectedCaseId)
           if (!caseItem) {
-            addToast({ type: 'error', title: 'Entrega de lote', message: 'Caso nao encontrado.' })
+            addToast({ type: 'error', title: 'Entrega de lote', message: 'Caso não encontrado.' })
             return
           }
           const upperQty = Math.max(0, Math.trunc(payload.upperQty))

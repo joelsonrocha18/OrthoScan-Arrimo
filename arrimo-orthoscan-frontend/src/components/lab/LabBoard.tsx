@@ -15,7 +15,7 @@ type LabBoardProps = {
 
 const columns: Array<{ status: LabStatus; label: string }> = [
   { status: 'aguardando_iniciar', label: 'Aguardando iniciar' },
-  { status: 'em_producao', label: 'Em producao' },
+  { status: 'em_producao', label: 'Em produção' },
   { status: 'controle_qualidade', label: 'Controle de qualidade' },
   { status: 'prontas', label: 'Prontas' },
 ]
@@ -45,7 +45,7 @@ export default function LabBoard({ items, guideTone, caseLabel, onItemsChange, o
     }
     if (!result.sync.ok) {
       if (onSyncMessage) onSyncMessage(result.sync.message)
-      addToast({ type: 'error', title: 'Nao foi possivel sincronizar', message: result.sync.message })
+      addToast({ type: 'error', title: 'Não foi possível sincronizar', message: result.sync.message })
     }
     onItemsChange()
   }
@@ -63,7 +63,7 @@ export default function LabBoard({ items, guideTone, caseLabel, onItemsChange, o
     }
     if (!result.sync.ok) {
       if (onSyncMessage) onSyncMessage(result.sync.message)
-      addToast({ type: 'error', title: 'Nao foi possivel sincronizar', message: result.sync.message })
+      addToast({ type: 'error', title: 'Não foi possível sincronizar', message: result.sync.message })
     }
     onItemsChange()
   }
