@@ -407,7 +407,7 @@ export function registerCaseDeliveryLot(
   if (inRange.length === 0) {
     return { ok: false, error: 'Nenhuma placa encontrada neste intervalo.' }
   }
-  const notReady = inRange.find((item) => item.state !== 'pronta' && item.state !== 'entregue')
+  const notReady = inRange.find((item) => item.state !== 'pronta' && item.state !== 'entregue' && item.state !== 'rework')
   if (notReady) {
     return { ok: false, error: `A placa #${notReady.trayNumber} nao esta pronta para entrega.` }
   }

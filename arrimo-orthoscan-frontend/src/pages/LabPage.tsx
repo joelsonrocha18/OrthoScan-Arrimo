@@ -86,6 +86,10 @@ function isReworkItem(item: LabItem) {
   return item.requestKind === 'reconfeccao'
 }
 
+function isReworkProductionItem(item: LabItem) {
+  return (item.requestKind ?? 'producao') === 'producao' && (item.notes ?? '').toLowerCase().includes('rework')
+}
+
 function hasRevisionSuffix(code?: string) {
   if (!code) return false
   return /\/\d+$/.test(code)
@@ -134,11 +138,12 @@ export default function LabPage() {
       items.filter(
         (item) => {
           if (!item.caseId) return false
-          if ((item.requestKind ?? 'producao') !== 'producao') return false
           if (item.status !== 'prontas') return false
-          if (isReworkItem(item)) return false
           const caseItem = caseById.get(item.caseId)
           const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
+          if (isReworkItem(item) || isReworkProductionItem(item)) {
+            return tray?.state === 'rework' || tray?.state === 'pronta' || tray?.state === 'entregue'
+          }
           return tray?.state === 'pronta'
         },
       ),
@@ -154,7 +159,7 @@ export default function LabPage() {
         .filter((item) => item.caseId && visibleCases.some((current) => current.id === item.caseId))
         .map((item) => ({
           id: item.id,
-          label: `${item.patientName} (${item.requestCode ?? 'OS sem codigo'})`,
+          label: `${item.patientName} (${item.requestCode ?? 'OS sem codigo'})${isReworkItem(item) || isReworkProductionItem(item) ? ` - Rework placa #${item.trayNumber}` : ''}`,
         })),
     [readyDeliveryItems, visibleCases],
   )
@@ -579,15 +584,24 @@ export default function LabPage() {
             addToast({ type: 'error', title: 'Entrega de lote', message: 'Caso não encontrado.' })
             return
           }
+          const selectedIsRework = isReworkItem(selectedReadyItem) || isReworkProductionItem(selectedReadyItem)
           const upperQty = Math.max(0, Math.trunc(payload.upperQty))
           const lowerQty = Math.max(0, Math.trunc(payload.lowerQty))
-          if (upperQty + lowerQty <= 0) {
+          if (!selectedIsRework && upperQty + lowerQty <= 0) {
             addToast({ type: 'error', title: 'Entrega de lote', message: 'Informe quantidade superior e/ou inferior.' })
             return
           }
 
           const ops: Array<{ arch: 'superior' | 'inferior'; fromTray: number; toTray: number }> = []
-          if (upperQty > 0) {
+          if (selectedIsRework) {
+            if (selectedReadyItem.arch === 'superior' || selectedReadyItem.arch === 'ambos') {
+              ops.push({ arch: 'superior', fromTray: selectedReadyItem.trayNumber, toTray: selectedReadyItem.trayNumber })
+            }
+            if (selectedReadyItem.arch === 'inferior' || selectedReadyItem.arch === 'ambos') {
+              ops.push({ arch: 'inferior', fromTray: selectedReadyItem.trayNumber, toTray: selectedReadyItem.trayNumber })
+            }
+          }
+          if (!selectedIsRework && upperQty > 0) {
             const range = nextRangeByArch(caseItem, 'superior', upperQty)
             if (range.toTray > caseItem.totalTrays) {
               addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade superior excede o total do caso (${caseItem.totalTrays}).` })
@@ -595,7 +609,7 @@ export default function LabPage() {
             }
             ops.push({ arch: 'superior', ...range })
           }
-          if (lowerQty > 0) {
+          if (!selectedIsRework && lowerQty > 0) {
             const range = nextRangeByArch(caseItem, 'inferior', lowerQty)
             if (range.toTray > caseItem.totalTrays) {
               addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade inferior excede o total do caso (${caseItem.totalTrays}).` })
