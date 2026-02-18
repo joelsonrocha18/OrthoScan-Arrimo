@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import InternalChatWidget from '../components/InternalChatWidget'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../components/Topbar'
 
@@ -17,6 +18,7 @@ export default function AppShell({ breadcrumb, children }: AppShellProps) {
       <div className="md:pl-64">
         <Topbar breadcrumb={breadcrumb} />
         <main className="px-4 py-6 sm:px-6">{children}</main>
+        <InternalChatWidget />
       </div>
     </div>
   )
