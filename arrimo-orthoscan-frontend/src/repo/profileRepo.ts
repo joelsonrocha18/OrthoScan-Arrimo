@@ -1,5 +1,4 @@
 import { supabase } from '../lib/supabaseClient'
-import { getSupabaseAccessToken, setSupabaseAccessToken } from '../lib/auth'
 
 export type ProfileRecord = {
   user_id: string
@@ -93,29 +92,25 @@ export async function inviteUser(payload: {
   password?: string
   cpf?: string
   phone?: string
+  accessToken: string
 }) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
-
-  // Requires authenticated JWT for permission checks inside the Edge Function.
-  let accessToken = ''
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-  if (sessionError) return { ok: false as const, error: sessionError.message }
-  accessToken = sessionData.session?.access_token ?? ''
-  if (!accessToken) {
-    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
-    if (refreshError) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
-    accessToken = refreshed.session?.access_token ?? ''
-  }
-  if (!accessToken) {
-    accessToken = getSupabaseAccessToken() ?? ''
-  }
+  const accessToken = payload.accessToken?.trim()
   if (!accessToken) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
-  setSupabaseAccessToken(accessToken)
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
 
   const { data, error } = await supabase.functions.invoke('invite-user', {
-    body: payload,
+    body: {
+      email: payload.email,
+      role: payload.role,
+      clinicId: payload.clinicId,
+      dentistId: payload.dentistId,
+      fullName: payload.fullName,
+      password: payload.password,
+      cpf: payload.cpf,
+      phone: payload.phone,
+    },
     headers: { Authorization: `Bearer ${accessToken}`, apikey: anonKey, 'x-user-jwt': accessToken },
   })
   if (error) {

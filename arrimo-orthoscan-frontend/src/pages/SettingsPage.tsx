@@ -15,6 +15,7 @@ import { clearSession, getCurrentUser } from '../lib/auth'
 import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
 import { formatCnpj, isValidCnpj } from '../lib/cnpj'
 import { formatFixedPhone, formatMobilePhone, isValidFixedPhone, isValidMobilePhone } from '../lib/phone'
+import { supabase } from '../lib/supabaseClient'
 import { addAuditEntry, applyTheme, loadSystemSettings, saveSystemSettings, type AppThemeMode, type LabCompanyProfile } from '../lib/systemSettings'
 import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUser } from '../repo/userRepo'
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
@@ -148,7 +149,7 @@ export default function SettingsPage() {
   const [modalTab, setModalTab] = useState<ModalTab>('personal')
   const [showPassword, setShowPassword] = useState(false)
   const [passwordMode, setPasswordMode] = useState<PasswordMode>('auto')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', username: '', email: '', password: '', cpf: '', cep: '', birthDate: '', phone: '', whatsapp: '', street: '', number: '', district: '', city: '', state: '', addressLine: '', role: 'receptionist' as Role, isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
@@ -197,7 +198,7 @@ export default function SettingsPage() {
     setForm({ name: '', username: '', email: '', password: isSupabaseMode ? '' : generatePassword(), cpf: '', cep: '', birthDate: '', phone: '', whatsapp: '', street: '', number: '', district: '', city: '', state: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
     setCepStatus('')
     setCepError('')
-    setError('')
+    setError(null)
     setModalOpen(true)
   }
 
@@ -209,9 +210,13 @@ export default function SettingsPage() {
     setForm({ name: user.name, username: user.username ?? '', email: user.email, password: '', cpf: user.cpf ?? '', cep: user.cep ?? '', street: addressParts.street, number: addressParts.number, district: addressParts.district, city: addressParts.city, state: addressParts.state, birthDate: user.birthDate ?? '', phone: user.phone ?? '', whatsapp: user.whatsapp ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
     setCepStatus('')
     setCepError('')
-    setError('')
+    setError(null)
     setModalOpen(true)
   }
+
+  useEffect(() => {
+    if (modalOpen) setError(null)
+  }, [modalOpen])
 
   const resolveCep = async () => {
     setCepError('')
@@ -240,7 +245,19 @@ export default function SettingsPage() {
   }
 
   const submitUser = async () => {
-    setError('')
+    setError(null)
+
+    let submitAccessToken = ''
+    if (isSupabaseMode) {
+      if (!supabase) return setError('Supabase nao configurado.')
+      const { data } = await supabase.auth.getSession()
+      submitAccessToken = data.session?.access_token ?? ''
+      if (!submitAccessToken) {
+        setError('Sessao expirada. Faca login novamente.')
+        return
+      }
+    }
+
     if (isSupabaseMode && !editingUser) {
       if (!form.name.trim()) return setError('Nome e obrigatorio.')
       if (!form.email.trim()) return setError('Email e obrigatorio.')
@@ -266,6 +283,7 @@ export default function SettingsPage() {
         password: form.password.trim(),
         cpf: form.cpf.trim() || undefined,
         phone: form.whatsapp.trim() || undefined,
+        accessToken: submitAccessToken,
       })
       if (!result.ok) {
         return setError(result.error)
