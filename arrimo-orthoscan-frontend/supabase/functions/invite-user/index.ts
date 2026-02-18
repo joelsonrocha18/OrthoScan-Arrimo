@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const userJwtRaw = req.headers.get('x-user-jwt') ?? req.headers.get('authorization') ?? ''
-  const userJwt = userJwtRaw.replace(/^Bearer\\s+/i, '').trim()
+  const userJwt = userJwtRaw.replace(/^Bearer\s+/i, '').trim()
 
   const payload = (await req.json()) as InvitePayload
   if (!payload.email || !payload.role || !payload.clinicId) {
