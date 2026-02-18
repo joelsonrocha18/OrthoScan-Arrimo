@@ -15,9 +15,8 @@ import { formatCnpj, isValidCnpj } from '../lib/cnpj'
 import { addAuditEntry, applyTheme, loadSystemSettings, saveSystemSettings, type AppThemeMode, type LabCompanyProfile } from '../lib/systemSettings'
 import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUser } from '../repo/userRepo'
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
-import { createOnboardingInvite } from '../repo/onboardingRepo'
 import { listClinicsSupabase, listDentistsSupabase, type ClinicOption, type DentistOption } from '../repo/directoryRepo'
-import { listProfiles, setProfileActive, softDeleteProfile, updateProfile } from '../repo/profileRepo'
+import { inviteUser, listProfiles, setProfileActive, softDeleteProfile, updateProfile } from '../repo/profileRepo'
 import type { Role, User } from '../types/User'
 import { useDb } from '../lib/useDb'
 
@@ -112,7 +111,6 @@ export default function SettingsPage() {
 
   const canManageUsers = can(currentUser, 'users.write')
   const canDeleteUsers = can(currentUser, 'users.delete')
-  const [inviteLink, setInviteLink] = useState('')
 
   useEffect(() => {
     let active = true
@@ -151,7 +149,6 @@ export default function SettingsPage() {
     setModalTab('personal')
     setPasswordMode(isSupabaseMode ? 'manual' : 'auto')
     setForm({ name: '', email: '', password: isSupabaseMode ? '' : generatePassword(), cpf: '', birthDate: '', phone: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
-    setInviteLink('')
     setError('')
     setModalOpen(true)
   }
@@ -161,7 +158,6 @@ export default function SettingsPage() {
     setModalTab('personal')
     setPasswordMode('manual')
     setForm({ name: user.name, email: user.email, password: '', cpf: user.cpf ?? '', birthDate: user.birthDate ?? '', phone: user.phone ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
-    setInviteLink('')
     setError('')
     setModalOpen(true)
   }
@@ -170,8 +166,9 @@ export default function SettingsPage() {
     setError('')
     if (isSupabaseMode && !editingUser) {
       if (!form.name.trim()) return setError('Nome e obrigatorio.')
+      if (!form.email.trim()) return setError('Email e obrigatorio.')
       if (!INVITE_ROLE_LIST.includes(form.role)) {
-        return setError('Convite por link (Supabase) apenas para: Dentista Admin, Dentista Cliente, Clinica Cliente, Recepcao e Laboratorio.')
+        return setError('Perfil nao permitido para criacao neste modo.')
       }
       if (ROLE_REQUIRES_CLINIC.includes(form.role) && !form.linkedClinicId.trim()) {
         return setError('Clinica vinculada e obrigatoria para este perfil.')
@@ -179,19 +176,19 @@ export default function SettingsPage() {
       if (form.role === 'dentist_client' && !form.linkedDentistId.trim()) {
         return setError('Dentista responsavel e obrigatorio para perfil Dentista Cliente.')
       }
-      const result = await createOnboardingInvite({
-        fullName: form.name.trim(),
-        cpf: form.cpf || undefined,
-        phone: form.phone || undefined,
+      const result = await inviteUser({
+        email: form.email.trim(),
         role: form.role,
-        clinicId: form.linkedClinicId,
+        clinicId: form.linkedClinicId || clinicOptions[0]?.id || '',
         dentistId: form.linkedDentistId || undefined,
+        fullName: form.name.trim() || undefined,
       })
-      if (!result.ok || !result.inviteLink) {
-        return setError(result.ok ? 'Falha ao gerar link de convite.' : result.error)
+      if (!result.ok) {
+        return setError(result.error)
       }
-      setInviteLink(result.inviteLink)
-      addToast({ type: 'success', title: 'Convite gerado', message: 'Envie o link para o colaborador concluir cadastro.' })
+      await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
+      setModalOpen(false)
+      addToast({ type: 'success', title: 'Usuario criado', message: 'Use reset de senha para primeiro acesso.' })
       return
     }
 
@@ -298,7 +295,7 @@ export default function SettingsPage() {
               <h2 className="text-lg font-semibold text-slate-900">Usuarios</h2>
               <p className="text-sm text-slate-500">Tabela limpa com Perfil, status e vinculo.</p>
             </div>
-            {canManageUsers ? <Button onClick={openNew}>{isSupabaseMode ? '+ Convidar colaborador' : '+ Novo usuario'}</Button> : null}
+            {canManageUsers ? <Button onClick={openNew}>+ Novo usuario</Button> : null}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
@@ -433,7 +430,7 @@ export default function SettingsPage() {
       {modalOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
         <Card className="w-full max-w-3xl">
           <h2 className="text-xl font-semibold text-slate-900">
-            {editingUser ? 'Editar usuario' : isSupabaseMode ? 'Convidar colaborador' : 'Novo usuario'}
+            {editingUser ? 'Editar usuario' : 'Novo usuario'}
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {(isSupabaseMode
@@ -466,22 +463,10 @@ export default function SettingsPage() {
             setForm((c) => ({ ...c, role: nextRole, linkedDentistId: nextRole === 'dentist_client' ? c.linkedDentistId : '' }))
           }} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{availableRoleList.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select>{isSupabaseMode ? <p className="mt-1 text-xs text-slate-500">Convite por link apenas para perfis operacionais (nao-admin).</p> : null}{isSupabaseMode && form.role === 'dentist_admin' ? <div className="mt-3"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div> : null}</div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
           {modalTab === 'link' && showLinkTab ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value, linkedDentistId: '' }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div>{form.role === 'dentist_client' ? <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsavel</label><select value={form.linkedDentistId} onChange={(event) => setForm((c) => ({ ...c, linkedDentistId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{dentistsForSelect.map((dentist) => <option key={dentist.id} value={dentist.id}>{dentist.name}</option>)}</select></div> : null}</div> : null}
-          {inviteLink ? <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Link de cadastro</p>
-            <p className="mt-1 break-all text-sm text-emerald-800">{inviteLink}</p>
-            <div className="mt-2 flex gap-2">
-              <Button size="sm" variant="secondary" onClick={() => navigator.clipboard.writeText(inviteLink)}>
-                Copiar link
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => window.open(inviteLink, '_blank')}>
-                Abrir link
-              </Button>
-            </div>
-          </div> : null}
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={submitUser}>{isSupabaseMode && !editingUser ? 'Gerar link de cadastro' : 'Salvar'}</Button>
+            <Button onClick={submitUser}>Salvar</Button>
           </div>
         </Card>
       </div> : null}
