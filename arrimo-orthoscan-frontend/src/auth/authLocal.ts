@@ -21,11 +21,22 @@ export const authLocal: AuthProvider = {
   },
   async signIn(email: string, password: string) {
     const localPassword = (import.meta.env.VITE_LOCAL_PASSWORD as string | undefined)?.trim()
+    const credential = email.trim().toLowerCase()
     let db = loadDb()
-    let user = db.users.find((item) => item.email.toLowerCase() === email.toLowerCase() && item.isActive && !item.deletedAt)
+    let user = db.users.find((item) => {
+      if (!item.isActive || item.deletedAt) return false
+      const emailMatch = item.email.toLowerCase() === credential
+      const usernameMatch = (item.username ?? '').trim().toLowerCase() === credential
+      return emailMatch || usernameMatch
+    })
     if (!user) {
       db = ensureMasterUserInDb()
-      user = db.users.find((item) => item.email.toLowerCase() === email.toLowerCase() && item.isActive && !item.deletedAt)
+      user = db.users.find((item) => {
+        if (!item.isActive || item.deletedAt) return false
+        const emailMatch = item.email.toLowerCase() === credential
+        const usernameMatch = (item.username ?? '').trim().toLowerCase() === credential
+        return emailMatch || usernameMatch
+      })
     }
     if (!user) {
       throw new Error('Usuario nao encontrado.')

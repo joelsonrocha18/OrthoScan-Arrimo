@@ -9,9 +9,11 @@ export type Role =
 export type User = {
   id: string
   name: string
+  username?: string
   email: string
   password?: string
   cpf?: string
+  cep?: string
   birthDate?: string
   phone?: string
   addressLine?: string

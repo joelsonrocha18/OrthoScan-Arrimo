@@ -6,6 +6,9 @@ type InvitePayload = {
   clinicId: string
   dentistId?: string
   fullName?: string
+  password?: string
+  cpf?: string
+  phone?: string
 }
 
 const APP_ROLES = new Set([
@@ -56,15 +59,13 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
-  const siteUrl = Deno.env.get('SITE_URL') ?? ''
-  const inviteRedirect = Deno.env.get('INVITE_REDIRECT_URL') ?? siteUrl
 
   if (!supabaseUrl || !serviceRoleKey) {
     return json(req, { ok: false, error: 'Missing Supabase env vars.' }, 500)
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
-  const userJwtRaw = req.headers.get('x-user-jwt') ?? ''
+  const userJwtRaw = req.headers.get('x-user-jwt') ?? req.headers.get('authorization') ?? ''
   const userJwt = userJwtRaw.replace(/^Bearer\\s+/i, '').trim()
 
   const payload = (await req.json()) as InvitePayload
@@ -112,25 +113,47 @@ Deno.serve(async (req) => {
     return json(req, { ok: false, error: 'Rate limit exceeded. Try again later.' }, 429)
   }
 
-  const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(payload.email, {
-    redirectTo: inviteRedirect || siteUrl,
-  })
-  if (inviteError || !inviteData?.user) {
-    return json(req, { ok: false, error: inviteError?.message ?? 'Invite failed.' }, 400)
+  const password = payload.password?.trim()
+  if (password && password.length < 8) {
+    return json(req, { ok: false, error: 'Senha deve ter no minimo 8 caracteres.' }, 400)
+  }
+  const email = payload.email.trim().toLowerCase()
+  const fullName = payload.fullName?.trim() ?? null
+  const createPayload: {
+    email: string
+    password?: string
+    email_confirm: boolean
+    user_metadata: Record<string, string>
+  } = {
+    email,
+    email_confirm: true,
+    user_metadata: fullName ? { full_name: fullName } : {},
+  }
+  if (password) createPayload.password = password
+
+  const { data: createdData, error: createError } = await supabase.auth.admin.createUser(createPayload)
+  if (createError || !createdData?.user) {
+    const message = createError?.message ?? 'Create user failed.'
+    if (message.toLowerCase().includes('already')) {
+      return json(req, { ok: false, error: 'Email ja cadastrado.' }, 400)
+    }
+    return json(req, { ok: false, error: message }, 400)
   }
 
   const { error: upsertError } = await supabase.from('profiles').upsert({
-    user_id: inviteData.user.id,
-    login_email: payload.email.toLowerCase(),
+    user_id: createdData.user.id,
+    login_email: email,
     role: payload.role,
     clinic_id: payload.clinicId,
     dentist_id: payload.dentistId ?? null,
-    full_name: payload.fullName ?? null,
+    full_name: fullName,
+    cpf: payload.cpf?.trim() || null,
+    phone: payload.phone?.trim() || null,
     is_active: true,
   })
   if (upsertError) {
     return json(req, { ok: false, error: upsertError.message }, 400)
   }
 
-  return json(req, { ok: true, invitedEmail: payload.email }, 200)
+  return json(req, { ok: true, invitedEmail: email }, 200)
 })

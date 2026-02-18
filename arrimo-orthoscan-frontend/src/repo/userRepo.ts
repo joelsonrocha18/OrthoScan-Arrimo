@@ -17,9 +17,11 @@ export function getUser(id: string) {
 
 export function createUser(payload: {
   name: string
+  username?: string
   email: string
   password: string
   cpf?: string
+  cep?: string
   birthDate?: string
   phone?: string
   addressLine?: string
@@ -39,9 +41,11 @@ export function createUser(payload: {
   const user: User = {
     id: `user_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     name: payload.name.trim(),
+    username: payload.username?.trim() || undefined,
     email: payload.email.trim(),
     password: payload.password,
     cpf: payload.cpf?.trim() || undefined,
+    cep: payload.cep?.trim() || undefined,
     birthDate: payload.birthDate || undefined,
     phone: payload.phone?.trim() || undefined,
     addressLine: payload.addressLine?.trim() || undefined,
@@ -70,6 +74,8 @@ export function updateUser(id: string, patch: Partial<User>) {
     email: patch.email ? patch.email.trim() : current.email,
     password: typeof patch.password === 'string' ? patch.password : current.password,
     cpf: patch.cpf ? patch.cpf.trim() : current.cpf,
+    cep: patch.cep ? patch.cep.trim() : current.cep,
+    username: patch.username ? patch.username.trim() : current.username,
     phone: patch.phone ? patch.phone.trim() : current.phone,
     addressLine: patch.addressLine ? patch.addressLine.trim() : current.addressLine,
     updatedAt: nowIso(),

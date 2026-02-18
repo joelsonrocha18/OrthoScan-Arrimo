@@ -90,6 +90,9 @@ export async function inviteUser(payload: {
   clinicId: string
   dentistId?: string
   fullName?: string
+  password?: string
+  cpf?: string
+  phone?: string
 }) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
 
@@ -103,7 +106,7 @@ export async function inviteUser(payload: {
 
   const { data, error } = await supabase.functions.invoke('invite-user', {
     body: payload,
-    headers: { Authorization: `Bearer ${anonKey}`, 'x-user-jwt': accessToken },
+    headers: { Authorization: `Bearer ${accessToken}`, apikey: anonKey, 'x-user-jwt': accessToken },
   })
   if (error) return { ok: false as const, error: error.message }
   return { ok: true as const, data }

@@ -25,7 +25,7 @@ export default function LoginPage() {
     const nextErrors: LoginErrors = {}
 
     if (!email.trim()) {
-      nextErrors.email = 'Email obrigatorio'
+      nextErrors.email = 'Usuario ou email obrigatorio'
     }
 
     if (!password.trim()) {
@@ -75,12 +75,12 @@ export default function LoginPage() {
           <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
             <div>
               <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-200">
-                Email
+                Usuario (email)
               </label>
               <Input
                 id="email"
-                type="email"
-                placeholder="seu@email.com"
+                type="text"
+                placeholder="usuario ou seu@email.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />

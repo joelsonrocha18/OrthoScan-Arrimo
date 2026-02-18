@@ -11,6 +11,7 @@ import { DATA_MODE } from '../data/dataMode'
 import { DB_KEY, resetDb } from '../data/db'
 import AppShell from '../layouts/AppShell'
 import { clearSession, getCurrentUser } from '../lib/auth'
+import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
 import { formatCnpj, isValidCnpj } from '../lib/cnpj'
 import { addAuditEntry, applyTheme, loadSystemSettings, saveSystemSettings, type AppThemeMode, type LabCompanyProfile } from '../lib/systemSettings'
 import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUser } from '../repo/userRepo'
@@ -34,6 +35,26 @@ const ROLE_REQUIRES_CLINIC: Role[] = ['dentist_admin', 'dentist_client', 'clinic
 function generatePassword(size = 12) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%'
   return Array.from({ length: size }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+
+function formatCpf(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+  const p1 = digits.slice(0, 3)
+  const p2 = digits.slice(3, 6)
+  const p3 = digits.slice(6, 9)
+  const p4 = digits.slice(9, 11)
+  let out = p1
+  if (p2) out += `.${p2}`
+  if (p3) out += `.${p3}`
+  if (p4) out += `-${p4}`
+  return out
+}
+
+function formatCep(value: string) {
+  const digits = normalizeCep(value)
+  const p1 = digits.slice(0, 5)
+  const p2 = digits.slice(5, 8)
+  return p2 ? `${p1}-${p2}` : p1
 }
 
 function downloadFile(fileName: string, content: string, mime = 'text/plain') {
@@ -105,7 +126,9 @@ export default function SettingsPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [passwordMode, setPasswordMode] = useState<PasswordMode>('auto')
   const [error, setError] = useState('')
-  const [form, setForm] = useState({ name: '', email: '', password: '', cpf: '', birthDate: '', phone: '', addressLine: '', role: 'receptionist' as Role, isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', cpf: '', cep: '', birthDate: '', phone: '', addressLine: '', role: 'receptionist' as Role, isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+  const [cepStatus, setCepStatus] = useState('')
+  const [cepError, setCepError] = useState('')
   const [settingsState, setSettingsState] = useState(() => loadSystemSettings())
   const [labForm, setLabForm] = useState<LabCompanyProfile>(() => loadSystemSettings().labCompany)
 
@@ -148,7 +171,9 @@ export default function SettingsPage() {
     setEditingUser(null)
     setModalTab('personal')
     setPasswordMode(isSupabaseMode ? 'manual' : 'auto')
-    setForm({ name: '', email: '', password: isSupabaseMode ? '' : generatePassword(), cpf: '', birthDate: '', phone: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+    setForm({ name: '', username: '', email: '', password: isSupabaseMode ? '' : generatePassword(), cpf: '', cep: '', birthDate: '', phone: '', addressLine: '', role: 'receptionist', isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
+    setCepStatus('')
+    setCepError('')
     setError('')
     setModalOpen(true)
   }
@@ -157,9 +182,31 @@ export default function SettingsPage() {
     setEditingUser(user)
     setModalTab('personal')
     setPasswordMode('manual')
-    setForm({ name: user.name, email: user.email, password: '', cpf: user.cpf ?? '', birthDate: user.birthDate ?? '', phone: user.phone ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
+    setForm({ name: user.name, username: user.username ?? '', email: user.email, password: '', cpf: user.cpf ?? '', cep: user.cep ?? '', birthDate: user.birthDate ?? '', phone: user.phone ?? '', addressLine: user.addressLine ?? '', role: user.role, isActive: user.isActive, linkedDentistId: user.linkedDentistId ?? '', linkedClinicId: user.linkedClinicId ?? '', sendAccessEmail: false })
+    setCepStatus('')
+    setCepError('')
     setError('')
     setModalOpen(true)
+  }
+
+  const resolveCep = async () => {
+    setCepError('')
+    setCepStatus('')
+    if (!form.cep.trim()) return
+    if (!isValidCep(form.cep)) {
+      setCepError('CEP invalido.')
+      return
+    }
+    setCepStatus('Buscando CEP...')
+    try {
+      const data = await fetchCep(form.cep)
+      const addressText = [data.street, data.district, `${data.city}/${data.state}`].filter(Boolean).join(' - ')
+      setForm((current) => ({ ...current, addressLine: addressText || current.addressLine, cep: formatCep(current.cep) }))
+      setCepStatus('CEP localizado.')
+    } catch (errorFetch) {
+      const message = errorFetch instanceof Error ? errorFetch.message : 'Nao foi possivel localizar o CEP.'
+      setCepError(message)
+    }
   }
 
   const submitUser = async () => {
@@ -167,6 +214,8 @@ export default function SettingsPage() {
     if (isSupabaseMode && !editingUser) {
       if (!form.name.trim()) return setError('Nome e obrigatorio.')
       if (!form.email.trim()) return setError('Email e obrigatorio.')
+      if (!form.password.trim()) return setError('Senha e obrigatoria.')
+      if (form.password.trim().length < 8) return setError('Senha deve ter no minimo 8 caracteres.')
       if (!INVITE_ROLE_LIST.includes(form.role)) {
         return setError('Perfil nao permitido para criacao neste modo.')
       }
@@ -182,13 +231,16 @@ export default function SettingsPage() {
         clinicId: form.linkedClinicId || clinicOptions[0]?.id || '',
         dentistId: form.linkedDentistId || undefined,
         fullName: form.name.trim() || undefined,
+        password: form.password.trim(),
+        cpf: form.cpf.trim() || undefined,
+        phone: form.phone.trim() || undefined,
       })
       if (!result.ok) {
         return setError(result.error)
       }
       await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
       setModalOpen(false)
-      addToast({ type: 'success', title: 'Usuario criado', message: 'Use reset de senha para primeiro acesso.' })
+      addToast({ type: 'success', title: 'Usuario criado', message: 'Acesso liberado com email e senha cadastrados.' })
       return
     }
 
@@ -213,11 +265,13 @@ export default function SettingsPage() {
     if (!editingUser && !form.password.trim()) return setError('Senha e obrigatoria para novo usuario.')
     const basePayload = {
       name: form.name.trim(),
+      username: form.username.trim() || undefined,
       email: form.email.trim(),
-      cpf: form.cpf || undefined,
+      cpf: form.cpf.trim() || undefined,
+      cep: form.cep.trim() || undefined,
       birthDate: form.birthDate || undefined,
-      phone: form.phone || undefined,
-      addressLine: form.addressLine || undefined,
+      phone: form.phone.trim() || undefined,
+      addressLine: form.addressLine.trim() || undefined,
       role: form.role,
       isActive: form.isActive,
       linkedDentistId: form.linkedDentistId || undefined,
@@ -434,18 +488,33 @@ export default function SettingsPage() {
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {(isSupabaseMode
-              ? [{ id: 'personal', label: 'Dados pessoais' }, { id: 'profile', label: 'Perfil e permissoes' }, ...(showLinkTab ? [{ id: 'link', label: 'Vinculo' }] : [])]
+              ? [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (usuario e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, ...(showLinkTab ? [{ id: 'link', label: 'Vinculo' }] : [])]
               : [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (login e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, { id: 'link', label: 'Vinculo' }]
             ).map((tab) => <button key={tab.id} type="button" onClick={() => setModalTab(tab.id as ModalTab)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${modalTab === tab.id ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{tab.label}</button>)}
           </div>
           {modalTab === 'personal' ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Nome completo</label><Input aria-label="Nome completo" value={form.name} onChange={(event) => setForm((c) => ({ ...c, name: event.target.value }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">CPF</label><Input value={form.cpf} onChange={(event) => setForm((c) => ({ ...c, cpf: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">CPF</label><Input value={form.cpf} placeholder="000.000.000-00" onChange={(event) => setForm((c) => ({ ...c, cpf: formatCpf(event.target.value) }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Data de nascimento</label><Input type="date" value={form.birthDate} onChange={(event) => setForm((c) => ({ ...c, birthDate: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone</label><Input value={form.phone} onChange={(event) => setForm((c) => ({ ...c, phone: event.target.value }))} /></div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">CEP</label>
+              <div className="flex gap-2">
+                <Input
+                  value={form.cep}
+                  placeholder="00000-000"
+                  onChange={(event) => setForm((c) => ({ ...c, cep: formatCep(event.target.value) }))}
+                  onBlur={resolveCep}
+                />
+                <Button type="button" variant="secondary" onClick={resolveCep}>Localizar</Button>
+              </div>
+              {cepStatus ? <p className="mt-1 text-xs text-slate-500">{cepStatus}</p> : null}
+              {cepError ? <p className="mt-1 text-xs text-red-600">{cepError}</p> : null}
+            </div>
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Endereco completo</label><Input value={form.addressLine} onChange={(event) => setForm((c) => ({ ...c, addressLine: event.target.value }))} /></div>
           </div> : null}
-          {!isSupabaseMode && modalTab === 'access' ? <div className="mt-4 space-y-4">
+          {modalTab === 'access' ? <div className="mt-4 space-y-4">
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Usuario</label><Input aria-label="Usuario" value={form.username} placeholder="nome.sobrenome" onChange={(event) => setForm((c) => ({ ...c, username: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Email (login)</label><Input aria-label="Email (login)" type="email" value={form.email} onChange={(event) => setForm((c) => ({ ...c, email: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Senha</label><div className="flex items-center gap-2"><div className="relative flex-1"><Input aria-label="Senha" type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm((c) => ({ ...c, password: event.target.value }))} className="pr-12" /><button type="button" onClick={() => setShowPassword((current) => !current)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div><Button variant={passwordMode === 'manual' ? 'secondary' : 'ghost'} size="sm" onClick={() => setPasswordMode('manual')}>Manual</Button><Button variant={passwordMode === 'auto' ? 'secondary' : 'ghost'} size="sm" onClick={() => { setPasswordMode('auto'); setForm((c) => ({ ...c, password: generatePassword() })) }}>Auto</Button></div></div>
             <div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={() => setForm((c) => ({ ...c, password: generatePassword() }))}><WandSparkles className="mr-2 h-4 w-4" />Gerar senha automatica</Button><Button variant="ghost" size="sm" onClick={async () => {
@@ -457,11 +526,12 @@ export default function SettingsPage() {
               }
               addToast({ type: 'info', title: `Acesso enviado para ${form.email || '-'}` })
             }}><Mail className="mr-2 h-4 w-4" />Enviar acesso por email</Button></div>
+            {isSupabaseMode ? <p className="text-xs text-slate-500">No modo supabase, o login principal e por email + senha.</p> : null}
           </div> : null}
           {modalTab === 'profile' ? <div className="mt-4 space-y-4"><div><label className="mb-1 block text-sm font-medium text-slate-700">Perfil</label><select value={form.role} onChange={(event) => {
             const nextRole = event.target.value as Role
             setForm((c) => ({ ...c, role: nextRole, linkedDentistId: nextRole === 'dentist_client' ? c.linkedDentistId : '' }))
-          }} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{availableRoleList.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select>{isSupabaseMode ? <p className="mt-1 text-xs text-slate-500">Convite por link apenas para perfis operacionais (nao-admin).</p> : null}{isSupabaseMode && form.role === 'dentist_admin' ? <div className="mt-3"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div> : null}</div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
+          }} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{availableRoleList.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select>{isSupabaseMode ? <p className="mt-1 text-xs text-slate-500">Usuarios criados diretamente por admin com email e senha.</p> : null}{isSupabaseMode && form.role === 'dentist_admin' ? <div className="mt-3"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div> : null}</div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
           {modalTab === 'link' && showLinkTab ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value, linkedDentistId: '' }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div>{form.role === 'dentist_client' ? <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsavel</label><select value={form.linkedDentistId} onChange={(event) => setForm((c) => ({ ...c, linkedDentistId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{dentistsForSelect.map((dentist) => <option key={dentist.id} value={dentist.id}>{dentist.name}</option>)}</select></div> : null}</div> : null}
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
           <div className="mt-6 flex justify-end gap-2">
