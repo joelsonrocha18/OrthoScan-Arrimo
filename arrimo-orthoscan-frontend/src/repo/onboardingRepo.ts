@@ -1,6 +1,38 @@
 import { supabase } from '../lib/supabaseClient'
 import type { Role } from '../types/User'
 
+function normalizeInviteErrorMessage(raw: string) {
+  const text = (raw || '').toLowerCase()
+  if (text.includes('duplicate') || text.includes('already exists') || text.includes('já existe')) {
+    return 'Já existe cadastro com os dados informados.'
+  }
+  if (text.includes('permission') || text.includes('unauthorized') || text.includes('forbidden')) {
+    return 'Sem permissão para gerar convite. Faça login novamente como admin master.'
+  }
+  if (text.includes('invalid jwt') || text.includes('sessao') || text.includes('session')) {
+    return 'Sessão expirada. Saia e entre novamente.'
+  }
+  return raw || 'Falha ao gerar convite.'
+}
+
+async function extractFunctionErrorMessage(error: unknown) {
+  const defaultMessage = (error as { message?: string } | null)?.message ?? 'Falha ao processar solicitação.'
+  const response = (error as { context?: { text?: () => Promise<string> } } | null)?.context
+  if (!response?.text) return normalizeInviteErrorMessage(defaultMessage)
+  try {
+    const body = await response.text()
+    if (!body) return normalizeInviteErrorMessage(defaultMessage)
+    try {
+      const parsed = JSON.parse(body) as { error?: string; message?: string }
+      return normalizeInviteErrorMessage(parsed.error ?? parsed.message ?? body)
+    } catch {
+      return normalizeInviteErrorMessage(body)
+    }
+  } catch {
+    return normalizeInviteErrorMessage(defaultMessage)
+  }
+}
+
 export async function createOnboardingInvite(payload: {
   fullName: string
   cpf?: string
@@ -25,7 +57,10 @@ export async function createOnboardingInvite(payload: {
     // Send anon in Authorization and pass the real user JWT via `x-user-jwt`.
     headers: { Authorization: `Bearer ${anonKey}`, 'x-user-jwt': accessToken },
   })
-  if (error) return { ok: false as const, error: error.message }
+  if (error) {
+    const message = await extractFunctionErrorMessage(error)
+    return { ok: false as const, error: message }
+  }
   return {
     ok: true as const,
     inviteId: data?.inviteId as string | undefined,
