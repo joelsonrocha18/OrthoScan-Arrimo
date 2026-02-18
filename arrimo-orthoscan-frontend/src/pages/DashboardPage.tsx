@@ -1,5 +1,6 @@
 ﻿import {
   BadgeAlert,
+  CircleHelp,
   ClipboardList,
   DollarSign,
   Factory,
@@ -63,14 +64,26 @@ const toneStyles: Record<
   },
 }
 
-function KpiCard(props: { title: string; value: string; meta: string; tone?: Tone; icon: ReactNode }) {
+function KpiCard(props: { title: string; value: string; meta: string; info?: string; tone?: Tone; icon: ReactNode }) {
   const tone = props.tone ?? 'neutral'
   const styles = toneStyles[tone]
   return (
     <Card className={`border bg-slate-950/40 p-5 shadow-none backdrop-blur ${styles.border}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-200">{props.title}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-slate-200">{props.title}</p>
+            {props.info ? (
+              <details className="relative">
+                <summary className="list-none cursor-pointer rounded-full p-0.5 text-slate-400 hover:text-slate-200">
+                  <CircleHelp className="h-3.5 w-3.5" />
+                </summary>
+                <div className="absolute left-0 z-20 mt-2 w-64 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 shadow-lg">
+                  {props.info}
+                </div>
+              </details>
+            ) : null}
+          </div>
           <p className={`mt-2 text-3xl font-semibold tracking-tight ${styles.value}`}>{props.value}</p>
           <p className={`mt-1 text-sm font-medium ${styles.meta}`}>{props.meta}</p>
         </div>
@@ -99,21 +112,36 @@ export default function DashboardPage() {
   const budgetsOpenItems = visibleCases.filter((caseItem) => caseItem.phase === 'orcamento')
   const contractsToCloseItems = visibleCases.filter((caseItem) => caseItem.phase === 'contrato_pendente')
 
-  const queueItems = visibleLabItems.filter((item) => item.status === 'aguardando_iniciar')
-  const inProductionItems = visibleLabItems.filter((item) => item.status === 'em_producao' || item.status === 'controle_qualidade')
   const caseById = new Map(visibleCases.map((caseItem) => [caseItem.id, caseItem]))
   const isReworkItem = (notes?: string, requestKind?: string) => {
     const note = (notes ?? '').toLowerCase()
     return requestKind === 'reconfeccao' || note.includes('rework') || note.includes('defeito') || note.includes('reconfecc')
   }
-  const readyToDeliverItems = visibleLabItems.filter((item) => {
+  const isExplicitRework = (requestKind?: string) => requestKind === 'reconfeccao'
+  const hasRevisionSuffix = (code?: string) => /\/\d+$/.test(code ?? '')
+  const isDeliveredToProfessional = (item: (typeof visibleLabItems)[number]) => {
     if (!item.caseId) return false
-    if ((item.requestKind ?? 'producao') !== 'producao') return false
     if (item.status !== 'prontas') return false
-    if (isReworkItem(item.notes, item.requestKind)) return false
+    const caseItem = caseById.get(item.caseId)
+    const hasAnyDeliveryLot = (caseItem?.deliveryLots?.length ?? 0) > 0
+    if ((item.requestKind ?? 'producao') === 'producao' && hasAnyDeliveryLot && !hasRevisionSuffix(item.requestCode)) {
+      return true
+    }
+    const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
+    return tray?.state === 'entregue'
+  }
+  const pipelineItems = visibleLabItems.filter((item) => !isDeliveredToProfessional(item) && !isExplicitRework(item.requestKind))
+  const queuePipelineItems = pipelineItems.filter((item) => item.status === 'aguardando_iniciar')
+  const inProductionItems = pipelineItems.filter((item) => item.status === 'em_producao' || item.status === 'controle_qualidade')
+  const readyToDeliverItems = pipelineItems.filter((item) => {
+    if (!item.caseId) return false
+    if (item.status !== 'prontas') return false
     const caseItem = caseById.get(item.caseId)
     const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
-    return tray?.state === 'pronta'
+    if (isReworkItem(item.notes, item.requestKind)) {
+      return tray?.state === 'rework' || tray?.state === 'pronta' || tray?.state === 'entregue'
+    }
+    return tray?.state === 'pronta' || tray?.state === 'rework'
   })
   const reworkItems = visibleLabItems.filter((item) => item.requestKind === 'reconfeccao' && item.status !== 'prontas')
 
@@ -204,11 +232,19 @@ export default function DashboardPage() {
 
         <section className="mt-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard title="Escaneamentos recentes" value={String(scansRecent)} meta="Total recebido" tone="info" icon={<ScanLine className="h-4 w-4" />} />
+            <KpiCard
+              title="Escaneamentos recentes"
+              value={String(scansRecent)}
+              meta="Total recebido"
+              info="Origem: total de exames/escaneamentos visiveis para seu perfil."
+              tone="info"
+              icon={<ScanLine className="h-4 w-4" />}
+            />
             <KpiCard
               title="Planejamentos pendentes"
               value={String(planningPending)}
               meta={`${plansDone} concluídos`}
+              info="Origem: exames com status pendente na fila de scans."
               tone={planningPendingTone}
               icon={<ClipboardList className="h-4 w-4" />}
             />
@@ -216,6 +252,7 @@ export default function DashboardPage() {
               title="Orçamentos em aberto"
               value={String(budgetsOpenItems.length)}
               meta="Planejamentos sem proposta"
+              info="Origem: casos na fase de orçamento."
               tone={budgetsOpenItems.length > 0 ? 'warning' : 'neutral'}
               icon={<DollarSign className="h-4 w-4" />}
             />
@@ -223,6 +260,7 @@ export default function DashboardPage() {
               title="Contratos a fechar"
               value={String(contractsToCloseItems.length)}
               meta="Propostas enviadas"
+              info="Origem: casos na fase contrato pendente."
               tone={contractsToCloseItems.length > 0 ? 'warning' : 'neutral'}
               icon={<FileSignature className="h-4 w-4" />}
             />
@@ -233,15 +271,17 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
               title="Fila de confecção"
-              value={String(queueItems.length)}
+              value={String(queuePipelineItems.length)}
               meta="Aguardando início"
-              tone={queueItems.length > 0 ? 'warning' : 'neutral'}
+              info="Origem: itens da esteira com status aguardando_iniciar (exclui reconfeccao explicita e itens ja entregues)."
+              tone={queuePipelineItems.length > 0 ? 'warning' : 'neutral'}
               icon={<Factory className="h-4 w-4" />}
             />
             <KpiCard
               title="Em produção"
               value={String(inProductionItems.length)}
               meta="Impressão / termoformagem / CQ"
+              info="Origem: itens da esteira com status em_producao e controle_qualidade."
               tone="info"
               icon={<Printer className="h-4 w-4" />}
             />
@@ -249,6 +289,7 @@ export default function DashboardPage() {
               title="Prontos p/ entrega"
               value={String(readyToDeliverItems.length)}
               meta="Aguardando retirada"
+              info="Origem: itens em prontas aptos para entrega ao profissional, incluindo rework."
               tone={readyToDeliverItems.length > 0 ? 'success' : 'neutral'}
               icon={<Truck className="h-4 w-4" />}
             />
@@ -260,6 +301,7 @@ export default function DashboardPage() {
                   ? `${remainingCases} pacientes | Sup ${remainingByArch.sup} | Inf ${remainingByArch.inf}`
                   : `${reworkItems.length} reconfecções em aberto`
               }
+              info="Origem: saldo de placas por paciente (planejado menos entregue ao paciente), separado por arcada."
               tone={hasCases ? remainingTone : reworksTone}
               icon={<BadgeAlert className="h-4 w-4" />}
             />
@@ -268,8 +310,22 @@ export default function DashboardPage() {
 
         <section className="mt-8">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard title="Pacientes em tratamento" value={String(visiblePatients.length)} meta="Ativos" tone="neutral" icon={<UsersRound className="h-4 w-4" />} />
-            <KpiCard title="Casos concluídos" value={String(completedCases.length)} meta="Finalizados" tone="neutral" icon={<PackageCheck className="h-4 w-4" />} />
+            <KpiCard
+              title="Pacientes em tratamento"
+              value={String(visiblePatients.length)}
+              meta="Ativos"
+              info="Origem: pacientes visiveis para o perfil atual."
+              tone="neutral"
+              icon={<UsersRound className="h-4 w-4" />}
+            />
+            <KpiCard
+              title="Casos concluídos"
+              value={String(completedCases.length)}
+              meta="Finalizados"
+              info="Origem: casos com fase/status finalizado."
+              tone="neutral"
+              icon={<PackageCheck className="h-4 w-4" />}
+            />
             <Card className="border border-slate-800/70 bg-slate-950/40 p-5 shadow-none backdrop-blur sm:col-span-2">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -349,3 +405,4 @@ export default function DashboardPage() {
     </AppShell>
   )
 }
+
