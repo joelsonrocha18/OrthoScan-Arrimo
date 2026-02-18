@@ -651,7 +651,7 @@ export default function PatientDetailPage() {
               <div key={caseItem.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-slate-900">{caseItem.id}</p>
+                    <p className="font-medium text-slate-900">{caseItem.treatmentCode ?? caseItem.id}</p>
                     <p className="text-xs text-slate-500">Status: {caseItem.status}</p>
                   </div>
                   <Link to={`/app/cases/${caseItem.id}`} className="text-xs font-semibold text-brand-700">

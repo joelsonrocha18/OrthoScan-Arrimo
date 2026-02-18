@@ -176,9 +176,12 @@ export function createCaseFromScan(
   const fallback = Math.max(upper, lower)
   if (fallback <= 0) return { ok: false, error: 'Informe total de placas superior e/ou inferior.' }
 
-  const caseId = `case_${Date.now()}`
   const internal = isInternalClinic(db, scan.clinicId)
   const treatmentCode = scan.serviceOrderCode ?? nextTreatmentCode(db, internal ? 'A' : 'C')
+  const caseId = treatmentCode
+  if (db.cases.some((item) => item.id === caseId)) {
+    return { ok: false, error: `Ja existe um caso com o codigo ${caseId}.` }
+  }
   const scanFiles = scan.attachments.map((att: ScanAttachment) => ({
     id: att.id,
     name: att.name,
