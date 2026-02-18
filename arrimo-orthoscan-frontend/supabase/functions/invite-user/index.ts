@@ -58,14 +58,16 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
-  const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? ''
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('ANON_KEY') ?? ''
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) {
     return json(req, { ok: false, error: 'Missing Supabase env vars.' }, 500)
   }
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey)
-  const userJwtRaw = req.headers.get('x-user-jwt') ?? req.headers.get('authorization') ?? ''
+  const authClient = createClient(supabaseUrl, anonKey)
+  const admin = createClient(supabaseUrl, serviceRoleKey)
+  const userJwtRaw = req.headers.get('authorization') ?? req.headers.get('x-user-jwt') ?? ''
   const userJwt = userJwtRaw.replace(/^Bearer\s+/i, '').trim()
 
   const payload = (await req.json()) as InvitePayload
@@ -79,13 +81,13 @@ Deno.serve(async (req) => {
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser(userJwt)
+  } = await authClient.auth.getUser(userJwt)
 
   if (authError || !user) {
-    return json(req, { ok: false, error: 'Unauthorized.' }, 401)
+    return json(req, { ok: false, code: 'unauthorized', error: 'Unauthorized.' }, 401)
   }
 
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from('profiles')
     .select('role, clinic_id')
     .eq('user_id', user.id)
@@ -93,17 +95,17 @@ Deno.serve(async (req) => {
 
   const role = profile?.role ?? 'dentist_client'
   if (!['master_admin', 'dentist_admin'].includes(role)) {
-    return json(req, { ok: false, error: 'Forbidden.' }, 403)
+    return json(req, { ok: false, code: 'forbidden', error: 'Forbidden.' }, 403)
   }
   if (role === 'dentist_admin' && profile?.clinic_id !== payload.clinicId) {
-    return json(req, { ok: false, error: 'Clinic mismatch.' }, 403)
+    return json(req, { ok: false, code: 'forbidden', error: 'Clinic mismatch.' }, 403)
   }
   if (role === 'dentist_admin' && ['master_admin', 'dentist_admin'].includes(payload.role)) {
-    return json(req, { ok: false, error: 'Role not allowed for actor.' }, 403)
+    return json(req, { ok: false, code: 'forbidden', error: 'Role not allowed for actor.' }, 403)
   }
 
   const inviteWindowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  const { count: recentInvites } = await supabase
+  const { count: recentInvites } = await admin
     .from('security_audit_logs')
     .select('id', { count: 'exact', head: true })
     .eq('event_type', 'access_email_sent')
@@ -131,7 +133,7 @@ Deno.serve(async (req) => {
   }
   if (password) createPayload.password = password
 
-  const { data: createdData, error: createError } = await supabase.auth.admin.createUser(createPayload)
+  const { data: createdData, error: createError } = await admin.auth.admin.createUser(createPayload)
   if (createError || !createdData?.user) {
     const message = createError?.message ?? 'Create user failed.'
     if (message.toLowerCase().includes('already')) {
@@ -140,7 +142,7 @@ Deno.serve(async (req) => {
     return json(req, { ok: false, error: message }, 400)
   }
 
-  const { error: upsertError } = await supabase.from('profiles').upsert({
+  const { error: upsertError } = await admin.from('profiles').upsert({
     user_id: createdData.user.id,
     login_email: email,
     role: payload.role,

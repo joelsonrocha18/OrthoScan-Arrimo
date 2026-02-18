@@ -98,55 +98,54 @@ export async function inviteUser(payload: {
   const accessToken = payload.accessToken?.trim()
   if (!accessToken) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
+  if (!supabaseUrl) return { ok: false as const, error: 'Supabase URL ausente no build.' }
 
-  const { data, error } = await supabase.functions.invoke('invite-user', {
-    body: {
-      email: payload.email,
-      role: payload.role,
-      clinicId: payload.clinicId,
-      dentistId: payload.dentistId,
-      fullName: payload.fullName,
-      password: payload.password,
-      cpf: payload.cpf,
-      phone: payload.phone,
-    },
-    headers: { Authorization: `Bearer ${accessToken}`, apikey: anonKey, 'x-user-jwt': accessToken },
-  })
-  if (error) {
-    let message = error.message || 'Falha ao criar usuario.'
-    const genericEdgeError = /non-2xx/i.test(message)
-    if (genericEdgeError) {
-      try {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-        if (supabaseUrl) {
-          const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/invite-user`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-              apikey: anonKey,
-              'x-user-jwt': accessToken,
-            },
-            body: JSON.stringify(payload),
-          })
-          const raw = (await response.json().catch(() => null)) as { error?: string; message?: string } | null
-          const detailed = raw?.error ?? raw?.message
-          if (detailed && detailed.trim()) {
-            message = detailed
-          } else {
-            message = `Falha ao criar usuario (HTTP ${response.status}).`
-          }
-        }
-      } catch {
-        // keep generic message fallback
-      }
+  const requestBody = {
+    email: payload.email,
+    role: payload.role,
+    clinicId: payload.clinicId,
+    dentistId: payload.dentistId,
+    fullName: payload.fullName,
+    password: payload.password,
+    cpf: payload.cpf,
+    phone: payload.phone,
+  }
+  const callInvite = async (token: string) => {
+    const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/invite-user`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        apikey: anonKey,
+      },
+      body: JSON.stringify(requestBody),
+    })
+    const raw = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; code?: string; message?: string } | null
+    return { response, raw }
+  }
+
+  let first = await callInvite(accessToken)
+  const firstMessage = (first.raw?.error ?? first.raw?.message ?? '').toLowerCase()
+  const shouldRetry =
+    first.response.status === 401 ||
+    first.response.status === 403 ||
+    firstMessage.includes('invalid jwt')
+
+  if (shouldRetry) {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession()
+    const refreshedToken = refreshed.session?.access_token ?? ''
+    if (!refreshError && refreshedToken) {
+      first = await callInvite(refreshedToken)
     }
-    return { ok: false as const, error: message }
   }
-  if (data && typeof data === 'object' && 'ok' in data && data.ok === false) {
-    const detailed = 'error' in data && typeof data.error === 'string' ? data.error : 'Falha ao criar usuario.'
-    return { ok: false as const, error: detailed }
+
+  if (!first.response.ok || (first.raw && first.raw.ok === false)) {
+    const code = first.raw?.code
+      ?? (first.response.status === 401 ? 'unauthorized' : first.response.status === 403 ? 'forbidden' : 'invite_failed')
+    const detailed = first.raw?.error ?? first.raw?.message ?? `Falha ao criar usuario (HTTP ${first.response.status}).`
+    return { ok: false as const, error: detailed, code }
   }
-  return { ok: true as const, data }
+  return { ok: true as const, data: first.raw }
 }

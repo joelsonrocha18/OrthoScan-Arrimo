@@ -250,10 +250,20 @@ export default function SettingsPage() {
     let submitAccessToken = ''
     if (isSupabaseMode) {
       if (!supabase) return setError('Supabase nao configurado.')
-      const { data } = await supabase.auth.getSession()
+      const { data, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) {
+        setError('Sessao expirada. Saia e entre novamente.')
+        return
+      }
       submitAccessToken = data.session?.access_token ?? ''
+      console.info('[settings-users] submit session snapshot', {
+        hasSession: Boolean(data.session),
+        tokenLength: submitAccessToken.length,
+        expiresAt: data.session?.expires_at ?? null,
+        userId: data.session?.user?.id ?? null,
+      })
       if (!submitAccessToken) {
-        setError('Sessao expirada. Faca login novamente.')
+        setError('Sessao expirada. Saia e entre novamente.')
         return
       }
     }
@@ -286,6 +296,8 @@ export default function SettingsPage() {
         accessToken: submitAccessToken,
       })
       if (!result.ok) {
+        if (result.code === 'unauthorized') return setError('Sessao expirada. Saia e entre novamente.')
+        if (result.code === 'forbidden') return setError('Sem permissao para criar usuarios.')
         return setError(result.error)
       }
       await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
