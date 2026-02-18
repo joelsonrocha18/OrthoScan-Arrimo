@@ -74,14 +74,12 @@ function KpiCard(props: { title: string; value: string; meta: string; info?: str
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold text-slate-200">{props.title}</p>
             {props.info ? (
-              <details className="relative">
-                <summary className="list-none cursor-pointer rounded-full p-0.5 text-slate-400 hover:text-slate-200">
-                  <CircleHelp className="h-3.5 w-3.5" />
-                </summary>
-                <div className="absolute left-0 z-20 mt-2 w-64 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 shadow-lg">
+              <span className="group relative inline-flex">
+                <CircleHelp className="h-3.5 w-3.5 cursor-help text-slate-400 transition-colors group-hover:text-slate-200" />
+                <span className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                   {props.info}
-                </div>
-              </details>
+                </span>
+              </span>
             ) : null}
           </div>
           <p className={`mt-2 text-3xl font-semibold tracking-tight ${styles.value}`}>{props.value}</p>
