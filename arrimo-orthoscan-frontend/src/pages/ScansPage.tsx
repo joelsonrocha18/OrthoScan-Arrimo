@@ -20,6 +20,7 @@ import {
   rejectScan,
 } from '../data/scanRepo'
 import { updatePatient } from '../repo/patientRepo'
+import { deleteScanSupabase, updateScanStatusSupabase } from '../repo/profileRepo'
 import AppShell from '../layouts/AppShell'
 import type { Scan, ScanAttachment } from '../types/Scan'
 import { useDb } from '../lib/useDb'
@@ -73,6 +74,7 @@ export default function ScansPage() {
   const [supabasePatients, setSupabasePatients] = useState<Array<{ id: string; name: string; primaryDentistId?: string; clinicId?: string }>>([])
   const [supabaseDentists, setSupabaseDentists] = useState<Array<{ id: string; name: string; gender?: 'masculino' | 'feminino'; clinicId?: string }>>([])
   const [supabaseClinics, setSupabaseClinics] = useState<Array<{ id: string; tradeName: string }>>([])
+  const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -154,7 +156,7 @@ export default function ScansPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode])
+  }, [isSupabaseMode, supabaseRefreshKey])
 
   const scans = useMemo(() => (canRead ? (isSupabaseMode ? supabaseScans : listScansForUser(db, currentUser)) : []), [canRead, isSupabaseMode, supabaseScans, db, currentUser])
   const caseById = useMemo(
@@ -174,32 +176,44 @@ export default function ScansPage() {
     [isSupabaseMode, supabaseClinics, db.clinics],
   )
 
-  const handleApprove = (id: string) => {
+  const handleApprove = async (id: string) => {
     if (isSupabaseMode) {
-      addToast({ type: 'info', title: 'Aprovacao de scan ainda nao habilitada nesta tela para Supabase.' })
+      const result = await updateScanStatusSupabase(id, 'aprovado')
+      if (!result.ok) return addToast({ type: 'error', title: result.error })
+      setSupabaseRefreshKey((current) => current + 1)
+      addToast({ type: 'success', title: 'Scan aprovado' })
       return
     }
     approveScan(id)
     addToast({ type: 'success', title: 'Scan aprovado' })
   }
 
-  const handleReject = (id: string) => {
+  const handleReject = async (id: string) => {
     if (isSupabaseMode) {
-      addToast({ type: 'info', title: 'Reprovacao de scan ainda nao habilitada nesta tela para Supabase.' })
+      const result = await updateScanStatusSupabase(id, 'reprovado')
+      if (!result.ok) return addToast({ type: 'error', title: result.error })
+      setSupabaseRefreshKey((current) => current + 1)
+      addToast({ type: 'info', title: 'Scan reprovado' })
       return
     }
     rejectScan(id)
     addToast({ type: 'info', title: 'Scan reprovado' })
   }
 
-  const handleDelete = (scan: Scan) => {
-    if (isSupabaseMode) {
-      addToast({ type: 'info', title: 'Exclusao de scan ainda nao habilitada nesta tela para Supabase.' })
-      return
-    }
+  const handleDelete = async (scan: Scan) => {
     if (!canDelete) return
     const confirmed = window.confirm(`Tem certeza que deseja excluir o escaneamento de ${scan.patientName}?`)
     if (!confirmed) return
+    if (isSupabaseMode) {
+      const result = await deleteScanSupabase(scan.id)
+      if (!result.ok) return addToast({ type: 'error', title: result.error })
+      if (details?.id === scan.id) {
+        setDetails(null)
+      }
+      setSupabaseRefreshKey((current) => current + 1)
+      addToast({ type: 'success', title: 'Escaneamento excluido' })
+      return
+    }
     deleteScan(scan.id)
     if (details?.id === scan.id) {
       setDetails(null)

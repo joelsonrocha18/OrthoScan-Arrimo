@@ -87,6 +87,42 @@ export async function updateProfile(
   return { ok: true as const }
 }
 
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+export async function updateScanStatusSupabase(scanId: string, status: 'aprovado' | 'reprovado') {
+  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const { data: current, error: readError } = await supabase
+    .from('scans')
+    .select('id, data')
+    .eq('id', scanId)
+    .maybeSingle()
+  if (readError || !current) return { ok: false as const, error: readError?.message ?? 'Scan nao encontrado.' }
+  const nextData = { ...asObject(current.data), status }
+  const { data, error } = await supabase
+    .from('scans')
+    .update({ data: nextData, updated_at: new Date().toISOString() })
+    .eq('id', scanId)
+    .select('id')
+  if (error) return { ok: false as const, error: error.message }
+  if (!data || data.length === 0) return { ok: false as const, error: 'Scan nao atualizado. Verifique permissoes.' }
+  return { ok: true as const }
+}
+
+export async function deleteScanSupabase(scanId: string) {
+  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('scans')
+    .update({ deleted_at: now, updated_at: now })
+    .eq('id', scanId)
+    .select('id')
+  if (error) return { ok: false as const, error: error.message }
+  if (!data || data.length === 0) return { ok: false as const, error: 'Scan nao excluido. Verifique permissoes.' }
+  return { ok: true as const }
+}
+
 export async function inviteUser(payload: {
   email: string
   role: string
