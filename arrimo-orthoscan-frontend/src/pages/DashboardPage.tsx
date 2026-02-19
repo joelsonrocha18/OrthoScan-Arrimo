@@ -95,7 +95,27 @@ export default function DashboardPage() {
   const { db } = useDb()
   const currentUser = getCurrentUser(db)
   const dashboardHost = typeof window !== 'undefined' ? window.location.hostname : 'unknown-host'
-  const envLabel = (import.meta.env.VITE_ENV_LABEL as string | undefined)?.trim() || dashboardHost
+  const configuredLabel = (import.meta.env.VITE_ENV_LABEL as string | undefined)?.trim()
+  const hostLabel =
+    dashboardHost.includes('ortho-scan-arrimo')
+      ? 'AMBIENTE B (ortho-scan-arrimo)'
+      : dashboardHost.includes('arrimo-orthoscan-frontend')
+        ? 'AMBIENTE A (arrimo-orthoscan-frontend)'
+        : dashboardHost
+  const envLabel = configuredLabel || hostLabel
+  const envTone = dashboardHost.includes('ortho-scan-arrimo')
+    ? {
+      wrapper: 'border-red-500/70 bg-red-950/30',
+      title: 'text-red-200',
+      value: 'text-red-100',
+      meta: 'text-red-200/80',
+    }
+    : {
+      wrapper: 'border-sky-500/70 bg-sky-950/30',
+      title: 'text-sky-200',
+      value: 'text-sky-100',
+      meta: 'text-sky-200/80',
+    }
   const visiblePatients = listPatientsForUser(db, currentUser)
   const visibleScans = listScansForUser(db, currentUser)
   const visibleCases = listCasesForUser(db, currentUser)
@@ -228,10 +248,10 @@ export default function DashboardPage() {
       <div className="rounded-3xl border border-slate-200 bg-slate-950 px-5 py-6 shadow-sm sm:px-6">
         <section>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-50">OrthoScan | Painel Operacional</h1>
-          <div className="mt-3 rounded-xl border border-amber-500/60 bg-amber-950/30 px-3 py-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">Ambiente de Validacao</p>
-            <p className="mt-1 text-sm font-semibold text-amber-100">Dashboard ID: {envLabel}</p>
-            <p className="mt-1 text-xs text-amber-200/80">Host atual: {dashboardHost}</p>
+          <div className={`mt-3 rounded-xl border px-3 py-2 ${envTone.wrapper}`}>
+            <p className={`text-xs font-semibold uppercase tracking-wide ${envTone.title}`}>Ambiente de Validacao</p>
+            <p className={`mt-1 text-base font-bold ${envTone.value}`}>Dashboard ID: {envLabel}</p>
+            <p className={`mt-1 text-xs ${envTone.meta}`}>Host atual: {dashboardHost}</p>
           </div>
         </section>
 
