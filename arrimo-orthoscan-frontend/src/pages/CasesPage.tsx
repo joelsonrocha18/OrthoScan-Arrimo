@@ -1,12 +1,14 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../layouts/AppShell'
 import Badge from '../components/Badge'
 import Card from '../components/Card'
-import type { Case } from '../types/Case'
 import type { CasePhase } from '../types/Case'
+import { DATA_MODE } from '../data/dataMode'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
 import { listCasesForUser } from '../auth/scope'
+import { supabase } from '../lib/supabaseClient'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
@@ -26,7 +28,23 @@ const phaseToneMap: Record<CasePhase, 'neutral' | 'info' | 'success'> = {
   finalizado: 'success',
 }
 
-function caseStatusBadge(item: Case) {
+type CaseListItem = {
+  id: string
+  patientId?: string
+  patientName: string
+  dentistId?: string
+  phase: CasePhase
+  status: string
+  treatmentCode?: string
+  totalTrays?: number
+  totalTraysUpper?: number
+  totalTraysLower?: number
+  changeEveryDays?: number
+  deliveryLots?: unknown[]
+  installation?: { installedAt?: string }
+}
+
+function caseStatusBadge(item: CaseListItem) {
   if (item.phase === 'finalizado' || item.status === 'finalizado') {
     return { label: 'Finalizado', tone: 'success' as const }
   }
@@ -41,10 +59,77 @@ function caseStatusBadge(item: Case) {
 
 export default function CasesPage() {
   const { db } = useDb()
+  const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
-  const patientsById = new Map(db.patients.map((item) => [item.id, item]))
-  const dentistsById = new Map(db.dentists.map((item) => [item.id, item]))
-  const cases = listCasesForUser(db, currentUser)
+  const [supabaseCases, setSupabaseCases] = useState<CaseListItem[]>([])
+  const [supabasePatientsById, setSupabasePatientsById] = useState<Map<string, string>>(new Map())
+  const [supabaseDentistsById, setSupabaseDentistsById] = useState<Map<string, { name: string; gender?: string }>>(new Map())
+
+  useEffect(() => {
+    let active = true
+    if (!isSupabaseMode || !supabase) return
+    ;(async () => {
+      const [casesRes, patientsRes, dentistsRes] = await Promise.all([
+        supabase.from('cases').select('id, patient_id, dentist_id, status, data, deleted_at').is('deleted_at', null),
+        supabase.from('patients').select('id, name, deleted_at').is('deleted_at', null),
+        supabase.from('dentists').select('id, name, gender, deleted_at').is('deleted_at', null),
+      ])
+      if (!active) return
+
+      const patientsMap = new Map<string, string>()
+      for (const row of (patientsRes.data ?? []) as Array<{ id: string; name: string }>) {
+        patientsMap.set(row.id, row.name ?? '')
+      }
+      setSupabasePatientsById(patientsMap)
+
+      const dentistsMap = new Map<string, { name: string; gender?: string }>()
+      for (const row of (dentistsRes.data ?? []) as Array<{ id: string; name: string; gender?: string }>) {
+        dentistsMap.set(row.id, { name: row.name ?? '', gender: row.gender })
+      }
+      setSupabaseDentistsById(dentistsMap)
+
+      const mapped = ((casesRes.data ?? []) as Array<{ id: string; patient_id?: string; dentist_id?: string; status?: string; data?: Record<string, unknown> }>).map((row) => {
+        const data = row.data ?? {}
+        const status = (data.status as string | undefined) ?? row.status ?? 'planejamento'
+        const phaseRaw = (data.phase as string | undefined) ?? ''
+        const phase = (phaseRaw || (status === 'finalizado' ? 'finalizado' : status === 'em_producao' || status === 'em_entrega' ? 'em_producao' : 'planejamento')) as CasePhase
+        const patientName = (data.patientName as string | undefined)
+          ?? (row.patient_id ? patientsMap.get(row.patient_id) : undefined)
+          ?? '-'
+        return {
+          id: row.id,
+          patientId: row.patient_id,
+          patientName,
+          dentistId: row.dentist_id,
+          phase,
+          status,
+          treatmentCode: data.treatmentCode as string | undefined,
+          totalTrays: data.totalTrays as number | undefined,
+          totalTraysUpper: data.totalTraysUpper as number | undefined,
+          totalTraysLower: data.totalTraysLower as number | undefined,
+          changeEveryDays: data.changeEveryDays as number | undefined,
+          deliveryLots: (data.deliveryLots as unknown[] | undefined) ?? [],
+          installation: (data.installation as { installedAt?: string } | undefined) ?? undefined,
+        } as CaseListItem
+      })
+      setSupabaseCases(mapped)
+    })()
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
+
+  const localPatientsById = useMemo(() => new Map(db.patients.map((item) => [item.id, item.name])), [db.patients])
+  const localDentistsById = useMemo(
+    () => new Map(db.dentists.map((item) => [item.id, { name: item.name, gender: item.gender }])),
+    [db.dentists],
+  )
+  const localCases = useMemo(() => listCasesForUser(db, currentUser), [db, currentUser])
+  const cases: CaseListItem[] = isSupabaseMode
+    ? supabaseCases
+    : localCases
+  const patientsById = isSupabaseMode ? supabasePatientsById : localPatientsById
+  const dentistsById = isSupabaseMode ? supabaseDentistsById : localDentistsById
 
   return (
     <AppShell breadcrumb={['Inicio', 'Tratamentos']}>
@@ -71,7 +156,7 @@ export default function CasesPage() {
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {cases.map((item) => {
-                  const patientName = item.patientId ? (patientsById.get(item.patientId)?.name ?? item.patientName) : item.patientName
+                  const patientName = item.patientId ? (patientsById.get(item.patientId) ?? item.patientName) : item.patientName
                   const dentist = item.dentistId ? dentistsById.get(item.dentistId) : undefined
                   const dentistPrefix = dentist?.gender === 'feminino' ? 'Dra.' : dentist ? 'Dr.' : ''
                   const hasArchCounts = typeof item.totalTraysUpper === 'number' || typeof item.totalTraysLower === 'number'

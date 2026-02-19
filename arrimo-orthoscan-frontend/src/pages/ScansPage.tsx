@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useToast } from '../app/ToastProvider'
 import CreateCaseFromScanModal from '../components/scans/CreateCaseFromScanModal'
@@ -26,6 +26,7 @@ import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
 import { listScansForUser } from '../auth/scope'
 import { buildScanAttachmentPath, createSignedUrl, uploadToStorage, validateScanAttachmentFile } from '../repo/storageRepo'
+import { supabase } from '../lib/supabaseClient'
 
 function archTone(arch: Scan['arch']) {
   if (arch === 'ambos') return 'info' as const
@@ -63,27 +64,139 @@ export default function ScansPage() {
   const canApprove = can(currentUser, 'scans.approve')
   const canDelete = can(currentUser, 'scans.delete')
   const canCreateCase = can(currentUser, 'cases.write')
+  const isSupabaseMode = DATA_MODE === 'supabase'
   const [createOpen, setCreateOpen] = useState(false)
   const [details, setDetails] = useState<Scan | null>(null)
   const [createCaseTarget, setCreateCaseTarget] = useState<Scan | null>(null)
+  const [supabaseScans, setSupabaseScans] = useState<Scan[]>([])
+  const [supabaseCases, setSupabaseCases] = useState<Array<{ id: string; treatmentCode?: string }>>([])
+  const [supabasePatients, setSupabasePatients] = useState<Array<{ id: string; name: string; primaryDentistId?: string; clinicId?: string }>>([])
+  const [supabaseDentists, setSupabaseDentists] = useState<Array<{ id: string; name: string; gender?: 'masculino' | 'feminino'; clinicId?: string }>>([])
+  const [supabaseClinics, setSupabaseClinics] = useState<Array<{ id: string; tradeName: string }>>([])
 
-  const scans = useMemo(() => (canRead ? listScansForUser(db, currentUser) : []), [db, canRead, currentUser])
-  const caseById = useMemo(() => new Map(db.cases.map((item) => [item.id, item])), [db.cases])
-  const patientsById = useMemo(() => new Map(db.patients.map((item) => [item.id, item.name])), [db.patients])
-  const dentists = useMemo(() => db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt), [db.dentists])
-  const clinics = useMemo(() => db.clinics.filter((item) => !item.deletedAt), [db.clinics])
+  useEffect(() => {
+    let active = true
+    if (!isSupabaseMode || !supabase) return
+    ;(async () => {
+      const [scansRes, casesRes, patientsRes, dentistsRes, clinicsRes] = await Promise.all([
+        supabase.from('scans').select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, created_at, updated_at, deleted_at, data').is('deleted_at', null),
+        supabase.from('cases').select('id, deleted_at, data').is('deleted_at', null),
+        supabase.from('patients').select('id, name, primary_dentist_id, clinic_id, deleted_at').is('deleted_at', null),
+        supabase.from('dentists').select('id, name, gender, clinic_id, deleted_at').is('deleted_at', null),
+        supabase.from('clinics').select('id, trade_name, deleted_at').is('deleted_at', null),
+      ])
+      if (!active) return
+
+      const patients = ((patientsRes.data ?? []) as Array<{
+        id: string
+        name: string
+        primary_dentist_id?: string
+        clinic_id?: string
+      }>).map((row) => ({
+        id: row.id,
+        name: row.name ?? '-',
+        primaryDentistId: row.primary_dentist_id ?? undefined,
+        clinicId: row.clinic_id ?? undefined,
+      }))
+      setSupabasePatients(patients)
+      const patientsById = new Map(patients.map((item) => [item.id, item.name]))
+
+      setSupabaseDentists(((dentistsRes.data ?? []) as Array<{ id: string; name: string; gender?: string; clinic_id?: string }>).map((row) => ({
+        id: row.id,
+        name: row.name ?? '-',
+        gender: row.gender === 'feminino' ? 'feminino' : 'masculino',
+        clinicId: row.clinic_id ?? undefined,
+      })))
+
+      setSupabaseClinics(((clinicsRes.data ?? []) as Array<{ id: string; trade_name?: string }>).map((row) => ({
+        id: row.id,
+        tradeName: row.trade_name ?? '-',
+      })))
+
+      setSupabaseCases(((casesRes.data ?? []) as Array<{ id: string; data?: Record<string, unknown> }>).map((row) => ({
+        id: row.id,
+        treatmentCode: (row.data?.treatmentCode as string | undefined) ?? undefined,
+      })))
+
+      const scansMapped = ((scansRes.data ?? []) as Array<{
+        id: string
+        clinic_id?: string
+        patient_id?: string
+        dentist_id?: string
+        requested_by_dentist_id?: string
+        created_at?: string
+        updated_at?: string
+        data?: Record<string, unknown>
+      }>).map((row) => {
+        const data = row.data ?? {}
+        return {
+          id: row.id,
+          clinicId: row.clinic_id ?? undefined,
+          patientId: row.patient_id ?? undefined,
+          dentistId: row.dentist_id ?? undefined,
+          requestedByDentistId: row.requested_by_dentist_id ?? undefined,
+          patientName: (data.patientName as string | undefined) ?? (row.patient_id ? patientsById.get(row.patient_id) ?? '-' : '-'),
+          serviceOrderCode: data.serviceOrderCode as string | undefined,
+          scanDate: (data.scanDate as string | undefined) ?? (row.created_at ?? new Date().toISOString()).slice(0, 10),
+          arch: (data.arch as Scan['arch'] | undefined) ?? 'ambos',
+          complaint: data.complaint as string | undefined,
+          dentistGuidance: data.dentistGuidance as string | undefined,
+          notes: data.notes as string | undefined,
+          attachments: (Array.isArray(data.attachments) ? data.attachments : []) as ScanAttachment[],
+          status: (data.status as Scan['status'] | undefined) ?? 'pendente',
+          linkedCaseId: data.linkedCaseId as string | undefined,
+          createdAt: (data.createdAt as string | undefined) ?? row.created_at ?? new Date().toISOString(),
+          updatedAt: (data.updatedAt as string | undefined) ?? row.updated_at ?? row.created_at ?? new Date().toISOString(),
+        } satisfies Scan
+      })
+      setSupabaseScans(scansMapped)
+    })()
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
+
+  const scans = useMemo(() => (canRead ? (isSupabaseMode ? supabaseScans : listScansForUser(db, currentUser)) : []), [canRead, isSupabaseMode, supabaseScans, db, currentUser])
+  const caseById = useMemo(
+    () => new Map((isSupabaseMode ? supabaseCases : db.cases).map((item: any) => [item.id, item])),
+    [isSupabaseMode, supabaseCases, db.cases],
+  )
+  const patientsById = useMemo(
+    () => new Map((isSupabaseMode ? supabasePatients : db.patients).map((item: any) => [item.id, item.name])),
+    [isSupabaseMode, supabasePatients, db.patients],
+  )
+  const dentists = useMemo(
+    () => (isSupabaseMode ? supabaseDentists : db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt)),
+    [isSupabaseMode, supabaseDentists, db.dentists],
+  )
+  const clinics = useMemo(
+    () => (isSupabaseMode ? supabaseClinics : db.clinics.filter((item) => !item.deletedAt)),
+    [isSupabaseMode, supabaseClinics, db.clinics],
+  )
 
   const handleApprove = (id: string) => {
+    if (isSupabaseMode) {
+      addToast({ type: 'info', title: 'Aprovacao de scan ainda nao habilitada nesta tela para Supabase.' })
+      return
+    }
     approveScan(id)
     addToast({ type: 'success', title: 'Scan aprovado' })
   }
 
   const handleReject = (id: string) => {
+    if (isSupabaseMode) {
+      addToast({ type: 'info', title: 'Reprovacao de scan ainda nao habilitada nesta tela para Supabase.' })
+      return
+    }
     rejectScan(id)
     addToast({ type: 'info', title: 'Scan reprovado' })
   }
 
   const handleDelete = (scan: Scan) => {
+    if (isSupabaseMode) {
+      addToast({ type: 'info', title: 'Exclusao de scan ainda nao habilitada nesta tela para Supabase.' })
+      return
+    }
     if (!canDelete) return
     const confirmed = window.confirm(`Tem certeza que deseja excluir o escaneamento de ${scan.patientName}?`)
     if (!confirmed) return
@@ -115,7 +228,7 @@ export default function ScansPage() {
       addToast({ type: 'error', title: validation.error })
       return
     }
-    const targetScan = db.scans.find((item) => item.id === scanId)
+    const targetScan = scans.find((item) => item.id === scanId)
     let filePath: string | undefined
     let url: string | undefined
     let isLocal = true
@@ -311,13 +424,17 @@ export default function ScansPage() {
       <ScanModal
         open={createOpen}
         mode="create"
-        patients={db.patients.map((item) => ({ id: item.id, name: item.name, primaryDentistId: item.primaryDentistId, clinicId: item.clinicId }))}
+        patients={(isSupabaseMode ? supabasePatients : db.patients).map((item: any) => ({ id: item.id, name: item.name, primaryDentistId: item.primaryDentistId, clinicId: item.clinicId }))}
         dentists={dentists.map((item) => ({ id: item.id, name: item.name, gender: item.gender, clinicId: item.clinicId }))}
-        clinics={clinics.map((item) => ({ id: item.id, name: item.tradeName }))}
+        clinics={clinics.map((item: any) => ({ id: item.id, name: item.tradeName }))}
         onClose={() => setCreateOpen(false)}
         onSubmit={(payload, options) => {
           if (!canWrite) {
             addToast({ type: 'error', title: 'Sem permissao para criar exames' })
+            return false
+          }
+          if (isSupabaseMode) {
+            addToast({ type: 'info', title: 'Criacao de exame nesta tela sera habilitada no proximo ajuste Supabase.' })
             return false
           }
           createScan(payload)
@@ -360,6 +477,10 @@ export default function ScansPage() {
           if (!createCaseTarget) return
           if (!canCreateCase) {
             addToast({ type: 'error', title: 'Sem permissao para criar caso' })
+            return
+          }
+          if (isSupabaseMode) {
+            addToast({ type: 'info', title: 'Criacao de caso a partir do scan nesta tela sera habilitada no proximo ajuste Supabase.' })
             return
           }
           const result = createCaseFromScan(createCaseTarget.id, payload)

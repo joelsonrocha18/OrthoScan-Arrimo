@@ -1,25 +1,82 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
 import WhatsappLink from '../components/WhatsappLink'
 import AppShell from '../layouts/AppShell'
+import { DATA_MODE } from '../data/dataMode'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 import { listPatientsForUser } from '../auth/scope'
+import { supabase } from '../lib/supabaseClient'
 
 export default function PatientsPage() {
   const { db } = useDb()
+  const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'patients.write')
   const [query, setQuery] = useState('')
   const [showDeleted, setShowDeleted] = useState(false)
+  const [supabasePatients, setSupabasePatients] = useState<Array<{
+    id: string
+    name: string
+    cpf?: string
+    phone?: string
+    whatsapp?: string
+    primaryDentistId?: string
+    deletedAt?: string
+  }>>([])
+  const [supabaseDentistsById, setSupabaseDentistsById] = useState<Map<string, string>>(new Map())
+
+  useEffect(() => {
+    let active = true
+    if (!isSupabaseMode || !supabase) return
+    ;(async () => {
+      const [patientsRes, dentistsRes] = await Promise.all([
+        supabase.from('patients').select('id, name, cpf, phone, whatsapp, primary_dentist_id, deleted_at'),
+        supabase.from('dentists').select('id, name, deleted_at').is('deleted_at', null),
+      ])
+      if (!active) return
+      const patients = ((patientsRes.data ?? []) as Array<{
+        id: string
+        name: string
+        cpf?: string
+        phone?: string
+        whatsapp?: string
+        primary_dentist_id?: string
+        deleted_at?: string
+      }>).map((row) => ({
+        id: row.id,
+        name: row.name ?? '-',
+        cpf: row.cpf ?? undefined,
+        phone: row.phone ?? undefined,
+        whatsapp: row.whatsapp ?? undefined,
+        primaryDentistId: row.primary_dentist_id ?? undefined,
+        deletedAt: row.deleted_at ?? undefined,
+      }))
+      setSupabasePatients(patients)
+      const dentistsMap = new Map<string, string>()
+      for (const row of (dentistsRes.data ?? []) as Array<{ id: string; name: string }>) {
+        dentistsMap.set(row.id, row.name ?? '')
+      }
+      setSupabaseDentistsById(dentistsMap)
+    })()
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
+
+  const localPatients = useMemo(() => listPatientsForUser(db, currentUser), [db, currentUser])
+  const sourcePatients = isSupabaseMode ? supabasePatients : localPatients
+  const dentistsById = isSupabaseMode
+    ? supabaseDentistsById
+    : new Map(db.dentists.map((dentist) => [dentist.id, dentist.name]))
 
   const patients = useMemo(
     () =>
-      [...listPatientsForUser(db, currentUser)]
+      [...sourcePatients]
         .filter((item) => (showDeleted ? true : !item.deletedAt))
         .filter((item) => {
           const q = query.trim().toLowerCase()
@@ -32,7 +89,7 @@ export default function PatientsPage() {
           )
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [db, currentUser, query, showDeleted],
+    [sourcePatients, query, showDeleted],
   )
 
   return (
@@ -79,7 +136,7 @@ export default function PatientsPage() {
                     <td className="px-5 py-4 text-sm font-medium text-slate-900">{item.name}</td>
                     <td className="px-5 py-4 text-sm text-slate-700">
                       {item.primaryDentistId
-                        ? db.dentists.find((dentist) => dentist.id === item.primaryDentistId)?.name ?? '-'
+                        ? dentistsById.get(item.primaryDentistId) ?? '-'
                         : '-'}
                     </td>
                     <td className="px-5 py-4 text-sm text-slate-700">{item.phone || '-'}</td>
