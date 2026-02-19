@@ -12,13 +12,15 @@
   Truck,
   UsersRound,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { listCasesForUser, listLabItemsForUser, listPatientsForUser, listScansForUser } from '../auth/scope'
 import Card from '../components/Card'
+import { DATA_MODE } from '../data/dataMode'
 import AppShell from '../layouts/AppShell'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import { getCurrentUser } from '../lib/auth'
+import { supabase } from '../lib/supabaseClient'
 import { useDb } from '../lib/useDb'
 
 type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success'
@@ -91,9 +93,52 @@ function KpiCard(props: { title: string; value: string; meta: string; info?: str
   )
 }
 
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function asText(value: unknown, fallback = '') {
+  return typeof value === 'string' ? value : fallback
+}
+
+function asNumber(value: unknown, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
 export default function DashboardPage() {
   const { db } = useDb()
   const currentUser = getCurrentUser(db)
+  const isSupabaseMode = DATA_MODE === 'supabase'
+  const [supabaseSnapshot, setSupabaseSnapshot] = useState<{
+    patients: Array<Record<string, unknown>>
+    scans: Array<Record<string, unknown>>
+    cases: Array<Record<string, unknown>>
+    labItems: Array<Record<string, unknown>>
+  }>({ patients: [], scans: [], cases: [], labItems: [] })
+
+  useEffect(() => {
+    let active = true
+    if (!isSupabaseMode || !supabase) return
+    ;(async () => {
+      const [patientsRes, scansRes, casesRes, labRes] = await Promise.all([
+        supabase.from('patients').select('id, clinic_id, primary_dentist_id, name, deleted_at, data').is('deleted_at', null),
+        supabase.from('scans').select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, created_at, deleted_at, data').is('deleted_at', null),
+        supabase.from('cases').select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, created_at, deleted_at, data').is('deleted_at', null),
+        supabase.from('lab_items').select('id, case_id, tray_number, status, notes, created_at, deleted_at, data').is('deleted_at', null),
+      ])
+      if (!active) return
+      setSupabaseSnapshot({
+        patients: (patientsRes.data ?? []) as Array<Record<string, unknown>>,
+        scans: (scansRes.data ?? []) as Array<Record<string, unknown>>,
+        cases: (casesRes.data ?? []) as Array<Record<string, unknown>>,
+        labItems: (labRes.data ?? []) as Array<Record<string, unknown>>,
+      })
+    })()
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
+
   const dashboardHost = typeof window !== 'undefined' ? window.location.hostname : 'unknown-host'
   const configuredLabel = (import.meta.env.VITE_ENV_LABEL as string | undefined)?.trim()
   const hostLabel =
@@ -116,10 +161,74 @@ export default function DashboardPage() {
       value: 'text-sky-100',
       meta: 'text-sky-200/80',
     }
-  const visiblePatients = listPatientsForUser(db, currentUser)
-  const visibleScans = listScansForUser(db, currentUser)
-  const visibleCases = listCasesForUser(db, currentUser)
-  const visibleLabItems = listLabItemsForUser(db, currentUser)
+  const visiblePatients: any[] = isSupabaseMode
+    ? supabaseSnapshot.patients.map((row) => ({
+      id: asText(row.id),
+      name: asText(row.name),
+      clinicId: asText(row.clinic_id),
+      primaryDentistId: asText(row.primary_dentist_id),
+    }))
+    : listPatientsForUser(db, currentUser)
+  const patientById = new Map(visiblePatients.map((item) => [item.id, item]))
+  const visibleScans: any[] = isSupabaseMode
+    ? supabaseSnapshot.scans.map((row) => {
+      const data = asObject(row.data)
+      const patient = patientById.get(asText(row.patient_id))
+      return {
+        id: asText(row.id),
+        clinicId: asText(row.clinic_id),
+        patientId: asText(row.patient_id),
+        dentistId: asText(row.dentist_id),
+        requestedByDentistId: asText(row.requested_by_dentist_id),
+        patientName: asText(data.patientName, patient?.name ?? '-'),
+        serviceOrderCode: asText(data.serviceOrderCode),
+        scanDate: asText(data.scanDate, asText(row.created_at).slice(0, 10)),
+        status: asText(data.status, 'pendente'),
+      }
+    })
+    : listScansForUser(db, currentUser)
+  const visibleCases: any[] = isSupabaseMode
+    ? supabaseSnapshot.cases.map((row) => {
+      const data = asObject(row.data)
+      const patient = patientById.get(asText(row.patient_id))
+      const status = asText(data.status, asText(row.status, 'planejamento'))
+      const phaseRaw = asText(data.phase)
+      const phase = phaseRaw || (status === 'finalizado' ? 'finalizado' : status === 'em_producao' || status === 'em_entrega' ? 'em_producao' : 'planejamento')
+      return {
+        id: asText(row.id),
+        clinicId: asText(row.clinic_id),
+        patientId: asText(row.patient_id),
+        dentistId: asText(row.dentist_id),
+        requestedByDentistId: asText(row.requested_by_dentist_id),
+        patientName: asText(data.patientName, patient?.name ?? '-'),
+        treatmentCode: asText(data.treatmentCode),
+        phase,
+        status,
+        contract: asObject(data.contract),
+        deliveryLots: Array.isArray(data.deliveryLots) ? data.deliveryLots : [],
+        installation: asObject(data.installation),
+        trays: Array.isArray(data.trays) ? data.trays : [],
+        totalTrays: asNumber(data.totalTrays, 0),
+        totalTraysUpper: asNumber(data.totalTraysUpper, asNumber(data.totalTrays, 0)),
+        totalTraysLower: asNumber(data.totalTraysLower, asNumber(data.totalTrays, 0)),
+      }
+    })
+    : listCasesForUser(db, currentUser)
+  const visibleLabItems: any[] = isSupabaseMode
+    ? supabaseSnapshot.labItems.map((row) => {
+      const data = asObject(row.data)
+      return {
+        id: asText(row.id),
+        caseId: asText(row.case_id),
+        trayNumber: asNumber(row.tray_number),
+        status: asText(row.status),
+        notes: asText(row.notes, asText(data.notes)),
+        patientName: asText(data.patientName, '-'),
+        requestCode: asText(data.requestCode),
+        requestKind: asText(data.requestKind, 'producao'),
+      }
+    })
+    : listLabItemsForUser(db, currentUser)
 
   const scansRecentItems = visibleScans
     .slice()
@@ -147,7 +256,7 @@ export default function DashboardPage() {
     if ((item.requestKind ?? 'producao') === 'producao' && hasAnyDeliveryLot && !hasRevisionSuffix(item.requestCode)) {
       return true
     }
-    const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
+    const tray = caseItem?.trays.find((current: any) => current.trayNumber === item.trayNumber)
     return tray?.state === 'entregue'
   }
   const pipelineItems = visibleLabItems.filter((item) => !isDeliveredToProfessional(item) && !isExplicitRework(item.requestKind))
@@ -157,7 +266,7 @@ export default function DashboardPage() {
     if (!item.caseId) return false
     if (item.status !== 'prontas') return false
     const caseItem = caseById.get(item.caseId)
-    const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
+    const tray = caseItem?.trays.find((current: any) => current.trayNumber === item.trayNumber)
     if (isReworkItem(item.notes, item.requestKind)) {
       return tray?.state === 'rework' || tray?.state === 'pronta' || tray?.state === 'entregue'
     }
