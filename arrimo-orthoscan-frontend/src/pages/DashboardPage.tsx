@@ -94,6 +94,8 @@ function KpiCard(props: { title: string; value: string; meta: string; info?: str
 export default function DashboardPage() {
   const { db } = useDb()
   const currentUser = getCurrentUser(db)
+  const dashboardHost = typeof window !== 'undefined' ? window.location.hostname : 'unknown-host'
+  const envLabel = (import.meta.env.VITE_ENV_LABEL as string | undefined)?.trim() || dashboardHost
   const visiblePatients = listPatientsForUser(db, currentUser)
   const visibleScans = listScansForUser(db, currentUser)
   const visibleCases = listCasesForUser(db, currentUser)
@@ -189,7 +191,7 @@ export default function DashboardPage() {
       meta: 'Gerar/enviar proposta',
       osCode: item.treatmentCode ?? '-',
       tone: 'info' as const,
-      href: '/app/cases',
+      href: '/app/alinhadores',
     })),
     ...contractsToCloseItems.slice(0, 3).map((item) => ({
       key: `contract_${item.id}`,
@@ -197,7 +199,7 @@ export default function DashboardPage() {
       meta: 'Aguardando assinatura',
       osCode: item.treatmentCode ?? '-',
       tone: 'neutral' as const,
-      href: '/app/cases',
+      href: '/app/alinhadores',
     })),
     ...reworkItems.slice(0, 3).map((item) => ({
       key: `rework_${item.id}`,
@@ -226,6 +228,11 @@ export default function DashboardPage() {
       <div className="rounded-3xl border border-slate-200 bg-slate-950 px-5 py-6 shadow-sm sm:px-6">
         <section>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-50">OrthoScan | Painel Operacional</h1>
+          <div className="mt-3 rounded-xl border border-amber-500/60 bg-amber-950/30 px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-200">Ambiente de Validacao</p>
+            <p className="mt-1 text-sm font-semibold text-amber-100">Dashboard ID: {envLabel}</p>
+            <p className="mt-1 text-xs text-amber-200/80">Host atual: {dashboardHost}</p>
+          </div>
         </section>
 
         <section className="mt-6">
@@ -358,7 +365,7 @@ export default function DashboardPage() {
                 <p className="mt-1 text-sm text-slate-400">Lista operacional de prioridades.</p>
               </div>
               <Link
-                to="/app/cases"
+                to="/app/alinhadores"
                 className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-900"
               >
                 Ver casos
