@@ -75,11 +75,15 @@ export async function updateProfile(
   patch: Partial<Pick<ProfileRecord, 'full_name' | 'cpf' | 'phone' | 'role' | 'clinic_id' | 'dentist_id' | 'is_active'>>,
 ) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('user_id', userId)
+    .select('user_id')
   if (error) return { ok: false as const, error: error.message }
+  if (!data || data.length === 0) {
+    return { ok: false as const, error: 'Perfil nao atualizado. Verifique permissoes para editar este usuario.' }
+  }
   return { ok: true as const }
 }
 

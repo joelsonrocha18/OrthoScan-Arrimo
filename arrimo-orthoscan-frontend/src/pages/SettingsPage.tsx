@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, EyeOff, LockKeyhole, Mail, Pause, PenLine, Play, Trash2, UserRound, WandSparkles } from 'lucide-react'
+import { getAuthProvider } from '../auth/authProvider'
 import { can, groupedPermissionsForRole, permissionLabel, profileDescription, profileLabel, type PermissionModule } from '../auth/permissions'
 import { useToast } from '../app/ToastProvider'
 import Badge from '../components/Badge'
@@ -321,6 +322,9 @@ export default function SettingsPage() {
       if (!result.ok) return setError(result.error)
       await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
       setModalOpen(false)
+      if (currentUser?.id === editingUser.id) {
+        await getAuthProvider().getCurrentUser()
+      }
       addToast({ type: 'success', title: 'Usuario atualizado' })
       return
     }

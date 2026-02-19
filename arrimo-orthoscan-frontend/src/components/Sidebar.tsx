@@ -1,5 +1,6 @@
 import { Building2, FlaskConical, LayoutDashboard, LogOut, ScanLine, Settings, Shapes, UserRound, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { getAuthProvider } from '../auth/authProvider'
 import { can } from '../auth/permissions'
 import { clearSession, getCurrentUser } from '../lib/auth'
 import { useDb } from '../lib/useDb'
@@ -12,8 +13,12 @@ type SidebarProps = {
 export default function Sidebar({ onLogout }: SidebarProps) {
   const { db } = useDb()
   const currentUser = getCurrentUser(db)
-  const handleLogout = () => {
-    clearSession()
+  const handleLogout = async () => {
+    try {
+      await getAuthProvider().signOut()
+    } catch {
+      clearSession()
+    }
     onLogout()
   }
 
@@ -60,7 +65,7 @@ export default function Sidebar({ onLogout }: SidebarProps) {
         </nav>
 
         <div className="border-t border-slate-700 p-4">
-          <Button variant="ghost" className="w-full justify-start text-slate-200 hover:bg-slate-800" onClick={handleLogout}>
+          <Button variant="ghost" className="w-full justify-start text-slate-200 hover:bg-slate-800" onClick={() => void handleLogout()}>
             <LogOut className="mr-2 h-4 w-4" />
             Sair
           </Button>
