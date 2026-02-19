@@ -5,9 +5,9 @@ test('scan to case to lab flow', async ({ page }) => {
   await seedDbAndStart(page)
   await loginAs(page, 'qa_user_master')
 
-  await page.goto('/app/scans')
-  await page.getByRole('button', { name: 'Criar Caso' }).first().click()
-  await page.getByRole('button', { name: 'Criar Caso' }).nth(1).click()
+  await page.goto('/app/scans', { waitUntil: 'domcontentloaded' })
+  await page.getByRole('button', { name: 'Criar Caso' }).first().click({ noWaitAfter: true })
+  await page.getByRole('button', { name: 'Criar Caso' }).nth(1).click({ noWaitAfter: true })
 
   await expect(page).toHaveURL(/\/app\/cases\//)
   await expect(page.getByText(/Queixa do paciente:/i)).toBeVisible()

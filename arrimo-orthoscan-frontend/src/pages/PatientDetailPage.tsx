@@ -396,6 +396,7 @@ export default function PatientDetailPage() {
     }
     const result = await addPatientDoc({
       patientId: existing.id,
+      clinicId: existing.clinicId,
       title: docForm.title,
       category: docForm.category,
       note: docForm.note,

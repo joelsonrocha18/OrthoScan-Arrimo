@@ -5,20 +5,20 @@ test('dentist_client sees only scoped records and cannot access diagnostics', as
   await seedDbAndStart(page)
   await loginAs(page, 'qa_user_dentist_client')
 
-  await page.goto('/app/patients')
+  await page.goto('/app/patients', { waitUntil: 'domcontentloaded' })
   await expect(page.getByText('Paciente 1')).toBeVisible()
   await expect(page.getByText('Paciente 2')).toBeVisible()
   await expect(page.getByText('Paciente 4')).toHaveCount(0)
 
-  await page.goto('/app/scans')
+  await page.goto('/app/scans', { waitUntil: 'domcontentloaded' })
   await expect(page.getByText('Paciente 1')).toBeVisible()
   await expect(page.getByText('Paciente 4')).toHaveCount(0)
 
-  await page.goto('/app/cases')
+  await page.goto('/app/cases', { waitUntil: 'domcontentloaded' })
   await expect(page.getByText('Paciente 1')).toBeVisible()
   await expect(page.getByText('Paciente 4')).toHaveCount(0)
 
-  await page.goto('/app/settings/diagnostics')
+  await page.goto('/app/settings/diagnostics', { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: 'Sem acesso' })).toBeVisible()
 })
 
@@ -26,9 +26,9 @@ test('lab_tech can access LAB but cannot access patients page', async ({ page })
   await seedDbAndStart(page)
   await loginAs(page, 'qa_user_lab')
 
-  await page.goto('/app/lab')
+  await page.goto('/app/lab', { waitUntil: 'domcontentloaded' })
   await expect(page.getByText('Fila de produção e entregas')).toBeVisible()
 
-  await page.goto('/app/patients')
+  await page.goto('/app/patients', { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: 'Sem acesso' })).toBeVisible()
 })

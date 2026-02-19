@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { DB_KEY, loadDb } from '../data/db'
 import { onDbChanged } from './events'
 
 export function useDb() {
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     const off = onDbChanged(() => {
@@ -21,7 +21,9 @@ export function useDb() {
     }
   }, [])
 
-  const db = loadDb()
+  // Intencional: recarrega DB somente quando ocorrer evento de alteracao/refresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const db = useMemo(() => loadDb(), [tick])
 
   const refresh = useCallback(() => {
     setTick((current) => current + 1)

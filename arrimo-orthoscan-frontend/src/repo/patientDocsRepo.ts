@@ -4,6 +4,7 @@ import { getSessionProfile } from '../lib/auth'
 import { supabase } from '../lib/supabaseClient'
 import type { PatientDocument } from '../types/PatientDocument'
 import { buildPatientDocPath, createSignedUrl, deleteFromStorage, uploadToStorage } from './storageRepo'
+import { uploadFileToStorage } from '../lib/storageUpload'
 
 function nowIso() {
   return new Date().toISOString()
@@ -68,9 +69,9 @@ export async function resolvePatientDocUrl(doc: PatientDocument) {
   if (!doc.filePath) return { ok: false as const, error: 'Documento sem caminho de arquivo.' }
   return createSignedUrl(doc.filePath, 300)
 }
-
 export async function addPatientDoc(payload: {
   patientId: string
+  clinicId?: string
   title: string
   category: PatientDocument['category']
   note?: string
@@ -115,6 +116,21 @@ export async function addPatientDoc(payload: {
   }
 
   const db = loadDb()
+  let uploadedUrl: string | undefined
+  let isLocal = Boolean(payload.file)
+
+  if (payload.file) {
+    const uploaded = await uploadFileToStorage(payload.file, {
+      scope: 'patient-docs',
+      clinicId: payload.clinicId,
+      ownerId: payload.patientId,
+    })
+    if (uploaded) {
+      uploadedUrl = uploaded.url
+      isLocal = false
+    }
+  }
+
   const doc: PatientDocument = {
     id: `pat_doc_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     patientId: payload.patientId,
@@ -122,8 +138,8 @@ export async function addPatientDoc(payload: {
     category: payload.category,
     createdAt: payload.createdAt ? new Date(payload.createdAt).toISOString() : nowIso(),
     note: payload.note?.trim() || undefined,
-    isLocal: Boolean(payload.file),
-    url: payload.file ? URL.createObjectURL(payload.file) : undefined,
+    isLocal,
+    url: payload.file ? (uploadedUrl ?? URL.createObjectURL(payload.file)) : undefined,
     fileName: payload.file?.name ?? (payload.title.trim() || 'arquivo'),
     mimeType: payload.file?.type,
     status: 'ok',

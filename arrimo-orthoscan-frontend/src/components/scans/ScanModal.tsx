@@ -20,7 +20,7 @@ type ScanModalProps = {
   onSubmit: (
     payload: Omit<Scan, 'id' | 'createdAt' | 'updatedAt'>,
     options?: { setPrimaryDentist?: boolean },
-  ) => boolean
+  ) => boolean | void | Promise<boolean | void>
 }
 
 type FormState = {
@@ -211,13 +211,13 @@ export default function ScanModal({
     setForm((current) => ({ ...current, attachments: current.attachments.filter((item) => item.id !== id) }))
   }
 
-  const submit = () => {
+  const submit = async () => {
     if (!form.patientName.trim() || !form.scanDate) {
       setError('Paciente e data do scan sao obrigatorios.')
       return
     }
 
-    const saved = onSubmit({
+    const saved = await onSubmit({
       patientName: form.patientName.trim(),
       patientId: form.patientId,
       dentistId: form.dentistId,
@@ -232,7 +232,7 @@ export default function ScanModal({
       status: mode === 'edit' && initialScan ? initialScan.status : 'pendente',
       linkedCaseId: mode === 'edit' && initialScan ? initialScan.linkedCaseId : undefined,
     }, { setPrimaryDentist })
-    if (saved) {
+    if (saved !== false) {
       onClose()
     }
   }

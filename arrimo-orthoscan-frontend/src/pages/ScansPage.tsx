@@ -232,7 +232,6 @@ export default function ScansPage() {
     }
     addToast({ type: 'success', title: 'Escaneamento excluido' })
   }
-
   const addAttachment = async (
     scanId: string,
     payload: {
@@ -283,7 +282,8 @@ export default function ScansPage() {
       url = URL.createObjectURL(payload.file)
     }
 
-    const result = addScanAttachment(scanId, {
+    const result = await addScanAttachment(scanId, {
+      file: payload.file,
       name: payload.file.name,
       kind: payload.kind,
       slotId: payload.slotId,
@@ -454,7 +454,7 @@ export default function ScansPage() {
         dentists={dentists.map((item) => ({ id: item.id, name: item.name, gender: item.gender, clinicId: item.clinicId }))}
         clinics={clinicsForModal}
         onClose={() => setCreateOpen(false)}
-        onSubmit={(payload, options) => {
+        onSubmit={async (payload, options) => {
           if (!canWrite) {
             addToast({ type: 'error', title: 'Sem permissao para criar exames' })
             return false
@@ -463,7 +463,7 @@ export default function ScansPage() {
             addToast({ type: 'info', title: 'Criacao de exame nesta tela sera habilitada no proximo ajuste Supabase.' })
             return false
           }
-          createScan(payload)
+          await createScan(payload)
           if (options?.setPrimaryDentist && payload.patientId && payload.dentistId) {
             const patient = db.patients.find((item) => item.id === payload.patientId)
             if (patient && !patient.primaryDentistId) {

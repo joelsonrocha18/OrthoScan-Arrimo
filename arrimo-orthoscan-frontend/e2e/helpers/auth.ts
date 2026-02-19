@@ -21,11 +21,17 @@ export async function loginAs(page: Page, userId: string) {
     qa_user_reception: 'reception.qa@local',
   }
 
-  await page.goto('/login')
-  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible()
-  await page.getByLabel(/usuario|email/i).fill(emailById[userId])
-  await page.getByLabel(/senha/i).fill('123456')
+  await page.goto('/login', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: 'Entrar', level: 2 })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Entrar' }).click()
+  const select = page.locator('select')
+  if (await select.count()) {
+    await select.selectOption(userId)
+  } else {
+    await page.getByLabel('Email').fill(emailById[userId])
+    await page.getByLabel('Senha').fill('123456')
+  }
+
+  await page.getByRole('button', { name: 'Entrar' }).click({ noWaitAfter: true })
   await expect(page).toHaveURL(/\/app\/dashboard/)
 }

@@ -16,8 +16,8 @@ test('smoke routes for master_admin', async ({ page }) => {
   ]
 
   for (const route of routes) {
-    await page.goto(route.path)
+    await page.goto(route.path, { waitUntil: 'domcontentloaded' })
     await expect(page).toHaveURL(new RegExp(route.path.replace('/', '\\/')))
-    await expect(page.getByText(route.marker).first()).toBeVisible()
+    await expect(page.locator('main')).toContainText(route.marker)
   }
 })

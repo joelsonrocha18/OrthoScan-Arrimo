@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { loginAs, seedDbAndStart } from './helpers/auth'
 
 async function openUsersTab(page: import('@playwright/test').Page) {
-  await page.locator('main').getByRole('button', { name: 'Usuarios' }).click()
+  await page.locator('main').getByRole('button', { name: 'Usuarios' }).click({ noWaitAfter: true })
   await expect(page.getByRole('button', { name: '+ Novo usuario' })).toBeVisible()
 }
 
@@ -10,7 +10,7 @@ test('settings users CRUD + status + reset', async ({ page }) => {
   await seedDbAndStart(page)
   await loginAs(page, 'qa_user_master')
 
-  await page.goto('/app/settings')
+  await page.goto('/app/settings', { waitUntil: 'domcontentloaded' })
   await openUsersTab(page)
 
   await page.getByRole('button', { name: '+ Novo usuario' }).click()

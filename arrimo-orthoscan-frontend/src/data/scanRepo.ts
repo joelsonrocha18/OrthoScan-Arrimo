@@ -2,6 +2,7 @@ import { loadDb, saveDb } from './db'
 import { pushAudit } from './audit'
 import type { Case, CaseTray } from '../types/Case'
 import type { Scan, ScanAttachment } from '../types/Scan'
+import { uploadFileToStorage } from '../lib/storageUpload'
 
 function nowIso() {
   return new Date().toISOString()
@@ -48,18 +49,53 @@ export function getScan(id: string) {
   return loadDb().scans.find((item) => item.id === id) ?? null
 }
 
-export function createScan(scan: Omit<Scan, 'id' | 'createdAt' | 'updatedAt'>) {
+async function fileFromAttachment(att: ScanAttachment) {
+  if (!att.isLocal || !att.url?.startsWith('blob:')) return null
+  try {
+    const response = await fetch(att.url)
+    const blob = await response.blob()
+    return new File([blob], att.name, { type: att.mime || blob.type || 'application/octet-stream' })
+  } catch {
+    return null
+  }
+}
+
+export async function createScan(scan: Omit<Scan, 'id' | 'createdAt' | 'updatedAt'>) {
   const db = loadDb()
   const internal = isInternalClinic(db, scan.clinicId)
   const serviceOrderCode = scan.serviceOrderCode ?? nextTreatmentCode(db, internal ? 'A' : 'C')
-  const next: Scan = {
-    ...scan,
-    serviceOrderCode,
-    attachments: scan.attachments.map((att) => ({
+  const attachments: ScanAttachment[] = []
+
+  for (const att of scan.attachments) {
+    const localFile = await fileFromAttachment(att)
+    if (localFile) {
+      const uploaded = await uploadFileToStorage(localFile, {
+        scope: 'scans',
+        clinicId: scan.clinicId,
+        ownerId: scan.patientId ?? scan.patientName.replace(/\s+/g, '_').toLowerCase(),
+      })
+      if (uploaded) {
+        attachments.push({
+          ...att,
+          url: uploaded.url,
+          isLocal: false,
+          status: att.status ?? 'ok',
+          attachedAt: att.attachedAt ?? att.createdAt ?? nowIso(),
+        })
+        continue
+      }
+    }
+    attachments.push({
       ...att,
       status: att.status ?? 'ok',
       attachedAt: att.attachedAt ?? att.createdAt ?? nowIso(),
-    })),
+    })
+  }
+
+  const next: Scan = {
+    ...scan,
+    serviceOrderCode,
+    attachments,
     id: `scan_${Date.now()}`,
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -87,14 +123,37 @@ export function updateScan(id: string, patch: Partial<Scan>) {
 
 export function addScanAttachment(
   scanId: string,
-  attachment: Omit<ScanAttachment, 'id' | 'createdAt' | 'status'> & { id?: string; status?: 'ok' | 'erro' },
+  attachment: Omit<ScanAttachment, 'id' | 'createdAt' | 'status'> & { id?: string; status?: 'ok' | 'erro'; file?: File },
+) {
+  return addScanAttachmentAsync(scanId, attachment)
+}
+
+export async function addScanAttachmentAsync(
+  scanId: string,
+  attachment: Omit<ScanAttachment, 'id' | 'createdAt' | 'status'> & { id?: string; status?: 'ok' | 'erro'; file?: File },
 ) {
   const scan = getScan(scanId)
   if (!scan) return null
+  let nextUrl = attachment.url
+  let nextIsLocal = attachment.isLocal
+
+  if (attachment.file) {
+    const uploaded = await uploadFileToStorage(attachment.file, {
+      scope: 'scans',
+      clinicId: scan.clinicId,
+      ownerId: scan.patientId ?? scan.patientName.replace(/\s+/g, '_').toLowerCase(),
+    })
+    if (uploaded) {
+      nextUrl = uploaded.url
+      nextIsLocal = false
+    }
+  }
 
   const nextAttachment: ScanAttachment = {
     ...attachment,
     id: attachment.id ?? `scan_file_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    url: nextUrl,
+    isLocal: nextIsLocal ?? true,
     status: attachment.status ?? 'ok',
     attachedAt: attachment.attachedAt ?? nowIso(),
     createdAt: nowIso(),
