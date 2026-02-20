@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom'
 import { listCasesForUser, listLabItemsForUser, listPatientsForUser, listScansForUser } from '../auth/scope'
 import Card from '../components/Card'
 import { DATA_MODE } from '../data/dataMode'
+import type { Case, CasePhase, CaseStatus, CaseTray } from '../types/Case'
 import AppShell from '../layouts/AppShell'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import { getCurrentUser } from '../lib/auth'
@@ -139,7 +140,7 @@ export default function DashboardPage() {
     }
   }, [isSupabaseMode])
 
-  const visiblePatients: any[] = isSupabaseMode
+  const visiblePatients = isSupabaseMode
     ? supabaseSnapshot.patients.map((row) => ({
       id: asText(row.id),
       name: asText(row.name),
@@ -148,7 +149,7 @@ export default function DashboardPage() {
     }))
     : listPatientsForUser(db, currentUser)
   const patientById = new Map(visiblePatients.map((item) => [item.id, item]))
-  const visibleScans: any[] = isSupabaseMode
+  const visibleScans = isSupabaseMode
     ? supabaseSnapshot.scans.map((row) => {
       const data = asObject(row.data)
       const patient = patientById.get(asText(row.patient_id))
@@ -165,14 +166,53 @@ export default function DashboardPage() {
       }
     })
     : listScansForUser(db, currentUser)
-  const visibleCases: any[] = isSupabaseMode
+  const visibleCases = isSupabaseMode
     ? supabaseSnapshot.cases.map((row) => {
       const data = asObject(row.data)
       const patient = patientById.get(asText(row.patient_id))
-      const status = asText(data.status, asText(row.status, 'planejamento'))
+      const nowIso = new Date().toISOString()
+      const statusRaw = asText(data.status, asText(row.status, 'planejamento'))
+      const status: CaseStatus =
+        statusRaw === 'finalizado' || statusRaw === 'em_producao' || statusRaw === 'em_entrega' ? statusRaw : 'planejamento'
       const phaseRaw = asText(data.phase)
-      const phase = phaseRaw || (status === 'finalizado' ? 'finalizado' : status === 'em_producao' || status === 'em_entrega' ? 'em_producao' : 'planejamento')
-      return {
+      const derivedPhase: CasePhase =
+        status === 'finalizado' ? 'finalizado' : status === 'em_producao' || status === 'em_entrega' ? 'em_producao' : 'planejamento'
+      const phase: CasePhase =
+        phaseRaw === 'orcamento' ||
+        phaseRaw === 'contrato_pendente' ||
+        phaseRaw === 'contrato_aprovado' ||
+        phaseRaw === 'em_producao' ||
+        phaseRaw === 'finalizado' ||
+        phaseRaw === 'planejamento'
+          ? phaseRaw
+          : derivedPhase
+      const totalTrays = asNumber(data.totalTrays, 0)
+      const trays: CaseTray[] = Array.isArray(data.trays)
+        ? data.trays
+            .map((tray) => {
+              const item = asObject(tray)
+              const stateRaw = asText(item.state, 'pendente')
+              const state: CaseTray['state'] =
+                stateRaw === 'em_producao' || stateRaw === 'pronta' || stateRaw === 'entregue' || stateRaw === 'rework'
+                  ? stateRaw
+                  : 'pendente'
+              return {
+                trayNumber: asNumber(item.trayNumber, 0),
+                state,
+                dueDate: asText(item.dueDate) || undefined,
+                deliveredAt: asText(item.deliveredAt) || undefined,
+                notes: asText(item.notes) || undefined,
+              }
+            })
+            .filter((item) => item.trayNumber > 0)
+        : []
+      const contractData = asObject(data.contract)
+      const contractStatusRaw = asText(contractData.status, 'pendente')
+      const contractStatus = contractStatusRaw === 'aprovado' ? 'aprovado' : 'pendente'
+      const installationData = asObject(data.installation)
+      const createdAt = asText(row.created_at, nowIso)
+      const updatedAt = asText(row.updated_at, createdAt)
+      const caseItem: Case = {
         id: asText(row.id),
         clinicId: asText(row.clinic_id),
         patientId: asText(row.patient_id),
@@ -182,17 +222,34 @@ export default function DashboardPage() {
         treatmentCode: asText(data.treatmentCode),
         phase,
         status,
-        contract: asObject(data.contract),
+        scanDate: asText(data.scanDate, createdAt.slice(0, 10)),
+        changeEveryDays: asNumber(data.changeEveryDays, 7),
+        contract: {
+          status: contractStatus,
+          approvedAt: asText(contractData.approvedAt) || undefined,
+          notes: asText(contractData.notes) || undefined,
+        },
         deliveryLots: Array.isArray(data.deliveryLots) ? data.deliveryLots : [],
-        installation: asObject(data.installation),
-        trays: Array.isArray(data.trays) ? data.trays : [],
-        totalTrays: asNumber(data.totalTrays, 0),
-        totalTraysUpper: asNumber(data.totalTraysUpper, asNumber(data.totalTrays, 0)),
-        totalTraysLower: asNumber(data.totalTraysLower, asNumber(data.totalTrays, 0)),
+        installation: Object.keys(installationData).length
+          ? {
+              installedAt: asText(installationData.installedAt, createdAt.slice(0, 10)),
+              note: asText(installationData.note) || undefined,
+              deliveredUpper: asNumber(installationData.deliveredUpper, 0),
+              deliveredLower: asNumber(installationData.deliveredLower, 0),
+            }
+          : undefined,
+        trays,
+        totalTrays,
+        totalTraysUpper: asNumber(data.totalTraysUpper, totalTrays),
+        totalTraysLower: asNumber(data.totalTraysLower, totalTrays),
+        attachments: [],
+        createdAt,
+        updatedAt,
       }
+      return caseItem
     })
     : listCasesForUser(db, currentUser)
-  const visibleLabItems: any[] = isSupabaseMode
+  const visibleLabItems = isSupabaseMode
     ? supabaseSnapshot.labItems.map((row) => {
       const data = asObject(row.data)
       return {
@@ -234,7 +291,7 @@ export default function DashboardPage() {
     if ((item.requestKind ?? 'producao') === 'producao' && hasAnyDeliveryLot && !hasRevisionSuffix(item.requestCode)) {
       return true
     }
-    const tray = caseItem?.trays.find((current: any) => current.trayNumber === item.trayNumber)
+    const tray = caseItem?.trays.find((current: { trayNumber?: number; state?: string }) => current.trayNumber === item.trayNumber)
     return tray?.state === 'entregue'
   }
   const pipelineItems = visibleLabItems.filter((item) => !isDeliveredToProfessional(item) && !isExplicitRework(item.requestKind))
@@ -244,7 +301,7 @@ export default function DashboardPage() {
     if (!item.caseId) return false
     if (item.status !== 'prontas') return false
     const caseItem = caseById.get(item.caseId)
-    const tray = caseItem?.trays.find((current: any) => current.trayNumber === item.trayNumber)
+    const tray = caseItem?.trays.find((current: { trayNumber?: number; state?: string }) => current.trayNumber === item.trayNumber)
     if (isReworkItem(item.notes, item.requestKind)) {
       return tray?.state === 'rework' || tray?.state === 'pronta' || tray?.state === 'entregue'
     }

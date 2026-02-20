@@ -159,13 +159,21 @@ export default function ScansPage() {
   }, [isSupabaseMode, supabaseRefreshKey])
 
   const scans = useMemo(() => (canRead ? (isSupabaseMode ? supabaseScans : listScansForUser(db, currentUser)) : []), [canRead, isSupabaseMode, supabaseScans, db, currentUser])
-  const caseById = useMemo(
-    () => new Map((isSupabaseMode ? supabaseCases : db.cases).map((item: any) => [item.id, item])),
+  const caseLookupSource = useMemo(
+    () => (isSupabaseMode ? supabaseCases : db.cases.map((item) => ({ id: item.id, treatmentCode: item.treatmentCode }))),
     [isSupabaseMode, supabaseCases, db.cases],
   )
-  const patientsById = useMemo(
-    () => new Map((isSupabaseMode ? supabasePatients : db.patients).map((item: any) => [item.id, item.name])),
+  const caseById = useMemo(
+    () => new Map(caseLookupSource.map((item) => [item.id, item])),
+    [caseLookupSource],
+  )
+  const patientLookupSource = useMemo(
+    () => (isSupabaseMode ? supabasePatients : db.patients.map((item) => ({ id: item.id, name: item.name, primaryDentistId: item.primaryDentistId, clinicId: item.clinicId }))),
     [isSupabaseMode, supabasePatients, db.patients],
+  )
+  const patientsById = useMemo(
+    () => new Map(patientLookupSource.map((item) => [item.id, item.name])),
+    [patientLookupSource],
   )
   const dentists = useMemo(
     () => (isSupabaseMode ? supabaseDentists : db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt)),
@@ -174,6 +182,10 @@ export default function ScansPage() {
   const clinics = useMemo(
     () => (isSupabaseMode ? supabaseClinics : db.clinics.filter((item) => !item.deletedAt)),
     [isSupabaseMode, supabaseClinics, db.clinics],
+  )
+  const clinicsForModal = useMemo(
+    () => clinics.map((item) => ({ id: item.id, name: item.tradeName })),
+    [clinics],
   )
 
   const handleApprove = async (id: string) => {
@@ -438,9 +450,9 @@ export default function ScansPage() {
       <ScanModal
         open={createOpen}
         mode="create"
-        patients={(isSupabaseMode ? supabasePatients : db.patients).map((item: any) => ({ id: item.id, name: item.name, primaryDentistId: item.primaryDentistId, clinicId: item.clinicId }))}
+        patients={patientLookupSource}
         dentists={dentists.map((item) => ({ id: item.id, name: item.name, gender: item.gender, clinicId: item.clinicId }))}
-        clinics={clinics.map((item: any) => ({ id: item.id, name: item.tradeName }))}
+        clinics={clinicsForModal}
         onClose={() => setCreateOpen(false)}
         onSubmit={(payload, options) => {
           if (!canWrite) {

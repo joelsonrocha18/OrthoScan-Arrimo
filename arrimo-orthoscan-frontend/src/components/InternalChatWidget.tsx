@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, Send, Users } from 'lucide-react'
 import { profileLabel } from '../auth/permissions'
 import { useDb } from '../lib/useDb'
@@ -45,17 +45,20 @@ export default function InternalChatWidget() {
   const myUserId = currentUser?.id ?? ''
   const roomKey = 'global'
   const isExternal = currentUser?.role === 'dentist_client' || currentUser?.role === 'clinic_client'
-  const isArrimoRole = (role?: string) => role === 'master_admin' || role === 'dentist_admin' || role === 'lab_tech' || role === 'receptionist'
-  const canSeeMessage = (item: InternalChatMessage) => {
+  const isArrimoRole = useCallback(
+    (role?: string) => role === 'master_admin' || role === 'dentist_admin' || role === 'lab_tech' || role === 'receptionist',
+    [],
+  )
+  const canSeeMessage = useCallback((item: InternalChatMessage) => {
     if (!isExternal) return true
     if (item.sender_user_id === myUserId) return true
     return isArrimoRole(item.sender_role)
-  }
-  const canSeePresence = (role?: string, userId?: string) => {
+  }, [isArrimoRole, isExternal, myUserId])
+  const canSeePresence = useCallback((role?: string, userId?: string) => {
     if (!isExternal) return true
     if (userId === myUserId) return true
     return isArrimoRole(role)
-  }
+  }, [isArrimoRole, isExternal, myUserId])
 
   useEffect(() => {
     if (!open || !listRef.current) return
@@ -108,7 +111,7 @@ export default function InternalChatWidget() {
     return () => {
       isMounted = false
     }
-  }, [currentUser, isSupabaseMode, open])
+  }, [canSeeMessage, currentUser, isSupabaseMode, open])
 
   useEffect(() => {
     const sb = supabase
@@ -169,7 +172,7 @@ export default function InternalChatWidget() {
       void sb.removeChannel(messagesChannel)
       void sb.removeChannel(presenceChannel)
     }
-  }, [currentUser, displayName, isSupabaseMode, open])
+  }, [canSeeMessage, canSeePresence, currentUser, displayName, isSupabaseMode, open])
 
   const onlineUsers = useMemo(() => Object.values(presence).sort((a, b) => a.name.localeCompare(b.name)), [presence])
 

@@ -283,7 +283,7 @@ export function addLabItem(item: Omit<LabItem, 'id' | 'createdAt' | 'updatedAt'>
     plannedLowerQty: resolvedLower,
     planningDefinedAt: planDefined ? now : undefined,
     status: resolvedStatus,
-    id: `lab_${Date.now()}`,
+    id: `lab_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
     createdAt: now,
     updatedAt: now,
   }
@@ -311,8 +311,6 @@ export function updateLabItem(id: string, patch: Partial<LabItem>) {
   const db = loadDb()
   let changed: LabItem | null = null
   let error: string | null = null
-  let spawnedRework: LabItem | null = null
-  let spawnedReworkId: string | null = null
 
   db.labItems = db.labItems.map((item) => {
     if (item.id !== id) {
@@ -363,40 +361,8 @@ export function updateLabItem(id: string, patch: Partial<LabItem>) {
       updatedAt: now,
     }
 
-    const defectDetected = false
-    if (defectDetected && linkedCase) {
-      const baseCode = caseCode(linkedCase)
-      const revision = nextRequestRevision(db, baseCode)
-      const requestCode = `${baseCode}/${revision}`
-      spawnedReworkId = `lab_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`
-      spawnedRework = {
-        id: spawnedReworkId,
-        caseId: linkedCase.id,
-        requestCode,
-        requestKind: 'reconfeccao',
-        expectedReplacementDate: changed.dueDate,
-        arch: changed.arch,
-        plannedUpperQty: 0,
-        plannedLowerQty: 0,
-        planningDefinedAt: undefined,
-        trayNumber: changed.trayNumber,
-        patientName: linkedCase.patientName,
-        plannedDate: addDays(changed.dueDate, -10),
-        dueDate: changed.dueDate,
-        status: 'aguardando_iniciar',
-        priority: 'Urgente',
-        notes: `Reconfeccao automatica por defeito identificado na placa #${changed.trayNumber}.`,
-        createdAt: now,
-        updatedAt: now,
-      }
-    }
     return changed
   })
-
-  if (spawnedRework) {
-    db.labItems = [spawnedRework, ...db.labItems]
-  }
-  const spawnedReworkItem = spawnedReworkId ? db.labItems.find((item) => item.id === spawnedReworkId) ?? null : null
 
   const updatedItem = db.labItems.find((item) => item.id === id) ?? null
   const sync = changed ? syncLabItemToCaseTray(changed, db) : { ok: true as const }
@@ -408,14 +374,6 @@ export function updateLabItem(id: string, patch: Partial<LabItem>) {
       message: `OS ${updatedItem.requestCode ?? updatedItem.id} atualizada para status ${updatedItem.status}.`,
     })
   }
-  if (spawnedReworkItem) {
-    pushAudit(db, {
-      entity: 'lab',
-      entityId: spawnedReworkItem.id,
-      action: 'lab.rework_auto',
-      message: `OS ${spawnedReworkItem.requestCode} criada automaticamente para reconfeccao.`,
-    })
-  }
   saveDb(db)
   return { item: updatedItem, sync, error: changed ? undefined : error ?? 'Nao foi possivel atualizar o item.' }
 }
@@ -424,8 +382,6 @@ export function moveLabItem(id: string, status: LabStatus) {
   const db = loadDb()
   let changed: LabItem | null = null
   let error: string | null = null
-  let spawnedRework: LabItem | null = null
-  let spawnedReworkId: string | null = null
 
   db.labItems = db.labItems.map((item) => {
     if (item.id !== id) {
@@ -447,39 +403,8 @@ export function moveLabItem(id: string, status: LabStatus) {
 
     const now = nowIso()
     changed = { ...item, status, updatedAt: now }
-    const defectDetected = false
-    if (defectDetected && linkedCase) {
-      const baseCode = caseCode(linkedCase)
-      const revision = nextRequestRevision(db, baseCode)
-      spawnedReworkId = `lab_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`
-      spawnedRework = {
-        id: spawnedReworkId,
-        caseId: linkedCase.id,
-        requestCode: `${baseCode}/${revision}`,
-        requestKind: 'reconfeccao',
-        expectedReplacementDate: item.dueDate,
-        arch: item.arch,
-        plannedUpperQty: 0,
-        plannedLowerQty: 0,
-        planningDefinedAt: undefined,
-        trayNumber: item.trayNumber,
-        patientName: linkedCase.patientName,
-        plannedDate: addDays(item.dueDate, -10),
-        dueDate: item.dueDate,
-        status: 'aguardando_iniciar',
-        priority: 'Urgente',
-        notes: `Reconfeccao automatica por defeito identificado na placa #${item.trayNumber}.`,
-        createdAt: now,
-        updatedAt: now,
-      }
-    }
     return changed
   })
-
-  if (spawnedRework) {
-    db.labItems = [spawnedRework, ...db.labItems]
-  }
-  const spawnedReworkItem = spawnedReworkId ? db.labItems.find((item) => item.id === spawnedReworkId) ?? null : null
 
   const movedItem = db.labItems.find((item) => item.id === id) ?? null
   const sync = changed ? syncLabItemToCaseTray(changed, db) : { ok: true as const }
@@ -489,14 +414,6 @@ export function moveLabItem(id: string, status: LabStatus) {
       entityId: movedItem.id,
       action: 'lab.move',
       message: `OS ${movedItem.requestCode ?? movedItem.id} movida para ${movedItem.status}.`,
-    })
-  }
-  if (spawnedReworkItem) {
-    pushAudit(db, {
-      entity: 'lab',
-      entityId: spawnedReworkItem.id,
-      action: 'lab.rework_auto',
-      message: `OS ${spawnedReworkItem.requestCode} criada automaticamente para reconfeccao.`,
     })
   }
   saveDb(db)

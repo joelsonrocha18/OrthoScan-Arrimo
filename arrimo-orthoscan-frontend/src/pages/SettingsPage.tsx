@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, EyeOff, LockKeyhole, Mail, Pause, PenLine, Play, Trash2, UserRound, WandSparkles } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { getAuthProvider } from '../auth/authProvider'
 import { can, groupedPermissionsForRole, permissionLabel, profileDescription, profileLabel, type PermissionModule } from '../auth/permissions'
 import { useToast } from '../app/ToastProvider'
@@ -28,8 +29,19 @@ import { useDb } from '../lib/useDb'
 type MainTab = 'registration' | 'users' | 'system_update' | 'system_diagnostics'
 type ModalTab = 'personal' | 'access' | 'profile' | 'link'
 type PasswordMode = 'auto' | 'manual'
+type ReportDatasetKey = 'patients' | 'dentists' | 'clinics' | 'users' | 'scans' | 'cases' | 'labItems'
+type ReportFieldOption = { key: string; label: string }
 const ROLE_LIST: Role[] = ['master_admin', 'dentist_admin', 'dentist_client', 'clinic_client', 'lab_tech', 'receptionist']
 const MODULE_ORDER: PermissionModule[] = ['Dashboard', 'Pacientes', 'Scans', 'Casos', 'Laboratorio', 'Usuarios', 'Configuracoes']
+const REPORT_DATASETS: Array<{ key: ReportDatasetKey; label: string }> = [
+  { key: 'patients', label: 'Pacientes' },
+  { key: 'dentists', label: 'Dentistas' },
+  { key: 'clinics', label: 'Clinicas' },
+  { key: 'users', label: 'Usuarios' },
+  { key: 'scans', label: 'Scans' },
+  { key: 'cases', label: 'Tratamentos' },
+  { key: 'labItems', label: 'Laboratorio' },
+]
 
 // In Supabase mode, collaborator onboarding via link is for operational profiles only (no admin).
 const INVITE_ROLE_LIST: Role[] = ['dentist_admin', 'dentist_client', 'clinic_client', 'lab_tech', 'receptionist']
@@ -93,6 +105,53 @@ function downloadFile(fileName: string, content: string, mime = 'text/plain') {
   URL.revokeObjectURL(url)
 }
 
+function prettifyFieldLabel(key: string) {
+  return key
+    .replace(/\./g, ' / ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function flattenForReport(value: unknown, prefix = '', output: Record<string, unknown> = {}) {
+  if (value == null) {
+    if (prefix) output[prefix] = ''
+    return output
+  }
+  if (Array.isArray(value)) {
+    output[prefix] = value
+      .map((item) => {
+        if (item == null) return ''
+        if (typeof item === 'object') return JSON.stringify(item)
+        return String(item)
+      })
+      .join(' | ')
+    return output
+  }
+  if (typeof value !== 'object') {
+    output[prefix] = value
+    return output
+  }
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    const nextPrefix = prefix ? `${prefix}.${key}` : key
+    if (item != null && typeof item === 'object' && !Array.isArray(item)) {
+      flattenForReport(item, nextPrefix, output)
+      continue
+    }
+    flattenForReport(item, nextPrefix, output)
+  }
+  return output
+}
+
+function createdAtDate(input: Record<string, unknown>) {
+  const value = input.createdAt ?? input.created_at
+  if (typeof value !== 'string' || !value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed
+}
+
 function mapProfilesToUsers(profiles: Awaited<ReturnType<typeof listProfiles>>): User[] {
   return profiles
     .filter((profile) => profile.deleted_at == null)
@@ -145,6 +204,11 @@ export default function SettingsPage() {
   }, [db.users, isSupabaseMode, supabaseUsers])
 
   const [mainTab, setMainTab] = useState<MainTab>('registration')
+  const [reportModalOpen, setReportModalOpen] = useState(false)
+  const [reportDataset, setReportDataset] = useState<ReportDatasetKey>('patients')
+  const [reportStartDate, setReportStartDate] = useState('')
+  const [reportEndDate, setReportEndDate] = useState('')
+  const [selectedReportFields, setSelectedReportFields] = useState<string[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [modalTab, setModalTab] = useState<ModalTab>('personal')
@@ -408,6 +472,82 @@ export default function SettingsPage() {
     return dentistOptions.filter((dentist) => (dentist.clinicId ? dentist.clinicId === form.linkedClinicId : true))
   }, [dentistOptions, form.linkedClinicId, form.role])
 
+  const reportRows = useMemo<Record<string, unknown>[]>(() => {
+    const byDataset: Record<ReportDatasetKey, Record<string, unknown>[]> = {
+      patients: db.patients as unknown as Record<string, unknown>[],
+      dentists: db.dentists as unknown as Record<string, unknown>[],
+      clinics: db.clinics as unknown as Record<string, unknown>[],
+      users: users as unknown as Record<string, unknown>[],
+      scans: db.scans as unknown as Record<string, unknown>[],
+      cases: db.cases as unknown as Record<string, unknown>[],
+      labItems: db.labItems as unknown as Record<string, unknown>[],
+    }
+    return byDataset[reportDataset] ?? []
+  }, [db.cases, db.clinics, db.dentists, db.labItems, db.patients, db.scans, reportDataset, users])
+
+  const reportFieldOptions = useMemo<ReportFieldOption[]>(() => {
+    const keys = new Set<string>()
+    reportRows.forEach((row) => {
+      const flattened = flattenForReport(row)
+      Object.keys(flattened).forEach((key) => keys.add(key))
+    })
+    return Array.from(keys)
+      .sort((a, b) => a.localeCompare(b))
+      .map((key) => ({ key, label: prettifyFieldLabel(key) }))
+  }, [reportRows])
+
+  useEffect(() => {
+    setSelectedReportFields((current) => {
+      const allowed = new Set(reportFieldOptions.map((item) => item.key))
+      const valid = current.filter((key) => allowed.has(key))
+      if (valid.length > 0) return valid
+      const preferred = ['id', 'name', 'fullName', 'email', 'createdAt']
+      const defaults = preferred.filter((key) => allowed.has(key))
+      if (defaults.length > 0) return defaults
+      return reportFieldOptions.slice(0, 8).map((item) => item.key)
+    })
+  }, [reportFieldOptions])
+
+  const exportReport = () => {
+    if (!selectedReportFields.length) {
+      addToast({ type: 'error', title: 'Selecione ao menos um campo para exportar.' })
+      return
+    }
+    if (reportStartDate && reportEndDate && reportStartDate > reportEndDate) {
+      addToast({ type: 'error', title: 'A data inicial deve ser menor ou igual a data final.' })
+      return
+    }
+    const startDate = reportStartDate ? new Date(`${reportStartDate}T00:00:00`) : null
+    const endDate = reportEndDate ? new Date(`${reportEndDate}T23:59:59`) : null
+    const filteredRows = reportRows.filter((row) => {
+      if (!startDate && !endDate) return true
+      const created = createdAtDate(row)
+      if (!created) return false
+      if (startDate && created < startDate) return false
+      if (endDate && created > endDate) return false
+      return true
+    })
+    if (!filteredRows.length) {
+      addToast({ type: 'error', title: 'Nenhum registro encontrado para os filtros selecionados.' })
+      return
+    }
+    const headers = selectedReportFields
+    const table = [
+      headers.map((field) => prettifyFieldLabel(field)),
+      ...filteredRows.map((row) => {
+        const flattened = flattenForReport(row)
+        return headers.map((field) => String(flattened[field] ?? ''))
+      }),
+    ]
+    const worksheet = XLSX.utils.aoa_to_sheet(table)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Relatorio')
+    const datasetLabel = REPORT_DATASETS.find((item) => item.key === reportDataset)?.label ?? reportDataset
+    const fileName = `relatorio_${datasetLabel.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`
+    XLSX.writeFile(workbook, fileName)
+    addToast({ type: 'success', title: `Relatorio gerado com ${filteredRows.length} registro(s).` })
+  }
+
   return (
     <AppShell breadcrumb={['Inicio', 'Configuracoes']}>
       <section>
@@ -562,10 +702,49 @@ export default function SettingsPage() {
 
       {mainTab === 'system_update' ? <section className="mt-4 space-y-4">
         <Card><h2 className="text-lg font-semibold text-slate-900">Backup</h2><div className="mt-3"><Button onClick={exportBackup}>Gerar backup</Button></div></Card>
+        <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Relatorios</h2><p className="mt-1 text-sm text-slate-500">Exporte os dados com selecao de campos e periodo de criacao.</p></div><Button onClick={() => setReportModalOpen(true)}>Abrir gerador de relatorio</Button></Card>
         {DATA_MODE === 'local' ? <Card><h2 className="text-lg font-semibold text-slate-900">Dados locais</h2><div className="mt-3"><Button variant="ghost" className="text-red-700" onClick={() => { resetDb('empty'); clearSession(); window.location.reload() }}>Limpar dados locais</Button></div></Card> : null}
       </section> : null}
 
       {mainTab === 'system_diagnostics' ? <section className="mt-4"><Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Diagnostico do sistema</h2><p className="mt-1 text-sm text-slate-500">Checklist automatico de recursos e dados.</p></div><Link to="/app/settings/diagnostics" className="inline-flex"><Button>Abrir diagnostico</Button></Link></Card></section> : null}
+
+      {reportModalOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 px-3 sm:px-4">
+        <Card className="w-full max-w-5xl overflow-hidden p-0">
+          <div className="flex items-center justify-between bg-brand-500 px-5 py-4 text-white">
+            <h2 className="text-lg font-semibold">Gerar relatorio</h2>
+            <button type="button" className="text-xl leading-none text-white/90 hover:text-white" onClick={() => setReportModalOpen(false)} aria-label="Fechar">x</button>
+          </div>
+          <div className="space-y-4 p-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div><label className="mb-1 block text-sm font-medium text-slate-700">Base de dados</label><select value={reportDataset} onChange={(event) => setReportDataset(event.target.value as ReportDatasetKey)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{REPORT_DATASETS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></div>
+              <div><label className="mb-1 block text-sm font-medium text-slate-700">Data inicial (criacao)</label><Input type="date" value={reportStartDate} onChange={(event) => setReportStartDate(event.target.value)} /></div>
+              <div><label className="mb-1 block text-sm font-medium text-slate-700">Data final (criacao)</label><Input type="date" value={reportEndDate} onChange={(event) => setReportEndDate(event.target.value)} /></div>
+            </div>
+            <div className="rounded-lg border border-slate-200 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-base font-semibold text-slate-900">Selecione os campos desejados</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setSelectedReportFields(reportFieldOptions.map((item) => item.key))}>Selecionar todos</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedReportFields([])}>Limpar</Button>
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">{selectedReportFields.length} campo(s) selecionado(s)</p>
+              <div className="mt-4 max-h-[48vh] overflow-auto rounded-lg border border-slate-200 p-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {reportFieldOptions.map((field) => <label key={field.key} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm text-slate-700 hover:bg-slate-50">
+                    <input type="checkbox" checked={selectedReportFields.includes(field.key)} onChange={(event) => setSelectedReportFields((current) => event.target.checked ? [...current, field.key] : current.filter((item) => item !== field.key))} />
+                    <span>{field.label}</span>
+                  </label>)}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setReportModalOpen(false)}>Fechar</Button>
+              <Button onClick={exportReport}>Exportar planilha</Button>
+            </div>
+          </div>
+        </Card>
+      </div> : null}
 
       {modalOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
         <Card className="w-full max-w-3xl">

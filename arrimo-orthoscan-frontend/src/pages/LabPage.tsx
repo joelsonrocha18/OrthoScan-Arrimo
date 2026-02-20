@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useToast } from '../app/ToastProvider'
 import RegisterDeliveryLotModal from '../components/cases/RegisterDeliveryLotModal'
 import LabBoard from '../components/lab/LabBoard'
@@ -126,9 +126,13 @@ export default function LabPage() {
   const [advanceTarget, setAdvanceTarget] = useState<LabItem | null>(null)
   const [advanceUpperQty, setAdvanceUpperQty] = useState('1')
   const [advanceLowerQty, setAdvanceLowerQty] = useState('1')
+  const labSyncSignature = `${db.cases.map((item) => item.updatedAt).join('|')}::${db.labItems.map((item) => item.updatedAt).join('|')}`
+
+  useEffect(() => {
+    listLabItems()
+  }, [labSyncSignature])
 
   const items = useMemo(() => {
-    listLabItems()
     return [...listLabItemsForUser(db, currentUser)].sort((a, b) => a.dueDate.localeCompare(b.dueDate))
   }, [db, currentUser])
   const caseById = useMemo(() => new Map(db.cases.map((item) => [item.id, item])), [db.cases])
@@ -385,14 +389,14 @@ export default function LabPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Laboratório</h1>
           <p className="mt-2 text-sm text-slate-500">Fila de produção e entregas</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
           {canWrite ? (
-            <Button variant="secondary" onClick={() => setDeliveryOpen(true)}>
+            <Button className="w-full sm:w-auto" variant="secondary" onClick={() => setDeliveryOpen(true)}>
               Registrar entrega ao profissional
             </Button>
           ) : null}
           {canWrite ? (
-            <Button onClick={() => setModal({ open: true, mode: 'create', item: null })}>Nova Solicitação</Button>
+            <Button className="w-full sm:w-auto" onClick={() => setModal({ open: true, mode: 'create', item: null })}>Nova Solicitação</Button>
           ) : null}
         </div>
       </section>
@@ -425,7 +429,7 @@ export default function LabPage() {
       ) : null}
 
       <section className="mt-6">
-        <div className="mb-3 flex flex-wrap gap-2">
+        <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
           <Button variant={boardTab === 'esteira' ? 'primary' : 'secondary'} onClick={() => setBoardTab('esteira')}>
             Esteira
           </Button>
@@ -593,6 +597,7 @@ export default function LabPage() {
             addToast({ type: 'error', title: 'Entrega de lote', message: 'Caso não encontrado.' })
             return
           }
+          const caseTotals = getCaseTotalsByArch(caseItem)
           const selectedIsRework = isReworkItem(selectedReadyItem) || isReworkProductionItem(selectedReadyItem)
           const upperQty = Math.max(0, Math.trunc(payload.upperQty))
           const lowerQty = Math.max(0, Math.trunc(payload.lowerQty))
@@ -612,16 +617,16 @@ export default function LabPage() {
           }
           if (!selectedIsRework && upperQty > 0) {
             const range = nextRangeByArch(caseItem, 'superior', upperQty)
-            if (range.toTray > caseItem.totalTrays) {
-              addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade superior excede o total do caso (${caseItem.totalTrays}).` })
+            if (range.toTray > caseTotals.upper) {
+              addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade superior excede o total da arcada superior (${caseTotals.upper}).` })
               return
             }
             ops.push({ arch: 'superior', ...range })
           }
           if (!selectedIsRework && lowerQty > 0) {
             const range = nextRangeByArch(caseItem, 'inferior', lowerQty)
-            if (range.toTray > caseItem.totalTrays) {
-              addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade inferior excede o total do caso (${caseItem.totalTrays}).` })
+            if (range.toTray > caseTotals.lower) {
+              addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade inferior excede o total da arcada inferior (${caseTotals.lower}).` })
               return
             }
             ops.push({ arch: 'inferior', ...range })
@@ -700,3 +705,4 @@ export default function LabPage() {
     </AppShell>
   )
 }
+

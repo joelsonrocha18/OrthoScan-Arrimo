@@ -11,12 +11,31 @@ type MonitoringEvent = {
 const webhookUrl = (import.meta.env.VITE_MONITORING_WEBHOOK_URL as string | undefined)?.trim()
 const release = (import.meta.env.VITE_RELEASE as string | undefined)?.trim()
 
+function isDiscordWebhook(url: string) {
+  return /discord\.com\/api\/webhooks\//i.test(url)
+}
+
+function buildDiscordPayload(event: MonitoringEvent) {
+  const title = event.type === 'error' ? 'Erro capturado' : 'Promise rejeitada'
+  const lines = [
+    `OrthoScan Monitor - ${title}`,
+    `Mensagem: ${event.message}`,
+    `URL: ${event.url}`,
+    `Release: ${event.release ?? 'n/a'}`,
+    `Timestamp: ${event.ts}`,
+  ]
+  return {
+    content: lines.join('\n'),
+  }
+}
+
 function sendMonitoringEvent(event: MonitoringEvent) {
   if (!webhookUrl) return
+  const payload = isDiscordWebhook(webhookUrl) ? buildDiscordPayload(event) : event
   void fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(event),
+    body: JSON.stringify(payload),
     keepalive: true,
   }).catch(() => {
     // Avoid throwing from the monitoring path.
@@ -53,4 +72,3 @@ export function initMonitoring() {
     sendMonitoringEvent(payload)
   })
 }
-

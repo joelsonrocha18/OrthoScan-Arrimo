@@ -8,6 +8,7 @@ import type { User } from '../types/User'
 import type { Clinic } from '../types/Clinic'
 import type { AuditLog } from '../types/Audit'
 import { emitDbChanged } from '../lib/events'
+import { DATA_MODE } from './dataMode'
 import { EXTRA_SLOTS, INTRA_SLOTS } from '../mocks/photoSlots'
 
 export const DB_KEY = 'arrimo_orthoscan_db_v1'
@@ -484,6 +485,7 @@ function readPersistedMode(): 'full' | 'empty' | null {
 }
 
 function effectiveSeedMode(): 'full' | 'empty' {
+  if (DATA_MODE === 'supabase') return 'empty'
   return readPersistedMode() ?? SEED_MODE
 }
 
@@ -1030,9 +1032,17 @@ export function ensureSeed() {
   try {
     const normalized = applyHotfixResetJoelsonTreatment(normalizeDb(JSON.parse(raw) as unknown))
     if (mode === 'empty') {
+      const mastersOnly = normalized.users.filter((user) => user.role === 'master_admin')
       const nextDb: AppDb = {
-        ...normalized,
-        users: ensureMasterUser(normalized.users.length === 0 ? seedUsers() : normalized.users),
+        cases: [],
+        labItems: [],
+        patients: [],
+        patientDocuments: [],
+        scans: [],
+        dentists: [],
+        clinics: [],
+        users: ensureMasterUser(mastersOnly.length === 0 ? seedUsers() : mastersOnly),
+        auditLogs: [],
       }
       localStorage.setItem(DB_KEY, JSON.stringify(nextDb))
       return nextDb

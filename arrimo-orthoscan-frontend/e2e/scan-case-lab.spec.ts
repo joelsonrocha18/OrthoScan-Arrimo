@@ -10,8 +10,8 @@ test('scan to case to lab flow', async ({ page }) => {
   await page.getByRole('button', { name: 'Criar Caso' }).nth(1).click()
 
   await expect(page).toHaveURL(/\/app\/cases\//)
-  await expect(page.getByText('Queixa do paciente:')).toBeVisible()
-  await expect(page.getByText('Orientação do dentista:')).toBeVisible()
+  await expect(page.getByText(/Queixa do paciente:/i)).toBeVisible()
+  await expect(page.getByText(/Orienta.*do dentista:/i)).toBeVisible()
   await expect(page.getByText('Queixa A')).toBeVisible()
   await expect(page.getByText('Orientacao A')).toBeVisible()
 

@@ -39,8 +39,7 @@ describe('DB migration and soft-delete', () => {
   it('keeps soft-deleted patients retrievable with includeDeleted', () => {
     const created = createPatient({
       name: 'Paciente Soft',
-      createdAt: '',
-      updatedAt: '',
+      birthDate: '1990-01-01',
     } as never)
 
     expect(created.ok).toBe(true)

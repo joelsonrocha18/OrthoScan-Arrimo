@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import InternalChatWidget from '../components/InternalChatWidget'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../components/Topbar'
@@ -11,12 +11,19 @@ type AppShellProps = {
 
 export default function AppShell({ breadcrumb, children }: AppShellProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [location.pathname])
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <Sidebar onLogout={() => navigate('/login', { replace: true })} />
+      {sidebarOpen ? <button type="button" aria-label="Fechar menu" className="fixed inset-0 z-40 bg-slate-900/50 md:hidden" onClick={() => setSidebarOpen(false)} /> : null}
+      <Sidebar isOpen={sidebarOpen} onCloseMobile={() => setSidebarOpen(false)} onLogout={() => navigate('/login', { replace: true })} />
       <div className="md:pl-64">
-        <Topbar breadcrumb={breadcrumb} />
+        <Topbar breadcrumb={breadcrumb} onMenuToggle={() => setSidebarOpen((current) => !current)} />
         <main className="px-4 py-6 sm:px-6">{children}</main>
         <InternalChatWidget />
       </div>

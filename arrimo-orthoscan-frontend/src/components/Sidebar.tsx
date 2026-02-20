@@ -7,10 +7,12 @@ import { useDb } from '../lib/useDb'
 import Button from './Button'
 
 type SidebarProps = {
+  isOpen: boolean
+  onCloseMobile: () => void
   onLogout: () => void
 }
 
-export default function Sidebar({ onLogout }: SidebarProps) {
+export default function Sidebar({ isOpen, onCloseMobile, onLogout }: SidebarProps) {
   const { db } = useDb()
   const currentUser = getCurrentUser(db)
   const handleLogout = async () => {
@@ -34,7 +36,12 @@ export default function Sidebar({ onLogout }: SidebarProps) {
   ]
 
   return (
-    <aside className="w-full border-b border-slate-700 bg-slate-900 text-slate-100 md:fixed md:inset-y-0 md:left-0 md:w-64 md:border-b-0 md:border-r">
+    <aside
+      className={[
+        'fixed inset-y-0 left-0 z-50 w-[82vw] max-w-72 border-r border-slate-700 bg-slate-900 text-slate-100 transition-transform duration-200 md:z-30 md:w-64',
+        isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+      ].join(' ')}
+    >
       <div className="flex h-full flex-col">
         <div className="border-b border-slate-700 px-6 py-6">
           <img
@@ -51,6 +58,7 @@ export default function Sidebar({ onLogout }: SidebarProps) {
               <NavLink
                 key={item.to}
                 to={item.to}
+                onClick={onCloseMobile}
                 className={({ isActive }) =>
                   [
                     'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition',
