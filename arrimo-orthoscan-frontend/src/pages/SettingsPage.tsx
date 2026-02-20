@@ -11,9 +11,9 @@ import Card from '../components/Card'
 import Input from '../components/Input'
 import WhatsappLink from '../components/WhatsappLink'
 import { DATA_MODE } from '../data/dataMode'
-import { DB_KEY, resetDb } from '../data/db'
+import { DB_KEY } from '../data/db'
 import AppShell from '../layouts/AppShell'
-import { clearSession, getCurrentUser } from '../lib/auth'
+import { getCurrentUser } from '../lib/auth'
 import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
 import { formatCnpj, isValidCnpj } from '../lib/cnpj'
 import { formatFixedPhone, formatMobilePhone, isValidFixedPhone, isValidMobilePhone } from '../lib/phone'
@@ -703,7 +703,6 @@ export default function SettingsPage() {
       {mainTab === 'system_update' ? <section className="mt-4 space-y-4">
         <Card><h2 className="text-lg font-semibold text-slate-900">Backup</h2><div className="mt-3"><Button onClick={exportBackup}>Gerar backup</Button></div></Card>
         <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Relatorios</h2><p className="mt-1 text-sm text-slate-500">Exporte os dados com selecao de campos e periodo de criacao.</p></div><Button onClick={() => setReportModalOpen(true)}>Abrir gerador de relatorio</Button></Card>
-        {DATA_MODE === 'local' ? <Card><h2 className="text-lg font-semibold text-slate-900">Dados locais</h2><div className="mt-3"><Button variant="ghost" className="text-red-700" onClick={() => { resetDb('empty'); clearSession(); window.location.reload() }}>Limpar dados locais</Button></div></Card> : null}
       </section> : null}
 
       {mainTab === 'system_diagnostics' ? <section className="mt-4"><Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Diagnostico do sistema</h2><p className="mt-1 text-sm text-slate-500">Checklist automatico de recursos e dados.</p></div><Link to="/app/settings/diagnostics" className="inline-flex"><Button>Abrir diagnostico</Button></Link></Card></section> : null}
