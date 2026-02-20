@@ -485,6 +485,7 @@ function readPersistedMode(): 'full' | 'empty' | null {
 }
 
 function effectiveSeedMode(): 'full' | 'empty' {
+  if (import.meta.env.MODE === 'test') return readPersistedMode() ?? 'full'
   if (DATA_MODE === 'supabase') return 'empty'
   return readPersistedMode() ?? SEED_MODE
 }

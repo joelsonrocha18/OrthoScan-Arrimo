@@ -141,12 +141,12 @@ export function makeE2ESeedDb() {
       { id: 'qa_clinic_2', tradeName: 'Clinica Sul', legalName: 'Clinica Sul LTDA', cnpj: '55444333000110', isActive: true, createdAt: ts, updatedAt: ts },
     ],
     users: [
-      { id: 'qa_user_master', name: 'Master QA', email: 'master.qa@local', role: 'master_admin', isActive: true, createdAt: ts, updatedAt: ts },
-      { id: 'qa_user_admin', name: 'Admin QA', email: 'admin.qa@local', role: 'dentist_admin', isActive: true, createdAt: ts, updatedAt: ts },
-      { id: 'qa_user_dentist_client', name: 'Dentista Cliente QA', email: 'dentist.client.qa@local', role: 'dentist_client', linkedDentistId: 'qa_dent_1', isActive: true, createdAt: ts, updatedAt: ts },
-      { id: 'qa_user_clinic_client', name: 'Clinica Cliente QA', email: 'clinic.client.qa@local', role: 'clinic_client', linkedClinicId: 'qa_clinic_1', isActive: true, createdAt: ts, updatedAt: ts },
-      { id: 'qa_user_lab', name: 'Lab QA', email: 'lab.qa@local', role: 'lab_tech', isActive: true, createdAt: ts, updatedAt: ts },
-      { id: 'qa_user_reception', name: 'Recepcao QA', email: 'reception.qa@local', role: 'receptionist', isActive: true, createdAt: ts, updatedAt: ts },
+      { id: 'qa_user_master', name: 'Master QA', email: 'master.qa@local', password: '123456', role: 'master_admin', isActive: true, createdAt: ts, updatedAt: ts },
+      { id: 'qa_user_admin', name: 'Admin QA', email: 'admin.qa@local', password: '123456', role: 'dentist_admin', isActive: true, createdAt: ts, updatedAt: ts },
+      { id: 'qa_user_dentist_client', name: 'Dentista Cliente QA', email: 'dentist.client.qa@local', password: '123456', role: 'dentist_client', linkedDentistId: 'qa_dent_1', isActive: true, createdAt: ts, updatedAt: ts },
+      { id: 'qa_user_clinic_client', name: 'Clinica Cliente QA', email: 'clinic.client.qa@local', password: '123456', role: 'clinic_client', linkedClinicId: 'qa_clinic_1', isActive: true, createdAt: ts, updatedAt: ts },
+      { id: 'qa_user_lab', name: 'Lab QA', email: 'lab.qa@local', password: '123456', role: 'lab_tech', isActive: true, createdAt: ts, updatedAt: ts },
+      { id: 'qa_user_reception', name: 'Recepcao QA', email: 'reception.qa@local', password: '123456', role: 'receptionist', isActive: true, createdAt: ts, updatedAt: ts },
     ],
   }
 }

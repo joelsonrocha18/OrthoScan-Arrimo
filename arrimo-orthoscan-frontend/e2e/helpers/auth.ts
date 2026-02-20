@@ -23,14 +23,8 @@ export async function loginAs(page: Page, userId: string) {
 
   await page.goto('/login')
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible()
-
-  const select = page.locator('select')
-  if (await select.count()) {
-    await select.selectOption(userId)
-  } else {
-    await page.getByLabel('Email').fill(emailById[userId])
-    await page.getByLabel('Senha').fill('123456')
-  }
+  await page.getByLabel(/usuario|email/i).fill(emailById[userId])
+  await page.getByLabel(/senha/i).fill('123456')
 
   await page.getByRole('button', { name: 'Entrar' }).click()
   await expect(page).toHaveURL(/\/app\/dashboard/)

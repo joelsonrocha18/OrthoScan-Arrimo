@@ -1,4 +1,4 @@
-import { loadDb, saveDb, type AppDb } from '../data/db'
+import { loadDb, resetDb, saveDb, type AppDb } from '../data/db'
 import type { Case } from '../types/Case'
 import type { Clinic } from '../types/Clinic'
 import type { DentistClinic } from '../types/DentistClinic'
@@ -65,7 +65,7 @@ export function clearQaSeed() {
 }
 
 export function seedQaData() {
-  const db = loadDb()
+  const db = resetDb('full')
   removeQaData(db)
 
   const ts = nowIso()
