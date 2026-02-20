@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
@@ -9,17 +9,61 @@ import AppShell from '../layouts/AppShell'
 import { useDb } from '../lib/useDb'
 import { can } from '../auth/permissions'
 import { getCurrentUser } from '../lib/auth'
+import { DATA_MODE } from '../data/dataMode'
+import { supabase } from '../lib/supabaseClient'
+import type { Clinic } from '../types/Clinic'
+
+function mapSupabaseClinic(row: Record<string, unknown>): Clinic {
+  return {
+    id: String(row.id ?? ''),
+    tradeName: String(row.trade_name ?? ''),
+    legalName: (row.legal_name as string | null) ?? undefined,
+    cnpj: (row.cnpj as string | null) ?? undefined,
+    phone: (row.phone as string | null) ?? undefined,
+    whatsapp: (row.whatsapp as string | null) ?? undefined,
+    email: (row.email as string | null) ?? undefined,
+    address: (row.address as Clinic['address'] | null) ?? undefined,
+    notes: (row.notes as string | null) ?? undefined,
+    isActive: Boolean(row.is_active ?? true),
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+    updatedAt: String(row.updated_at ?? new Date().toISOString()),
+    deletedAt: (row.deleted_at as string | null) ?? undefined,
+  }
+}
 
 export default function ClinicsPage() {
   const { db } = useDb()
+  const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'clinics.write')
   const [query, setQuery] = useState('')
   const [showDeleted, setShowDeleted] = useState(false)
+  const [supabaseClinics, setSupabaseClinics] = useState<Clinic[]>([])
+
+  useEffect(() => {
+    let active = true
+    if (!isSupabaseMode || !supabase) {
+      setSupabaseClinics([])
+      return
+    }
+
+    ;(async () => {
+      const { data } = await supabase
+        .from('clinics')
+        .select('id, trade_name, legal_name, cnpj, phone, whatsapp, email, address, notes, is_active, created_at, updated_at, deleted_at')
+      if (!active) return
+      setSupabaseClinics((data ?? []).map((row) => mapSupabaseClinic(row as Record<string, unknown>)))
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
 
   const clinics = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return [...db.clinics]
+    const source = isSupabaseMode ? supabaseClinics : db.clinics
+    return [...source]
       .filter((clinic) => (showDeleted ? true : !clinic.deletedAt))
       .filter((clinic) => {
         if (!q) return true
@@ -32,7 +76,7 @@ export default function ClinicsPage() {
         )
       })
       .sort((a, b) => a.tradeName.localeCompare(b.tradeName))
-  }, [db.clinics, query, showDeleted])
+  }, [db.clinics, isSupabaseMode, query, showDeleted, supabaseClinics])
 
   return (
     <AppShell breadcrumb={['Inicio', 'Clinicas']}>
