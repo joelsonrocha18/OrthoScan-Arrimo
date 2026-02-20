@@ -6,13 +6,19 @@ function dentistIdsForClinic(db: AppDb, clinicId?: string) {
   return new Set(db.dentists.filter((item) => item.type === 'dentista' && item.clinicId === clinicId).map((item) => item.id))
 }
 
+function resolveClinicScope(user: User | null) {
+  if (!user?.linkedClinicId) return undefined
+  if (user.role === 'master_admin') return undefined
+  return user.linkedClinicId
+}
+
 export function listPatientsForUser(db: AppDb, user: User | null) {
   if (!user) return []
   if (user.role === 'dentist_client') {
     return db.patients.filter((patient) => patient.primaryDentistId === user.linkedDentistId)
   }
-  if (user.role === 'clinic_client') {
-    const clinicId = user.linkedClinicId
+  const clinicId = resolveClinicScope(user)
+  if (clinicId) {
     const dentistIds = dentistIdsForClinic(db, clinicId)
     const patientsByClinic = db.patients.filter((patient) => patient.clinicId === clinicId)
     const patientsByDentist = db.patients.filter((patient) => patient.primaryDentistId && dentistIds.has(patient.primaryDentistId))
@@ -32,11 +38,12 @@ export function listScansForUser(db: AppDb, user: User | null) {
         scan.requestedByDentistId === user.linkedDentistId,
     )
   }
-  if (user.role === 'clinic_client') {
+  const clinicId = resolveClinicScope(user)
+  if (clinicId) {
     const patientIds = new Set(listPatientsForUser(db, user).map((item) => item.id))
     return db.scans.filter(
       (scan) =>
-        scan.clinicId === user.linkedClinicId ||
+        scan.clinicId === clinicId ||
         (scan.patientId && patientIds.has(scan.patientId)),
     )
   }
@@ -54,11 +61,12 @@ export function listCasesForUser(db: AppDb, user: User | null) {
         caseItem.requestedByDentistId === user.linkedDentistId,
     )
   }
-  if (user.role === 'clinic_client') {
+  const clinicId = resolveClinicScope(user)
+  if (clinicId) {
     const patientIds = new Set(listPatientsForUser(db, user).map((item) => item.id))
     return db.cases.filter(
       (caseItem) =>
-        caseItem.clinicId === user.linkedClinicId ||
+        caseItem.clinicId === clinicId ||
         (caseItem.patientId && patientIds.has(caseItem.patientId)),
     )
   }
@@ -67,7 +75,7 @@ export function listCasesForUser(db: AppDb, user: User | null) {
 
 export function listLabItemsForUser(db: AppDb, user: User | null) {
   if (!user) return []
-  if (user.role === 'dentist_client' || user.role === 'clinic_client') {
+  if (user.role === 'dentist_client' || resolveClinicScope(user)) {
     const allowedCases = new Set(listCasesForUser(db, user).map((item) => item.id))
     return db.labItems.filter((item) => item.caseId && allowedCases.has(item.caseId))
   }
