@@ -1,30 +1,46 @@
+import { Suspense, lazy, useEffect, useState } from 'react'
+import type { ReactElement } from 'react'
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './app/ProtectedRoute'
 import { ToastProvider } from './app/ToastProvider'
-import CaseDetailPage from './pages/CaseDetailPage'
-import CasesPage from './pages/CasesPage'
-import DashboardPage from './pages/DashboardPage'
-import DentistDetailPage from './pages/DentistDetailPage'
-import DentistsPage from './pages/DentistsPage'
-import ClinicDetailPage from './pages/ClinicDetailPage'
-import ClinicsPage from './pages/ClinicsPage'
-import DiagnosticsPage from './pages/DiagnosticsPage'
-import MigrationPage from './pages/MigrationPage'
-import LabPage from './pages/LabPage'
-import HelpPage from './pages/HelpPage'
-import LoginPage from './pages/LoginPage'
-import LegalLgpdPage from './pages/LegalLgpdPage'
-import LegalPrivacyPage from './pages/LegalPrivacyPage'
-import LegalTermsPage from './pages/LegalTermsPage'
-import OnboardingInvitePage from './pages/OnboardingInvitePage'
-import ResetPasswordPage from './pages/ResetPasswordPage'
-import PatientDetailPage from './pages/PatientDetailPage'
-import PatientsPage from './pages/PatientsPage'
-import ScansPage from './pages/ScansPage'
-import SettingsPage from './pages/SettingsPage'
-import { useEffect, useState } from 'react'
 import { getAuthProvider } from './auth/authProvider'
 import { applyStoredTheme } from './lib/systemSettings'
+
+const CaseDetailPage = lazy(() => import('./pages/CaseDetailPage'))
+const CasesPage = lazy(() => import('./pages/CasesPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const DentistDetailPage = lazy(() => import('./pages/DentistDetailPage'))
+const DentistsPage = lazy(() => import('./pages/DentistsPage'))
+const ClinicDetailPage = lazy(() => import('./pages/ClinicDetailPage'))
+const ClinicsPage = lazy(() => import('./pages/ClinicsPage'))
+const DiagnosticsPage = lazy(() => import('./pages/DiagnosticsPage'))
+const MigrationPage = lazy(() => import('./pages/MigrationPage'))
+const LabPage = lazy(() => import('./pages/LabPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const LegalLgpdPage = lazy(() => import('./pages/LegalLgpdPage'))
+const LegalPrivacyPage = lazy(() => import('./pages/LegalPrivacyPage'))
+const LegalTermsPage = lazy(() => import('./pages/LegalTermsPage'))
+const OnboardingInvitePage = lazy(() => import('./pages/OnboardingInvitePage'))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
+const PatientDetailPage = lazy(() => import('./pages/PatientDetailPage'))
+const PatientsPage = lazy(() => import('./pages/PatientsPage'))
+const ScansPage = lazy(() => import('./pages/ScansPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+
+function RouteLoader() {
+  return (
+    <div className="min-h-screen bg-slate-50 px-4 py-10">
+      <div className="mx-auto max-w-5xl rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+        Carregando pagina...
+      </div>
+    </div>
+  )
+}
+
+function withSuspense(element: ReactElement) {
+  return <Suspense fallback={<RouteLoader />}>{element}</Suspense>
+}
 
 function RootRedirect() {
   const [loading, setLoading] = useState(true)
@@ -65,48 +81,48 @@ export default function App() {
       <Router>
         <Routes>
           <Route path="/" element={<RootRedirect />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/legal/privacy" element={<LegalPrivacyPage />} />
-          <Route path="/legal/terms" element={<LegalTermsPage />} />
-          <Route path="/legal/lgpd" element={<LegalLgpdPage />} />
-          <Route path="/complete-signup" element={<OnboardingInvitePage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/login" element={withSuspense(<LoginPage />)} />
+          <Route path="/legal/privacy" element={withSuspense(<LegalPrivacyPage />)} />
+          <Route path="/legal/terms" element={withSuspense(<LegalTermsPage />)} />
+          <Route path="/legal/lgpd" element={withSuspense(<LegalLgpdPage />)} />
+          <Route path="/complete-signup" element={withSuspense(<OnboardingInvitePage />)} />
+          <Route path="/reset-password" element={withSuspense(<ResetPasswordPage />)} />
           <Route element={<ProtectedRoute permission="dashboard.read" />}>
-            <Route path="/app/dashboard" element={<DashboardPage />} />
+            <Route path="/app/dashboard" element={withSuspense(<DashboardPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="scans.read" />}>
-            <Route path="/app/scans" element={<ScansPage />} />
+            <Route path="/app/scans" element={withSuspense(<ScansPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="cases.read" />}>
-            <Route path="/app/cases" element={<CasesPage />} />
-            <Route path="/app/cases/:id" element={<CaseDetailPage />} />
+            <Route path="/app/cases" element={withSuspense(<CasesPage />)} />
+            <Route path="/app/cases/:id" element={withSuspense(<CaseDetailPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="dentists.read" />}>
-            <Route path="/app/dentists" element={<DentistsPage />} />
-            <Route path="/app/dentists/:id" element={<DentistDetailPage />} />
+            <Route path="/app/dentists" element={withSuspense(<DentistsPage />)} />
+            <Route path="/app/dentists/:id" element={withSuspense(<DentistDetailPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="clinics.read" />}>
-            <Route path="/app/clinics" element={<ClinicsPage />} />
-            <Route path="/app/clinics/:id" element={<ClinicDetailPage />} />
+            <Route path="/app/clinics" element={withSuspense(<ClinicsPage />)} />
+            <Route path="/app/clinics/:id" element={withSuspense(<ClinicDetailPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="patients.read" />}>
-            <Route path="/app/patients" element={<PatientsPage />} />
-            <Route path="/app/patients/:id" element={<PatientDetailPage />} />
+            <Route path="/app/patients" element={withSuspense(<PatientsPage />)} />
+            <Route path="/app/patients/:id" element={withSuspense(<PatientDetailPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="lab.read" />}>
-            <Route path="/app/lab" element={<LabPage />} />
+            <Route path="/app/lab" element={withSuspense(<LabPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="dashboard.read" />}>
-            <Route path="/app/help" element={<HelpPage />} />
+            <Route path="/app/help" element={withSuspense(<HelpPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="settings.read" />}>
-            <Route path="/app/settings" element={<SettingsPage />} />
+            <Route path="/app/settings" element={withSuspense(<SettingsPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="settings.read" />}>
-            <Route path="/app/settings/diagnostics" element={<DiagnosticsPage />} />
+            <Route path="/app/settings/diagnostics" element={withSuspense(<DiagnosticsPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="settings.write" />}>
-            <Route path="/app/settings/migration" element={<MigrationPage />} />
+            <Route path="/app/settings/migration" element={withSuspense(<MigrationPage />)} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

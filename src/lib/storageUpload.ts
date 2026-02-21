@@ -1,4 +1,5 @@
 import { DATA_MODE } from '../data/dataMode'
+import { logger } from './logger'
 import { supabase } from './supabaseClient'
 
 type UploadScope = 'scans' | 'patient-docs'
@@ -41,13 +42,34 @@ export async function uploadFileToStorage(
     contentType: file.type || 'application/octet-stream',
   })
   if (upload.error) {
-    console.error('Falha ao enviar arquivo para storage:', upload.error.message)
+    logger.error(
+      'Falha ao enviar arquivo para storage.',
+      {
+        scope: params.scope,
+        clinicId: params.clinicId,
+        ownerId: params.ownerId,
+        fileName: file.name,
+        fileType: file.type,
+        path,
+      },
+      upload.error,
+    )
     return null
   }
 
   const signed = await storage.createSignedUrl(path, 60 * 60 * 24 * 30)
   if (signed.error || !signed.data?.signedUrl) {
-    console.error('Falha ao gerar URL assinada:', signed.error?.message)
+    logger.error(
+      'Falha ao gerar URL assinada para arquivo no storage.',
+      {
+        scope: params.scope,
+        clinicId: params.clinicId,
+        ownerId: params.ownerId,
+        fileName: file.name,
+        path,
+      },
+      signed.error,
+    )
     return null
   }
 

@@ -10,7 +10,7 @@ import { addAttachment, clearCaseScanFileError, deleteCase, getCase, markCaseSca
 import { addLabItem, generateLabOrder } from '../data/labRepo'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
-import { EXTRA_SLOTS, INTRA_SLOTS } from '../mocks/photoSlots'
+import { slotLabel as getPhotoSlotLabel } from '../lib/photoSlots'
 import type { Case, CasePhase, CaseTray, TrayState } from '../types/Case'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
@@ -54,8 +54,6 @@ const scanArchLabelMap: Record<'superior' | 'inferior' | 'mordida', string> = {
   inferior: 'Inferior',
   mordida: 'Mordida',
 }
-
-const slotLabelMap = Object.fromEntries([...INTRA_SLOTS, ...EXTRA_SLOTS].map((slot) => [slot.id, slot.label]))
 
 function caseProgress(total: number, delivered: number) {
   const safeDelivered = Math.max(0, Math.min(delivered, total))
@@ -187,8 +185,7 @@ function fileAvailability(item: NonNullable<Case['scanFiles']>[number]) {
 }
 
 function slotLabel(slotId?: string) {
-  if (!slotId) return 'Sem slot'
-  return slotLabelMap[slotId] ?? slotId
+  return getPhotoSlotLabel(slotId)
 }
 
 function formatBrlCurrencyInput(raw: string) {

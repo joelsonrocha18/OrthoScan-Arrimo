@@ -9,15 +9,29 @@ import type { Clinic } from '../types/Clinic'
 import type { AuditLog } from '../types/Audit'
 import { emitDbChanged } from '../lib/events'
 import { DATA_MODE } from './dataMode'
-import { EXTRA_SLOTS, INTRA_SLOTS } from '../mocks/photoSlots'
 
 export const DB_KEY = 'arrimo_orthoscan_db_v1'
 const DB_MODE_KEY = 'arrimo_orthoscan_seed_mode_v1'
 const HOTFIX_RESET_JOELSON_TREATMENT_KEY = 'arrimo_hotfix_reset_joelson_treatment_v1'
 const HOTFIX_RESET_JOELSON_TARGET = 'JOELSON DOS ANJOS ROCHA'
-const SEED_MODE = ((import.meta.env.VITE_LOCAL_SEED as string | undefined) ?? 'full') as 'full' | 'empty'
-const MASTER_EMAIL = (import.meta.env.VITE_LOCAL_MASTER_EMAIL as string | undefined)?.trim()
-const LOCAL_DEFAULT_PASSWORD = (import.meta.env.VITE_LOCAL_PASSWORD as string | undefined)?.trim()
+const SEED_MODE: 'full' | 'empty' = 'empty'
+const MASTER_EMAIL: string | undefined = undefined
+const LOCAL_DEFAULT_PASSWORD: string | undefined = undefined
+const FULL_DEMO_INTRA_SLOTS = [
+  'intra_frontal',
+  'intra_lateral_dir',
+  'intra_lateral_esq',
+  'intra_oclusal_sup',
+  'intra_oclusal_inf',
+]
+const FULL_DEMO_EXTRA_SLOTS = [
+  'extra_face_frontal',
+  'extra_face_lateral_dir',
+  'extra_face_lateral_esq',
+  'extra_diagonal_dir',
+  'extra_diagonal_esq',
+  'extra_sorriso_frontal',
+]
 
 export type AppDb = {
   cases: Case[]
@@ -501,21 +515,21 @@ function fullDemoAttachments(): ScanAttachment[] {
     { id: 'scan_full_001_setup', name: 'setup.project', kind: 'projeto', isLocal: false, status: 'ok', attachedAt: createdAt, createdAt },
   ]
 
-  const intra = INTRA_SLOTS.map((slot, index) => ({
+  const intra = FULL_DEMO_INTRA_SLOTS.map((slotId, index) => ({
     id: `scan_full_001_intra_${index + 1}`,
-    name: `${slot.id}.jpg`,
-    kind: slot.kind,
-    slotId: slot.id,
+    name: `${slotId}.jpg`,
+    kind: 'foto_intra' as const,
+    slotId,
     isLocal: false,
     status: 'ok' as const,
     attachedAt: createdAt,
     createdAt,
   }))
-  const extra = EXTRA_SLOTS.map((slot, index) => ({
+  const extra = FULL_DEMO_EXTRA_SLOTS.map((slotId, index) => ({
     id: `scan_full_001_extra_${index + 1}`,
-    name: `${slot.id}.jpg`,
-    kind: slot.kind,
-    slotId: slot.id,
+    name: `${slotId}.jpg`,
+    kind: 'foto_extra' as const,
+    slotId,
     isLocal: false,
     status: 'ok' as const,
     attachedAt: createdAt,

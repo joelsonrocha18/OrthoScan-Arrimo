@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { EXTRA_SLOTS, INTRA_SLOTS } from '../../mocks/photoSlots'
 import { DATA_MODE } from '../../data/dataMode'
+import { buildPhotoSlotsFromItems, loadDevPhotoSlots, mergePhotoSlots } from '../../lib/photoSlots'
 import type { Scan, ScanArch, ScanAttachment } from '../../types/Scan'
+import type { PhotoSlot } from '../../types/Scan'
 import Button from '../Button'
 import Card from '../Card'
 import ImageCaptureInput from '../files/ImageCaptureInput'
@@ -98,6 +99,7 @@ export default function ScanModal({
   const [error, setError] = useState('')
   const [setPrimaryDentist, setSetPrimaryDentist] = useState(false)
   const [draftId, setDraftId] = useState('')
+  const [devPhotoSlots, setDevPhotoSlots] = useState<PhotoSlot[]>([])
 
   useEffect(() => {
     if (!open) return
@@ -127,6 +129,17 @@ export default function ScanModal({
     setDraftId(`draft_${Date.now()}`)
   }, [open, mode, initialScan])
 
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    let active = true
+    void loadDevPhotoSlots().then((slots) => {
+      if (active) setDevPhotoSlots(slots)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
   const stlWarning = useMemo(() => {
     const hasSup = form.attachments.some((item) => item.kind === 'scan3d' && item.arch === 'superior')
     const hasInf = form.attachments.some((item) => item.kind === 'scan3d' && item.arch === 'inferior')
@@ -135,6 +148,19 @@ export default function ScanModal({
     if (form.arch === 'ambos' && (!hasSup || !hasInf)) return 'Falta arquivo 3D superior e/ou inferior.'
     return ''
   }, [form.arch, form.attachments])
+
+  const availablePhotoSlots = useMemo(
+    () => mergePhotoSlots(buildPhotoSlotsFromItems(form.attachments), devPhotoSlots),
+    [devPhotoSlots, form.attachments],
+  )
+  const intraSlots = useMemo(
+    () => availablePhotoSlots.filter((slot) => slot.kind === 'foto_intra'),
+    [availablePhotoSlots],
+  )
+  const extraSlots = useMemo(
+    () => availablePhotoSlots.filter((slot) => slot.kind === 'foto_extra'),
+    [availablePhotoSlots],
+  )
 
   useEffect(() => {
     if (!form.patientId || !form.dentistId) return
@@ -570,12 +596,20 @@ export default function ScanModal({
 
         <div className="mt-4 rounded-xl border border-slate-200 p-4">
           <h3 className="text-sm font-semibold text-slate-900">Fotos Intraorais</h3>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{INTRA_SLOTS.map((slot) => renderPhotoSlot(slot))}</div>
+          {intraSlots.length > 0 ? (
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{intraSlots.map((slot) => renderPhotoSlot(slot))}</div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">Nenhum slot intraoral disponivel neste ambiente.</p>
+          )}
         </div>
 
         <div className="mt-4 rounded-xl border border-slate-200 p-4">
           <h3 className="text-sm font-semibold text-slate-900">Fotos Extraorais</h3>
-          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{EXTRA_SLOTS.map((slot) => renderPhotoSlot(slot))}</div>
+          {extraSlots.length > 0 ? (
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{extraSlots.map((slot) => renderPhotoSlot(slot))}</div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">Nenhum slot extraoral disponivel neste ambiente.</p>
+          )}
         </div>
 
         <div className="mt-4 rounded-xl border border-slate-200 p-4">

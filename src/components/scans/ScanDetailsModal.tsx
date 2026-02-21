@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { EXTRA_SLOTS, INTRA_SLOTS } from '../../mocks/photoSlots'
+import { buildPhotoSlotsFromItems, loadDevPhotoSlots, mergePhotoSlots } from '../../lib/photoSlots'
 import type { Scan, ScanAttachment } from '../../types/Scan'
+import type { PhotoSlot } from '../../types/Scan'
 import Badge from '../Badge'
 import Button from '../Button'
 import Card from '../Card'
@@ -74,6 +75,32 @@ export default function ScanDetailsModal({
   const [note, setNote] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [errorModal, setErrorModal] = useState<{ id: string; reason: string } | null>(null)
+  const [devPhotoSlots, setDevPhotoSlots] = useState<PhotoSlot[]>([])
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    let active = true
+    void loadDevPhotoSlots().then((slots) => {
+      if (active) setDevPhotoSlots(slots)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const availablePhotoSlots = useMemo(
+    () => mergePhotoSlots(buildPhotoSlotsFromItems(scan?.attachments ?? []), devPhotoSlots),
+    [devPhotoSlots, scan?.attachments],
+  )
+  const intraSlots = useMemo(
+    () => availablePhotoSlots.filter((slot) => slot.kind === 'foto_intra'),
+    [availablePhotoSlots],
+  )
+  const extraSlots = useMemo(
+    () => availablePhotoSlots.filter((slot) => slot.kind === 'foto_extra'),
+    [availablePhotoSlots],
+  )
+
   const grouped = useMemo(() => {
     const files = scan?.attachments ?? []
     return {
@@ -82,8 +109,8 @@ export default function ScanDetailsModal({
         inferior: files.filter((item) => item.kind === 'scan3d' && item.arch === 'inferior'),
         mordida: files.filter((item) => item.kind === 'scan3d' && item.arch === 'mordida'),
       },
-      intra: INTRA_SLOTS.map((slot) => ({ slot, files: files.filter((item) => item.kind === 'foto_intra' && item.slotId === slot.id) })),
-      extra: EXTRA_SLOTS.map((slot) => ({ slot, files: files.filter((item) => item.kind === 'foto_extra' && item.slotId === slot.id) })),
+      intra: intraSlots.map((slot) => ({ slot, files: files.filter((item) => item.kind === 'foto_intra' && item.slotId === slot.id) })),
+      extra: extraSlots.map((slot) => ({ slot, files: files.filter((item) => item.kind === 'foto_extra' && item.slotId === slot.id) })),
       rx: {
         panoramica: files.filter((item) => item.rxType === 'panoramica'),
         teleradiografia: files.filter((item) => item.rxType === 'teleradiografia'),
@@ -92,7 +119,7 @@ export default function ScanDetailsModal({
       planejamento: files.filter((item) => item.kind === 'projeto'),
       outros: files.filter((item) => item.kind === 'outro'),
     }
-  }, [scan?.attachments])
+  }, [extraSlots, intraSlots, scan?.attachments])
 
   if (!open || !scan) return null
 
@@ -274,7 +301,7 @@ export default function ScanDetailsModal({
                 <label className="mb-1 block text-sm font-medium text-slate-700">Slot intraoral</label>
                 <select value={slotId} onChange={(event) => setSlotId(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">
                   <option value="">Selecione</option>
-                  {INTRA_SLOTS.map((slot) => (
+                  {intraSlots.map((slot) => (
                     <option key={slot.id} value={slot.id}>
                       {slot.label}
                     </option>
@@ -288,7 +315,7 @@ export default function ScanDetailsModal({
                 <label className="mb-1 block text-sm font-medium text-slate-700">Slot extraoral</label>
                 <select value={slotId} onChange={(event) => setSlotId(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">
                   <option value="">Selecione</option>
-                  {EXTRA_SLOTS.map((slot) => (
+                  {extraSlots.map((slot) => (
                     <option key={slot.id} value={slot.id}>
                       {slot.label}
                     </option>
