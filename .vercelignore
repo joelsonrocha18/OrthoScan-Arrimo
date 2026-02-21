@@ -1,32 +1,18 @@
-# Root ignore for Vercel CLI deploys in this repo.
-# The actual app lives in `arrimo-orthoscan-frontend/` and contains big local artifacts.
-arrimo-orthoscan-frontend/node_modules
-arrimo-orthoscan-frontend/**/node_modules
-arrimo-orthoscan-frontend/desktop-dist
-arrimo-orthoscan-frontend/dist
-arrimo-orthoscan-frontend/test-results
-arrimo-orthoscan-frontend/reports
-arrimo-orthoscan-frontend/playwright-report
-arrimo-orthoscan-frontend/coverage
-arrimo-orthoscan-frontend/.vercel
-arrimo-orthoscan-frontend/.env
-arrimo-orthoscan-frontend/.env.*
-arrimo-orthoscan-frontend/*.log
-arrimo-orthoscan-frontend/dev.log
-arrimo-orthoscan-frontend/dev-live.log
-
+# Vercel uploads files from the project root directory.
+# Ignore local-only artifacts to avoid exceeding upload limits.
 node_modules
 **/node_modules
-desktop-dist
-**/desktop-dist
+.git
+.vercel
 dist
-**/dist
+desktop-dist
 test-results
 reports
 playwright-report
 coverage
-.git
+*.log
+dev.log
+dev-live.log
 .env
 .env.*
-*.log
 !.env.example
