@@ -53,6 +53,7 @@ export function createPatient(payload: Omit<Patient, 'id' | 'createdAt' | 'updat
     birthDate: payload.birthDate,
     address: payload.address,
     primaryDentistId: payload.primaryDentistId,
+    clinicId: payload.clinicId,
     notes: payload.notes,
     createdAt: now,
     updatedAt: now,

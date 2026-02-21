@@ -214,6 +214,7 @@ export default function SettingsPage() {
   const [modalTab, setModalTab] = useState<ModalTab>('personal')
   const [showPassword, setShowPassword] = useState(false)
   const [passwordMode, setPasswordMode] = useState<PasswordMode>('auto')
+  const [submittingUser, setSubmittingUser] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({ name: '', username: '', email: '', password: '', cpf: '', cep: '', birthDate: '', phone: '', whatsapp: '', street: '', number: '', district: '', city: '', state: '', addressLine: '', role: 'receptionist' as Role, isActive: true, linkedDentistId: '', linkedClinicId: '', sendAccessEmail: true })
   const [cepStatus, setCepStatus] = useState('')
@@ -310,120 +311,127 @@ export default function SettingsPage() {
   }
 
   const submitUser = async () => {
+    if (submittingUser) return
+    setSubmittingUser(true)
     setError(null)
 
-    let submitAccessToken = ''
-    if (isSupabaseMode) {
-      if (!supabase) return setError('Supabase nao configurado.')
-      const { data, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError) {
-        setError('Sessao expirada. Saia e entre novamente.')
-        return
+    try {
+      let submitAccessToken = ''
+      if (isSupabaseMode) {
+        if (!supabase) return setError('Supabase nao configurado.')
+        const { data, error: sessionError } = await supabase.auth.getSession()
+        if (sessionError) {
+          setError('Sessao expirada. Saia e entre novamente.')
+          return
+        }
+        submitAccessToken = data.session?.access_token ?? ''
+        console.info('[settings-users] submit session snapshot', {
+          hasSession: Boolean(data.session),
+          tokenLength: submitAccessToken.length,
+          expiresAt: data.session?.expires_at ?? null,
+          userId: data.session?.user?.id ?? null,
+        })
+        if (!submitAccessToken) {
+          setError('Sessao expirada. Saia e entre novamente.')
+          return
+        }
       }
-      submitAccessToken = data.session?.access_token ?? ''
-      console.info('[settings-users] submit session snapshot', {
-        hasSession: Boolean(data.session),
-        tokenLength: submitAccessToken.length,
-        expiresAt: data.session?.expires_at ?? null,
-        userId: data.session?.user?.id ?? null,
-      })
-      if (!submitAccessToken) {
-        setError('Sessao expirada. Saia e entre novamente.')
-        return
-      }
-    }
 
-    if (isSupabaseMode && !editingUser) {
-      if (!form.name.trim()) return setError('Nome e obrigatorio.')
-      if (!form.email.trim()) return setError('Email e obrigatorio.')
-      if (!form.password.trim()) return setError('Senha e obrigatoria.')
-      if (form.password.trim().length < 8) return setError('Senha deve ter no minimo 8 caracteres.')
+      if (isSupabaseMode && !editingUser) {
+        if (!form.name.trim()) return setError('Nome e obrigatorio.')
+        if (!form.email.trim()) return setError('Email e obrigatorio.')
+        if (!form.password.trim()) return setError('Senha e obrigatoria.')
+        if (form.password.trim().length < 8) return setError('Senha deve ter no minimo 8 caracteres.')
+        if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
+        if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
+        if (!INVITE_ROLE_LIST.includes(form.role)) {
+          return setError('Perfil nao permitido para criacao neste modo.')
+        }
+        if (ROLE_REQUIRES_CLINIC.includes(form.role) && !form.linkedClinicId.trim()) {
+          return setError('Clinica vinculada e obrigatoria para este perfil.')
+        }
+        if (form.role === 'dentist_client' && !form.linkedDentistId.trim()) {
+          return setError('Dentista responsavel e obrigatorio para perfil Dentista Cliente.')
+        }
+        const result = await inviteUser({
+          email: form.email.trim(),
+          role: form.role,
+          clinicId: form.linkedClinicId || clinicOptions[0]?.id || '',
+          dentistId: form.linkedDentistId || undefined,
+          fullName: form.name.trim() || undefined,
+          password: form.password.trim(),
+          cpf: form.cpf.trim() || undefined,
+          phone: form.whatsapp.trim() || undefined,
+          accessToken: submitAccessToken,
+        })
+        if (!result.ok) {
+          if (result.code === 'unauthorized') return setError('Sessao expirada. Saia e entre novamente.')
+          if (result.code === 'forbidden') return setError('Sem permissao para criar usuarios.')
+          if (result.code === 'network_error') return setError(result.error)
+          return setError(result.error)
+        }
+        await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
+        setModalOpen(false)
+        addToast({ type: 'success', title: 'Usuario criado', message: 'Acesso liberado com email e senha cadastrados.' })
+        return
+      }
+
+      if (isSupabaseMode && editingUser) {
+        if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
+        if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
+        const result = await updateProfile(editingUser.id, {
+          full_name: form.name.trim() || null,
+          cpf: form.cpf.trim() || null,
+          phone: form.whatsapp.trim() || null,
+          role: form.role,
+          clinic_id: form.linkedClinicId.trim() || null,
+          dentist_id: form.linkedDentistId.trim() || null,
+          is_active: form.isActive,
+        })
+        if (!result.ok) return setError(result.error)
+        await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
+        setModalOpen(false)
+        if (currentUser?.id === editingUser.id) {
+          await getAuthProvider().getCurrentUser()
+        }
+        addToast({ type: 'success', title: 'Usuario atualizado' })
+        return
+      }
+
+      if (!form.name.trim() || !form.email.trim()) return setError('Nome e email sao obrigatorios.')
+      if (!editingUser && !form.password.trim()) return setError('Senha e obrigatoria para novo usuario.')
       if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
       if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
-      if (!INVITE_ROLE_LIST.includes(form.role)) {
-        return setError('Perfil nao permitido para criacao neste modo.')
-      }
-      if (ROLE_REQUIRES_CLINIC.includes(form.role) && !form.linkedClinicId.trim()) {
-        return setError('Clinica vinculada e obrigatoria para este perfil.')
-      }
-      if (form.role === 'dentist_client' && !form.linkedDentistId.trim()) {
-        return setError('Dentista responsavel e obrigatorio para perfil Dentista Cliente.')
-      }
-      const result = await inviteUser({
+      const basePayload = {
+        name: form.name.trim(),
+        username: form.username.trim() || undefined,
         email: form.email.trim(),
-        role: form.role,
-        clinicId: form.linkedClinicId || clinicOptions[0]?.id || '',
-        dentistId: form.linkedDentistId || undefined,
-        fullName: form.name.trim() || undefined,
-        password: form.password.trim(),
         cpf: form.cpf.trim() || undefined,
-        phone: form.whatsapp.trim() || undefined,
-        accessToken: submitAccessToken,
-      })
-      if (!result.ok) {
-        if (result.code === 'unauthorized') return setError('Sessao expirada. Saia e entre novamente.')
-        if (result.code === 'forbidden') return setError('Sem permissao para criar usuarios.')
-        return setError(result.error)
-      }
-      await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
-      setModalOpen(false)
-      addToast({ type: 'success', title: 'Usuario criado', message: 'Acesso liberado com email e senha cadastrados.' })
-      return
-    }
-
-    if (isSupabaseMode && editingUser) {
-      if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
-      if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
-      const result = await updateProfile(editingUser.id, {
-        full_name: form.name.trim() || null,
-        cpf: form.cpf.trim() || null,
-        phone: form.whatsapp.trim() || null,
+        cep: form.cep.trim() || undefined,
+        birthDate: form.birthDate || undefined,
+        phone: form.phone.trim() || undefined,
+        whatsapp: form.whatsapp.trim() || undefined,
+        addressLine: composeAddressLine({
+          street: form.street,
+          number: form.number,
+          district: form.district,
+          city: form.city,
+          state: form.state,
+        }) || undefined,
         role: form.role,
-        clinic_id: form.linkedClinicId.trim() || null,
-        dentist_id: form.linkedDentistId.trim() || null,
-        is_active: form.isActive,
-      })
-      if (!result.ok) return setError(result.error)
-      await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
-      setModalOpen(false)
-      if (currentUser?.id === editingUser.id) {
-        await getAuthProvider().getCurrentUser()
+        isActive: form.isActive,
+        linkedDentistId: form.linkedDentistId || undefined,
+        linkedClinicId: form.linkedClinicId || undefined,
       }
-      addToast({ type: 'success', title: 'Usuario atualizado' })
-      return
+      const result = editingUser
+        ? updateUser(editingUser.id, { ...basePayload, ...(form.password.trim() ? { password: form.password.trim() } : {}) })
+        : createUser({ ...basePayload, password: form.password.trim() })
+      if (!result.ok) return setError(result.error)
+      setModalOpen(false)
+      addToast({ type: 'success', title: editingUser ? 'Usuario atualizado' : 'Usuario criado' })
+    } finally {
+      setSubmittingUser(false)
     }
-
-    if (!form.name.trim() || !form.email.trim()) return setError('Nome e email sao obrigatorios.')
-    if (!editingUser && !form.password.trim()) return setError('Senha e obrigatoria para novo usuario.')
-    if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
-    if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
-    const basePayload = {
-      name: form.name.trim(),
-      username: form.username.trim() || undefined,
-      email: form.email.trim(),
-      cpf: form.cpf.trim() || undefined,
-      cep: form.cep.trim() || undefined,
-      birthDate: form.birthDate || undefined,
-      phone: form.phone.trim() || undefined,
-      whatsapp: form.whatsapp.trim() || undefined,
-      addressLine: composeAddressLine({
-        street: form.street,
-        number: form.number,
-        district: form.district,
-        city: form.city,
-        state: form.state,
-      }) || undefined,
-      role: form.role,
-      isActive: form.isActive,
-      linkedDentistId: form.linkedDentistId || undefined,
-      linkedClinicId: form.linkedClinicId || undefined,
-    }
-    const result = editingUser
-      ? updateUser(editingUser.id, { ...basePayload, ...(form.password.trim() ? { password: form.password.trim() } : {}) })
-      : createUser({ ...basePayload, password: form.password.trim() })
-    if (!result.ok) return setError(result.error)
-    setModalOpen(false)
-    addToast({ type: 'success', title: editingUser ? 'Usuario atualizado' : 'Usuario criado' })
   }
 
   const linkage = (user: User) => {
@@ -805,7 +813,7 @@ export default function SettingsPage() {
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={submitUser}>Salvar</Button>
+            <Button onClick={submitUser} disabled={submittingUser}>{submittingUser ? 'Salvando...' : 'Salvar'}</Button>
           </div>
         </Card>
       </div> : null}

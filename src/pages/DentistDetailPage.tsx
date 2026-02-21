@@ -12,6 +12,8 @@ import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
 import { formatFixedPhone, formatMobilePhone, isValidFixedPhone, isValidMobilePhone } from '../lib/phone'
 import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
+import { DATA_MODE } from '../data/dataMode'
+import { supabase } from '../lib/supabaseClient'
 
 type DentistForm = {
   name: string
@@ -82,18 +84,99 @@ export default function DentistDetailPage() {
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'dentists.write')
   const canDelete = can(currentUser, 'dentists.delete')
+  const isSupabaseMode = DATA_MODE === 'supabase'
   const isNew = params.id === 'new'
-  const existing = useMemo(
+  const localExisting = useMemo(
     () => (!isNew && params.id ? getDentist(params.id) : null),
     [isNew, params.id],
   )
+  const [supabaseExisting, setSupabaseExisting] = useState<DentistClinic | null>(null)
+  const [loadingExisting, setLoadingExisting] = useState(false)
+  const existing = isSupabaseMode ? supabaseExisting : localExisting
 
   const [form, setForm] = useState<DentistForm>(emptyForm)
   const [error, setError] = useState('')
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
 
-  const clinics = useMemo(() => db.clinics.filter((item) => !item.deletedAt), [db.clinics])
+  const [supabaseClinics, setSupabaseClinics] = useState<Array<{ id: string; tradeName: string }>>([])
+  const clinics = useMemo(
+    () => (isSupabaseMode ? supabaseClinics : db.clinics.filter((item) => !item.deletedAt)),
+    [db.clinics, isSupabaseMode, supabaseClinics],
+  )
+
+  useEffect(() => {
+    if (!isSupabaseMode || !supabase) return
+    let active = true
+    void (async () => {
+      const { data } = await supabase.from('clinics').select('id, trade_name, deleted_at').is('deleted_at', null)
+      if (!active) return
+      setSupabaseClinics(
+        ((data ?? []) as Array<{ id: string; trade_name?: string }>).map((row) => ({
+          id: row.id,
+          tradeName: row.trade_name ?? '-',
+        })),
+      )
+    })()
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
+
+  useEffect(() => {
+    if (!isSupabaseMode || !supabase || isNew || !params.id) {
+      setSupabaseExisting(null)
+      setLoadingExisting(false)
+      return
+    }
+    let active = true
+    setLoadingExisting(true)
+    void (async () => {
+      const { data, error } = await supabase
+        .from('dentists')
+        .select('id, name, cro, gender, clinic_id, phone, whatsapp, email, is_active, deleted_at, created_at, updated_at, data')
+        .eq('id', params.id)
+        .maybeSingle()
+      if (!active) return
+      if (error || !data) {
+        setSupabaseExisting(null)
+        setLoadingExisting(false)
+        return
+      }
+      const rowData = data.data && typeof data.data === 'object' ? (data.data as Record<string, unknown>) : {}
+      const address = rowData.address && typeof rowData.address === 'object'
+        ? (rowData.address as Record<string, unknown>)
+        : {}
+      setSupabaseExisting({
+        id: String(data.id),
+        type: 'dentista',
+        name: String(data.name ?? ''),
+        cro: (data.cro as string | null) ?? undefined,
+        gender: data.gender === 'feminino' ? 'feminino' : 'masculino',
+        clinicId: (data.clinic_id as string | null) ?? undefined,
+        phone: (data.phone as string | null) ?? undefined,
+        whatsapp: (data.whatsapp as string | null) ?? undefined,
+        email: (data.email as string | null) ?? undefined,
+        address: {
+          cep: (address.cep as string | undefined) ?? undefined,
+          street: (address.street as string | undefined) ?? undefined,
+          number: (address.number as string | undefined) ?? undefined,
+          district: (address.district as string | undefined) ?? undefined,
+          city: (address.city as string | undefined) ?? undefined,
+          state: (address.state as string | undefined) ?? undefined,
+        },
+        notes: (rowData.notes as string | undefined) ?? undefined,
+        isActive: (data.is_active as boolean | null) ?? true,
+        createdAt: (data.created_at as string | undefined) ?? new Date().toISOString(),
+        updatedAt: (data.updated_at as string | undefined) ?? new Date().toISOString(),
+        deletedAt: (data.deleted_at as string | null) ?? undefined,
+      })
+      setLoadingExisting(false)
+    })()
+    return () => {
+      active = false
+    }
+  }, [isNew, isSupabaseMode, params.id])
 
   useEffect(() => {
     if (!existing) {
@@ -142,7 +225,17 @@ export default function DentistDetailPage() {
   const namePrefix = form.gender === 'feminino' ? 'Dra.' : 'Dr.'
   const headerName = form.name.trim() ? `${namePrefix} ${form.name.trim()}` : ''
 
-  if (!isNew && !existing) {
+  if (!isNew && loadingExisting) {
+    return (
+      <AppShell breadcrumb={['Inicio', 'Dentistas']}>
+        <Card>
+          <h1 className="text-xl font-semibold text-slate-900">Carregando registro...</h1>
+        </Card>
+      </AppShell>
+    )
+  }
+
+  if (!isNew && !existing && !loadingExisting) {
     return (
       <AppShell breadcrumb={['Inicio', 'Dentistas']}>
         <Card>
@@ -155,7 +248,7 @@ export default function DentistDetailPage() {
     )
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canWrite) {
       setError('Sem permissao para editar dentistas.')
       return
@@ -194,6 +287,47 @@ export default function DentistDetailPage() {
       isActive: form.isActive,
     }
 
+    if (isSupabaseMode && supabase) {
+      const supabasePayload = {
+        name: payload.name,
+        cro: payload.cro ?? null,
+        gender: payload.gender,
+        clinic_id: payload.clinicId ?? null,
+        phone: payload.phone ?? null,
+        whatsapp: payload.whatsapp ?? null,
+        email: payload.email ?? null,
+        is_active: payload.isActive,
+        data: {
+          address: payload.address ?? null,
+          notes: payload.notes ?? null,
+        },
+      }
+      if (isNew) {
+        const { data, error: createError } = await supabase
+          .from('dentists')
+          .insert(supabasePayload)
+          .select('id')
+          .single()
+        if (createError || !data?.id) {
+          setError(createError?.message ?? 'Falha ao criar dentista.')
+          return
+        }
+        navigate(`/app/dentists/${data.id as string}`, { replace: true })
+        return
+      }
+      if (!existing) return
+      const { error: updateError } = await supabase
+        .from('dentists')
+        .update({ ...supabasePayload, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      if (updateError) {
+        setError(updateError.message)
+        return
+      }
+      setError('')
+      return
+    }
+
     if (isNew) {
       const result = createDentist({
         ...payload,
@@ -216,27 +350,52 @@ export default function DentistDetailPage() {
     setError('')
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!existing) return
     if (!canDelete) return
     const confirmed = window.confirm('Tem certeza que deseja excluir?')
     if (!confirmed) return
-    const result = softDeleteDentist(existing.id)
-    if (!result.ok) {
-      setError(result.error)
-      return
+    if (isSupabaseMode && supabase) {
+      const { error: deleteError } = await supabase
+        .from('dentists')
+        .update({ deleted_at: new Date().toISOString(), is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      if (deleteError) {
+        setError(deleteError.message)
+        return
+      }
+    } else {
+      const result = softDeleteDentist(existing.id)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
     }
     setError('')
     navigate('/app/dentists', { replace: true })
   }
 
-  const handleRestore = () => {
+  const handleRestore = async () => {
     if (!existing) return
     if (!canDelete) return
-    const result = restoreDentist(existing.id)
-    if (!result.ok) {
-      setError(result.error)
-      return
+    if (isSupabaseMode && supabase) {
+      const { error: restoreError } = await supabase
+        .from('dentists')
+        .update({ deleted_at: null, is_active: true, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      if (restoreError) {
+        setError(restoreError.message)
+        return
+      }
+      setSupabaseExisting((current) =>
+        current ? { ...current, deletedAt: undefined, isActive: true } : current,
+      )
+    } else {
+      const result = restoreDentist(existing.id)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
     }
     setError('')
   }

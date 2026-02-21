@@ -153,21 +153,36 @@ export async function inviteUser(payload: {
     phone: payload.phone,
   }
   const callInvite = async (token: string) => {
-    const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/invite-user`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${anonKey}`,
-        'x-user-jwt': token,
-        'Content-Type': 'application/json',
-        apikey: anonKey,
-      },
-      body: JSON.stringify({ ...requestBodyBase, userJwt: token }),
-    })
-    const raw = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; code?: string; message?: string } | null
-    return { response, raw }
+    try {
+      const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/invite-user`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${anonKey}`,
+          'x-user-jwt': token,
+          'Content-Type': 'application/json',
+          apikey: anonKey,
+        },
+        body: JSON.stringify({ ...requestBodyBase, userJwt: token }),
+      })
+      const raw = (await response.json().catch(() => null)) as { ok?: boolean; error?: string; code?: string; message?: string } | null
+      return { response, raw, networkError: '' }
+    } catch (error) {
+      return {
+        response: null,
+        raw: null,
+        networkError: error instanceof Error ? error.message : String(error),
+      }
+    }
   }
 
   let first = await callInvite(accessToken)
+  if (!first.response) {
+    return {
+      ok: false as const,
+      error: `Falha de rede/CORS ao chamar invite-user. Verifique ALLOWED_ORIGIN e tente novamente. Detalhe: ${first.networkError}`,
+      code: 'network_error',
+    }
+  }
   const firstMessage = (first.raw?.error ?? first.raw?.message ?? '').toLowerCase()
   const shouldRetry =
     first.response.status === 401 ||
@@ -179,6 +194,13 @@ export async function inviteUser(payload: {
     const refreshedToken = refreshed.session?.access_token ?? ''
     if (!refreshError && refreshedToken) {
       first = await callInvite(refreshedToken)
+    }
+  }
+  if (!first.response) {
+    return {
+      ok: false as const,
+      error: `Falha de rede/CORS ao chamar invite-user. Verifique ALLOWED_ORIGIN e tente novamente. Detalhe: ${first.networkError}`,
+      code: 'network_error',
     }
   }
 

@@ -1047,17 +1047,11 @@ export function ensureSeed() {
   try {
     const normalized = applyHotfixResetJoelsonTreatment(normalizeDb(JSON.parse(raw) as unknown))
     if (mode === 'empty') {
-      const mastersOnly = normalized.users.filter((user) => user.role === 'master_admin')
+      // In Supabase mode we keep local cache untouched to avoid wiping
+      // records used by local UI state between route transitions.
       const nextDb: AppDb = {
-        cases: [],
-        labItems: [],
-        patients: [],
-        patientDocuments: [],
-        scans: [],
-        dentists: [],
-        clinics: [],
-        users: ensureMasterUser(mastersOnly.length === 0 ? seedUsers() : mastersOnly),
-        auditLogs: [],
+        ...normalized,
+        users: ensureMasterUser(normalized.users.length === 0 ? seedUsers() : normalized.users),
       }
       localStorage.setItem(DB_KEY, JSON.stringify(nextDb))
       return nextDb

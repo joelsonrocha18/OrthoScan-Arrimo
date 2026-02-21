@@ -28,6 +28,8 @@ import { updateCase } from '../data/caseRepo'
 import { getCurrentUser } from '../lib/auth'
 import DocumentsList from '../components/documents/DocumentsList'
 import { validatePatientDocFile } from '../repo/storageRepo'
+import { DATA_MODE } from '../data/dataMode'
+import { supabase } from '../lib/supabaseClient'
 
 type PatientForm = {
   name: string
@@ -116,8 +118,12 @@ export default function PatientDetailPage() {
   const isExternalUser = currentUser?.role === 'dentist_client' || currentUser?.role === 'clinic_client'
   const canDocsWrite = can(currentUser, 'docs.write')
   const canDocsAdmin = currentUser?.role === 'master_admin' || currentUser?.role === 'dentist_admin' || currentUser?.role === 'receptionist'
+  const isSupabaseMode = DATA_MODE === 'supabase'
   const isNew = params.id === 'new'
-  const existing = useMemo(() => (!isNew && params.id ? getPatient(params.id) : null), [isNew, params.id])
+  const localExisting = useMemo(() => (!isNew && params.id ? getPatient(params.id) : null), [isNew, params.id])
+  const [supabaseExisting, setSupabaseExisting] = useState<Patient | null>(null)
+  const [loadingExisting, setLoadingExisting] = useState(false)
+  const existing = isSupabaseMode ? supabaseExisting : localExisting
   const scopedPatients = useMemo(() => listPatientsForUser(db, currentUser), [db, currentUser])
 
   const [form, setForm] = useState<PatientForm>(emptyForm)
@@ -129,9 +135,112 @@ export default function PatientDetailPage() {
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
 
-  const dentists = useMemo(() => db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt), [db.dentists])
-  const clinics = useMemo(() => db.clinics.filter((item) => !item.deletedAt), [db.clinics])
+  const [supabaseDentists, setSupabaseDentists] = useState<Array<{
+    id: string
+    name: string
+    gender?: 'masculino' | 'feminino'
+    whatsapp?: string
+    clinicId?: string
+  }>>([])
+  const [supabaseClinics, setSupabaseClinics] = useState<Array<{ id: string; tradeName: string }>>([])
+  const dentists = useMemo(
+    () =>
+      isSupabaseMode
+        ? supabaseDentists
+        : db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt),
+    [db.dentists, isSupabaseMode, supabaseDentists],
+  )
+  const clinics = useMemo(
+    () => (isSupabaseMode ? supabaseClinics : db.clinics.filter((item) => !item.deletedAt)),
+    [db.clinics, isSupabaseMode, supabaseClinics],
+  )
   const [docs, setDocs] = useState<PatientDocument[]>([])
+
+  useEffect(() => {
+    if (!isSupabaseMode || !supabase) return
+    let active = true
+    void (async () => {
+      const [clinicsRes, dentistsRes] = await Promise.all([
+        supabase.from('clinics').select('id, trade_name, deleted_at').is('deleted_at', null),
+        supabase.from('dentists').select('id, name, gender, whatsapp, clinic_id, deleted_at').is('deleted_at', null),
+      ])
+      if (!active) return
+      setSupabaseClinics(
+        ((clinicsRes.data ?? []) as Array<{ id: string; trade_name?: string }>).map((row) => ({
+          id: row.id,
+          tradeName: row.trade_name ?? '-',
+        })),
+      )
+      setSupabaseDentists(
+        ((dentistsRes.data ?? []) as Array<{ id: string; name?: string; gender?: string; whatsapp?: string; clinic_id?: string }>).map((row) => ({
+          id: row.id,
+          name: row.name ?? '-',
+          gender: row.gender === 'feminino' ? 'feminino' : 'masculino',
+          whatsapp: row.whatsapp ?? undefined,
+          clinicId: row.clinic_id ?? undefined,
+        })),
+      )
+    })()
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
+
+  useEffect(() => {
+    if (!isSupabaseMode || !supabase || isNew || !params.id) {
+      setSupabaseExisting(null)
+      setLoadingExisting(false)
+      return
+    }
+    let active = true
+    setLoadingExisting(true)
+    void (async () => {
+      const { data, error } = await supabase
+        .from('patients')
+        .select('id, name, cpf, phone, whatsapp, clinic_id, primary_dentist_id, deleted_at, created_at, updated_at, data')
+        .eq('id', params.id)
+        .maybeSingle()
+      if (!active) return
+      if (error || !data) {
+        setSupabaseExisting(null)
+        setLoadingExisting(false)
+        return
+      }
+      const rowData = data.data && typeof data.data === 'object' ? (data.data as Record<string, unknown>) : {}
+      const address = rowData.address && typeof rowData.address === 'object'
+        ? (rowData.address as Record<string, unknown>)
+        : {}
+      const mapped: Patient = {
+        id: String(data.id),
+        name: String(data.name ?? ''),
+        cpf: (data.cpf as string | null) ?? undefined,
+        phone: (data.phone as string | null) ?? undefined,
+        whatsapp: (data.whatsapp as string | null) ?? undefined,
+        email: (rowData.email as string | undefined) ?? undefined,
+        birthDate: (rowData.birthDate as string | undefined) ?? undefined,
+        gender: ((rowData.gender as string | undefined) as Patient['gender']) ?? 'outro',
+        clinicId: (data.clinic_id as string | null) ?? undefined,
+        primaryDentistId: (data.primary_dentist_id as string | null) ?? undefined,
+        address: {
+          cep: (address.cep as string | undefined) ?? undefined,
+          street: (address.street as string | undefined) ?? undefined,
+          number: (address.number as string | undefined) ?? undefined,
+          district: (address.district as string | undefined) ?? undefined,
+          city: (address.city as string | undefined) ?? undefined,
+          state: (address.state as string | undefined) ?? undefined,
+        },
+        notes: (rowData.notes as string | undefined) ?? undefined,
+        createdAt: (data.created_at as string | undefined) ?? new Date().toISOString(),
+        updatedAt: (data.updated_at as string | undefined) ?? new Date().toISOString(),
+        deletedAt: (data.deleted_at as string | null) ?? undefined,
+      }
+      setSupabaseExisting(mapped)
+      setLoadingExisting(false)
+    })()
+    return () => {
+      active = false
+    }
+  }, [isNew, isSupabaseMode, params.id])
 
   const scans = useMemo(() => {
     if (!existing) return []
@@ -231,7 +340,7 @@ export default function PatientDetailPage() {
     }
   }, [form.address.cep])
 
-  if (!isNew && existing && !scopedPatients.some((item) => item.id === existing.id)) {
+  if (!isSupabaseMode && !isNew && existing && !scopedPatients.some((item) => item.id === existing.id)) {
     return (
       <AppShell breadcrumb={['Inicio', 'Pacientes']}>
         <Card>
@@ -245,7 +354,17 @@ export default function PatientDetailPage() {
     )
   }
 
-  if (!isNew && !existing) {
+  if (!isNew && loadingExisting) {
+    return (
+      <AppShell breadcrumb={['Inicio', 'Pacientes']}>
+        <Card>
+          <h1 className="text-xl font-semibold text-slate-900">Carregando paciente...</h1>
+        </Card>
+      </AppShell>
+    )
+  }
+
+  if (!isNew && !existing && !loadingExisting) {
     return (
       <AppShell breadcrumb={['Inicio', 'Pacientes']}>
         <Card>
@@ -263,7 +382,7 @@ export default function PatientDetailPage() {
   const dentistWhatsappDigits = normalizeWhatsapp(selectedDentist?.whatsapp ?? '')
   const dentistWhatsappValid = dentistWhatsappDigits.length === 10 || dentistWhatsappDigits.length === 11
 
-  const savePatient = () => {
+  const savePatient = async () => {
     if (!canWrite) {
       setError('Sem permissao para editar pacientes.')
       return
@@ -322,6 +441,48 @@ export default function PatientDetailPage() {
       payload.clinicId = currentUser.linkedClinicId
     }
 
+    if (isSupabaseMode && supabase) {
+      const supabasePayload = {
+        name: payload.name,
+        cpf: payload.cpf ?? null,
+        phone: payload.phone ?? null,
+        whatsapp: payload.whatsapp ?? null,
+        clinic_id: payload.clinicId ?? null,
+        primary_dentist_id: payload.primaryDentistId ?? null,
+        data: {
+          birthDate: payload.birthDate,
+          gender: payload.gender,
+          email: payload.email ?? null,
+          address: payload.address ?? null,
+          notes: payload.notes ?? null,
+        },
+      }
+      if (isNew) {
+        const { data, error: createError } = await supabase
+          .from('patients')
+          .insert(supabasePayload)
+          .select('id')
+          .single()
+        if (createError || !data?.id) {
+          setError(createError?.message ?? 'Falha ao criar paciente.')
+          return
+        }
+        navigate(`/app/patients/${data.id as string}`, { replace: true })
+        return
+      }
+      if (!existing) return
+      const { error: updateError } = await supabase
+        .from('patients')
+        .update({ ...supabasePayload, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      if (updateError) {
+        setError(updateError.message)
+        return
+      }
+      setError('')
+      return
+    }
+
     if (isNew) {
       const result = createPatient(payload)
       if (!result.ok) {
@@ -341,7 +502,7 @@ export default function PatientDetailPage() {
     setError('')
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!existing) return
     if (!canDeletePatient) {
       setError('Somente Master Admin ou Dentista Admin podem excluir paciente.')
@@ -349,18 +510,41 @@ export default function PatientDetailPage() {
     }
     const confirmed = window.confirm('Tem certeza que deseja excluir este paciente?')
     if (!confirmed) return
-    const result = softDeletePatient(existing.id)
-    if (!result.ok) {
-      setError(result.error)
-      return
+    if (isSupabaseMode && supabase) {
+      const { error: deleteError } = await supabase
+        .from('patients')
+        .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      if (deleteError) {
+        setError(deleteError.message)
+        return
+      }
+    } else {
+      const result = softDeletePatient(existing.id)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
     }
     setError('')
     navigate('/app/patients', { replace: true })
   }
 
-  const handleRestore = () => {
+  const handleRestore = async () => {
     if (!existing) return
     if (!canDeletePatient) return
+    if (isSupabaseMode && supabase) {
+      const { error: restoreError } = await supabase
+        .from('patients')
+        .update({ deleted_at: null, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+      if (restoreError) {
+        setError(restoreError.message)
+        return
+      }
+      setSupabaseExisting((current) => (current ? { ...current, deletedAt: undefined } : current))
+      return
+    }
     restorePatient(existing.id)
   }
 
