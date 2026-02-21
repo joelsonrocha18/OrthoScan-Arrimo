@@ -197,7 +197,7 @@ export default function PatientDetailPage() {
     void (async () => {
       const { data, error } = await supabase
         .from('patients')
-        .select('id, name, cpf, phone, whatsapp, clinic_id, primary_dentist_id, deleted_at, created_at, updated_at, data')
+        .select('id, name, cpf, phone, whatsapp, clinic_id, primary_dentist_id, birth_date, gender, email, address, notes, deleted_at, created_at, updated_at')
         .eq('id', params.id)
         .maybeSingle()
       if (!active) return
@@ -206,9 +206,8 @@ export default function PatientDetailPage() {
         setLoadingExisting(false)
         return
       }
-      const rowData = data.data && typeof data.data === 'object' ? (data.data as Record<string, unknown>) : {}
-      const address = rowData.address && typeof rowData.address === 'object'
-        ? (rowData.address as Record<string, unknown>)
+      const address = data.address && typeof data.address === 'object'
+        ? (data.address as Record<string, unknown>)
         : {}
       const mapped: Patient = {
         id: String(data.id),
@@ -216,9 +215,9 @@ export default function PatientDetailPage() {
         cpf: (data.cpf as string | null) ?? undefined,
         phone: (data.phone as string | null) ?? undefined,
         whatsapp: (data.whatsapp as string | null) ?? undefined,
-        email: (rowData.email as string | undefined) ?? undefined,
-        birthDate: (rowData.birthDate as string | undefined) ?? undefined,
-        gender: ((rowData.gender as string | undefined) as Patient['gender']) ?? 'outro',
+        email: (data.email as string | null) ?? undefined,
+        birthDate: (data.birth_date as string | null) ?? undefined,
+        gender: ((data.gender as string | null) as Patient['gender']) ?? 'outro',
         clinicId: (data.clinic_id as string | null) ?? undefined,
         primaryDentistId: (data.primary_dentist_id as string | null) ?? undefined,
         address: {
@@ -229,7 +228,7 @@ export default function PatientDetailPage() {
           city: (address.city as string | undefined) ?? undefined,
           state: (address.state as string | undefined) ?? undefined,
         },
-        notes: (rowData.notes as string | undefined) ?? undefined,
+        notes: (data.notes as string | null) ?? undefined,
         createdAt: (data.created_at as string | undefined) ?? new Date().toISOString(),
         updatedAt: (data.updated_at as string | undefined) ?? new Date().toISOString(),
         deletedAt: (data.deleted_at as string | null) ?? undefined,
@@ -449,13 +448,11 @@ export default function PatientDetailPage() {
         whatsapp: payload.whatsapp ?? null,
         clinic_id: payload.clinicId ?? null,
         primary_dentist_id: payload.primaryDentistId ?? null,
-        data: {
-          birthDate: payload.birthDate,
-          gender: payload.gender,
-          email: payload.email ?? null,
-          address: payload.address ?? null,
-          notes: payload.notes ?? null,
-        },
+        birth_date: payload.birthDate,
+        gender: payload.gender ?? null,
+        email: payload.email ?? null,
+        address: payload.address ?? null,
+        notes: payload.notes ?? null,
       }
       if (isNew) {
         const { data, error: createError } = await supabase

@@ -134,7 +134,7 @@ export default function DentistDetailPage() {
     void (async () => {
       const { data, error } = await supabase
         .from('dentists')
-        .select('id, name, cro, gender, clinic_id, phone, whatsapp, email, is_active, deleted_at, created_at, updated_at, data')
+        .select('id, name, cro, gender, clinic_id, phone, whatsapp, email, notes, is_active, deleted_at, created_at, updated_at')
         .eq('id', params.id)
         .maybeSingle()
       if (!active) return
@@ -143,10 +143,6 @@ export default function DentistDetailPage() {
         setLoadingExisting(false)
         return
       }
-      const rowData = data.data && typeof data.data === 'object' ? (data.data as Record<string, unknown>) : {}
-      const address = rowData.address && typeof rowData.address === 'object'
-        ? (rowData.address as Record<string, unknown>)
-        : {}
       setSupabaseExisting({
         id: String(data.id),
         type: 'dentista',
@@ -157,15 +153,7 @@ export default function DentistDetailPage() {
         phone: (data.phone as string | null) ?? undefined,
         whatsapp: (data.whatsapp as string | null) ?? undefined,
         email: (data.email as string | null) ?? undefined,
-        address: {
-          cep: (address.cep as string | undefined) ?? undefined,
-          street: (address.street as string | undefined) ?? undefined,
-          number: (address.number as string | undefined) ?? undefined,
-          district: (address.district as string | undefined) ?? undefined,
-          city: (address.city as string | undefined) ?? undefined,
-          state: (address.state as string | undefined) ?? undefined,
-        },
-        notes: (rowData.notes as string | undefined) ?? undefined,
+        notes: (data.notes as string | null) ?? undefined,
         isActive: (data.is_active as boolean | null) ?? true,
         createdAt: (data.created_at as string | undefined) ?? new Date().toISOString(),
         updatedAt: (data.updated_at as string | undefined) ?? new Date().toISOString(),
@@ -296,11 +284,8 @@ export default function DentistDetailPage() {
         phone: payload.phone ?? null,
         whatsapp: payload.whatsapp ?? null,
         email: payload.email ?? null,
+        notes: payload.notes ?? null,
         is_active: payload.isActive,
-        data: {
-          address: payload.address ?? null,
-          notes: payload.notes ?? null,
-        },
       }
       if (isNew) {
         const { data, error: createError } = await supabase

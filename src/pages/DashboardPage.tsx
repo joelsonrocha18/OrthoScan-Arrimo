@@ -122,7 +122,7 @@ export default function DashboardPage() {
     if (!isSupabaseMode || !supabase) return
     ;(async () => {
       const [patientsRes, scansRes, casesRes, labRes] = await Promise.all([
-        supabase.from('patients').select('id, clinic_id, primary_dentist_id, name, deleted_at, data').is('deleted_at', null),
+        supabase.from('patients').select('id, clinic_id, primary_dentist_id, name, deleted_at').is('deleted_at', null),
         supabase.from('scans').select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, created_at, deleted_at, data').is('deleted_at', null),
         supabase.from('cases').select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, created_at, deleted_at, data').is('deleted_at', null),
         supabase.from('lab_items').select('id, case_id, tray_number, status, notes, created_at, deleted_at, data').is('deleted_at', null),
