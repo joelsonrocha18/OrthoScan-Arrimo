@@ -480,7 +480,45 @@ export async function deleteScanSupabase(scanId: string) {
   const patientId = asText((current as Record<string, unknown> | null)?.patient_id, asText(currentData.patientId)) || undefined
   const patientName = asText(currentData.patientName, '-')
   const scanDate = asText(currentData.scanDate)
+  const linkedCaseIdFromScan = asText(currentData.linkedCaseId)
   const now = new Date().toISOString()
+
+  const caseIds = new Set<string>()
+  if (linkedCaseIdFromScan) caseIds.add(linkedCaseIdFromScan)
+  const { data: casesByScan } = await supabase
+    .from('cases')
+    .select('id')
+    .eq('scan_id', scanId)
+    .is('deleted_at', null)
+  ;(casesByScan ?? []).forEach((row) => {
+    const id = asText((row as Record<string, unknown>).id)
+    if (id) caseIds.add(id)
+  })
+
+  if (caseIds.size > 0) {
+    const ids = Array.from(caseIds)
+    await supabase
+      .from('lab_items')
+      .update({ deleted_at: now, updated_at: now })
+      .in('case_id', ids)
+      .is('deleted_at', null)
+
+    await supabase
+      .from('cases')
+      .update({ deleted_at: now, updated_at: now })
+      .in('id', ids)
+      .is('deleted_at', null)
+
+    // Tabela opcional no banco; se nao existir, apenas ignora.
+    const replacementDelete = await supabase
+      .from('replacement_bank')
+      .delete()
+      .in('case_id', ids)
+    if (replacementDelete.error) {
+      // no-op
+    }
+  }
+
   const { data, error } = await supabase
     .from('scans')
     .update({ deleted_at: now, updated_at: now })
@@ -490,7 +528,9 @@ export async function deleteScanSupabase(scanId: string) {
   if (!data || data.length === 0) return { ok: false as const, error: 'Scan nao excluido. Verifique permissoes.' }
   await appendPatientHistorySupabase(
     patientId,
-    `Exame excluido pelo administrador. Paciente: ${patientName}. Data do exame: ${scanDate || '-'}.`,
+    caseIds.size > 0
+      ? `Exame excluido pelo administrador com cascata (${caseIds.size} pedido(s), OS e reposicoes). Paciente: ${patientName}. Data do exame: ${scanDate || '-'}.`
+      : `Exame excluido pelo administrador. Paciente: ${patientName}. Data do exame: ${scanDate || '-'}.`,
   )
   return { ok: true as const }
 }
@@ -523,10 +563,34 @@ export async function deleteCaseSupabase(caseId: string) {
     .update({ deleted_at: now, updated_at: now })
     .eq('case_id', caseId)
     .is('deleted_at', null)
-  await supabase
+  const linkedScans = await supabase
     .from('scans')
-    .update({ updated_at: now })
+    .select('id, data')
     .eq('data->>linkedCaseId', caseId)
+    .is('deleted_at', null)
+  if (!linkedScans.error) {
+    for (const row of linkedScans.data ?? []) {
+      const scanData = asObject((row as Record<string, unknown>).data)
+      const nextScanData = {
+        ...scanData,
+        linkedCaseId: undefined,
+        status: scanData.status === 'convertido' ? 'aprovado' : scanData.status,
+        updatedAt: now,
+      }
+      await supabase
+        .from('scans')
+        .update({ data: nextScanData, updated_at: now })
+        .eq('id', asText((row as Record<string, unknown>).id))
+    }
+  }
+
+  const replacementDelete = await supabase
+    .from('replacement_bank')
+    .delete()
+    .eq('case_id', caseId)
+  if (replacementDelete.error) {
+    // no-op
+  }
 
   await appendPatientHistorySupabase(
     patientId,

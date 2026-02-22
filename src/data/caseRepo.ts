@@ -120,9 +120,10 @@ export function deleteCase(id: string): RepoResult<null> {
 
   db.cases = db.cases.filter((item) => item.id !== id)
   db.labItems = db.labItems.filter((item) => item.caseId !== id)
+  db.replacementBank = db.replacementBank.filter((entry) => entry.caseId !== id)
   db.scans = db.scans.map((item) =>
     item.linkedCaseId === id
-      ? { ...item, linkedCaseId: undefined, serviceOrderCode: undefined, updatedAt: nowIso() }
+      ? { ...item, linkedCaseId: undefined, status: 'aprovado', updatedAt: nowIso() }
       : item,
   )
 

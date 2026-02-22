@@ -205,19 +205,40 @@ export function deleteScan(id: string) {
   const db = loadDb()
   const target = db.scans.find((item) => item.id === id)
   if (!target) return
+  const linkedCaseIds = new Set<string>()
+  db.cases.forEach((item) => {
+    if (item.sourceScanId === id || item.id === target.linkedCaseId) {
+      linkedCaseIds.add(item.id)
+    }
+  })
+
+  if (linkedCaseIds.size > 0) {
+    db.labItems = db.labItems.filter((item) => !item.caseId || !linkedCaseIds.has(item.caseId))
+    db.replacementBank = db.replacementBank.filter((entry) => !linkedCaseIds.has(entry.caseId))
+    db.cases = db.cases.filter((item) => !linkedCaseIds.has(item.id))
+  }
   db.scans = db.scans.filter((item) => item.id !== id)
-  db.cases = db.cases.map((item) =>
-    item.sourceScanId === id
-      ? { ...item, sourceScanId: undefined, updatedAt: nowIso() }
-      : item,
+  pushAudit(
+    db,
+    {
+      entity: 'scan',
+      entityId: id,
+      action: 'scan.delete',
+      message:
+        linkedCaseIds.size > 0
+          ? `Exame removido com cascata (${linkedCaseIds.size} pedido(s), OS e reposicoes vinculadas).`
+          : 'Exame removido.',
+    },
   )
-  pushAudit(db, { entity: 'scan', entityId: id, action: 'scan.delete', message: 'Exame removido.' })
   if (target.patientId) {
     pushAudit(db, {
       entity: 'patient',
       entityId: target.patientId,
       action: 'patient.history.scan_delete',
-      message: `Exame removido: ${target.serviceOrderCode ?? target.id}.`,
+      message:
+        linkedCaseIds.size > 0
+          ? `Exame removido com cascata completa: ${target.serviceOrderCode ?? target.id}.`
+          : `Exame removido: ${target.serviceOrderCode ?? target.id}.`,
     })
   }
   saveDb(db)
