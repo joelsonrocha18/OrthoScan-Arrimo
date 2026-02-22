@@ -33,6 +33,14 @@ function formatDate(dateIso: string) {
   return new Date(`${dateIso}T00:00:00`).toLocaleDateString('pt-BR')
 }
 
+function productionByArchLabel(item: LabItem) {
+  const upper = item.plannedUpperQty ?? 0
+  const lower = item.plannedLowerQty ?? 0
+  if (item.arch === 'superior') return `Producao por arcada: Sup ${upper}`
+  if (item.arch === 'inferior') return `Producao por arcada: Inf ${lower}`
+  return `Producao por arcada: Sup ${upper} | Inf ${lower}`
+}
+
 export default function LabCard({
   item,
   isOverdue,
@@ -79,7 +87,7 @@ export default function LabCard({
         </p>
         {isAligner ? (
           <p className="text-slate-600">
-            Producao por arcada: Sup {item.plannedUpperQty ?? 0} | Inf {item.plannedLowerQty ?? 0}
+            {productionByArchLabel(item)}
           </p>
         ) : null}
         {isAligner && item.status === 'aguardando_iniciar' && (item.plannedUpperQty ?? 0) + (item.plannedLowerQty ?? 0) <= 0 ? (

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Button from '../Button'
 import Card from '../Card'
 import Input from '../Input'
@@ -8,6 +8,8 @@ type RegisterDeliveryLotModalProps = {
   caseOptions?: Array<{ id: string; label: string }>
   selectedCaseId?: string
   isSelectedRework?: boolean
+  initialUpperQty?: number
+  initialLowerQty?: number
   onCaseChange?: (caseId: string) => void
   onClose: () => void
   onConfirm: (payload: {
@@ -23,6 +25,8 @@ export default function RegisterDeliveryLotModal({
   caseOptions,
   selectedCaseId,
   isSelectedRework = false,
+  initialUpperQty = 0,
+  initialLowerQty = 0,
   onCaseChange,
   onClose,
   onConfirm,
@@ -31,6 +35,12 @@ export default function RegisterDeliveryLotModal({
   const [lowerQty, setLowerQty] = useState('')
   const [deliveredToDoctorAt, setDeliveredToDoctorAt] = useState(new Date().toISOString().slice(0, 10))
   const [note, setNote] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setUpperQty(String(initialUpperQty))
+    setLowerQty(String(initialLowerQty))
+  }, [initialLowerQty, initialUpperQty, open, selectedCaseId])
 
   if (!open) return null
 

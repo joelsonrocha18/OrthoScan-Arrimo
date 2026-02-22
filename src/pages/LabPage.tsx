@@ -406,6 +406,16 @@ export default function LabPage() {
     () => !!selectedDeliveryItem && (isReworkItem(selectedDeliveryItem) || isReworkProductionItem(selectedDeliveryItem)),
     [selectedDeliveryItem],
   )
+  const deliveryInitialUpperQty = useMemo(() => {
+    if (!selectedDeliveryItem || selectedDeliveryIsRework) return 0
+    if (selectedDeliveryItem.arch === 'inferior') return 0
+    return Math.max(0, Math.trunc(selectedDeliveryItem.plannedUpperQty ?? 0))
+  }, [selectedDeliveryIsRework, selectedDeliveryItem])
+  const deliveryInitialLowerQty = useMemo(() => {
+    if (!selectedDeliveryItem || selectedDeliveryIsRework) return 0
+    if (selectedDeliveryItem.arch === 'superior') return 0
+    return Math.max(0, Math.trunc(selectedDeliveryItem.plannedLowerQty ?? 0))
+  }, [selectedDeliveryIsRework, selectedDeliveryItem])
   const casesWithAlerts = useMemo(
     () =>
       new Set(caseSource.filter((caseItem) => getReplenishmentAlerts(caseItem).length > 0).map((caseItem) => caseItem.id)),
@@ -438,7 +448,13 @@ export default function LabPage() {
     return isDeliveredToProfessionalItem(item, caseById)
   }, [caseById])
   const pipelineItems = useMemo(
-    () => filteredItems.filter((item) => !isDeliveredToProfessional(item) && !isReworkItem(item)),
+    () =>
+      filteredItems.filter(
+        (item) =>
+          !isDeliveredToProfessional(item) &&
+          !isReworkItem(item) &&
+          item.requestKind !== 'reposicao_programada',
+      ),
     [filteredItems, isDeliveredToProfessional],
   )
   const reworkItems = useMemo(
@@ -1171,6 +1187,8 @@ export default function LabPage() {
         caseOptions={deliveryCaseOptions}
         selectedCaseId={deliveryCaseId}
         isSelectedRework={selectedDeliveryIsRework}
+        initialUpperQty={deliveryInitialUpperQty}
+        initialLowerQty={deliveryInitialLowerQty}
         onCaseChange={setDeliveryCaseId}
         onClose={() => setDeliveryOpen(false)}
         onConfirm={(payload) => {

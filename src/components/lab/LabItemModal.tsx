@@ -91,6 +91,16 @@ const archLabelMap: Record<'superior' | 'inferior' | 'ambos', string> = {
   ambos: 'Ambas',
 }
 
+function treatmentArchSummary(
+  arch: 'superior' | 'inferior' | 'ambos',
+  upper: number,
+  lower: number,
+) {
+  if (arch === 'superior') return `Sup ${upper}`
+  if (arch === 'inferior') return `Inf ${lower}`
+  return `Sup ${upper} | Inf ${lower}`
+}
+
 export default function LabItemModal({
   mode,
   item,
@@ -195,8 +205,10 @@ export default function LabItemModal({
       return
     }
     const tray = mode === 'edit' && item ? item.trayNumber : 1
-    const plannedUpperQty = Number(form.plannedUpperQty || 0)
-    const plannedLowerQty = Number(form.plannedLowerQty || 0)
+    const rawUpperQty = Number(form.plannedUpperQty || 0)
+    const rawLowerQty = Number(form.plannedLowerQty || 0)
+    const plannedUpperQty = form.arch === 'inferior' ? 0 : rawUpperQty
+    const plannedLowerQty = form.arch === 'superior' ? 0 : rawLowerQty
     if (!form.patientName.trim() || !form.dueDate || !Number.isFinite(tray) || tray <= 0) {
       const message = 'Preencha os campos obrigatorios com valores validos.'
       setError(message)
@@ -325,21 +337,23 @@ export default function LabItemModal({
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-700">Tipo de produto</label>
-            <select
-              value={form.productType}
-              onChange={(event) => setForm((current) => ({ ...current, productType: event.target.value as ProductType }))}
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-              disabled={readOnly || Boolean(linkedCaseId)}
-            >
-              {Object.entries(PRODUCT_TYPE_LABEL).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!linkedCaseId ? (
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700">Tipo de produto</label>
+              <select
+                value={form.productType}
+                onChange={(event) => setForm((current) => ({ ...current, productType: event.target.value as ProductType }))}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                disabled={readOnly}
+              >
+                {Object.entries(PRODUCT_TYPE_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div className="sm:col-span-2">
             {mode === 'edit' ? (
@@ -355,7 +369,7 @@ export default function LabItemModal({
             ) : null}
             {selectedCase ? (
               <p className="text-xs text-slate-600">
-                Tratamento: Sup {selectedCaseUpper} | Inf {selectedCaseLower} | Troca a cada {selectedCase.changeEveryDays} dias
+                Tratamento: {treatmentArchSummary(selectedCase.arch ?? 'ambos', selectedCaseUpper, selectedCaseLower)} | Troca a cada {selectedCase.changeEveryDays} dias
               </p>
             ) : null}
           </div>
@@ -440,27 +454,31 @@ export default function LabItemModal({
 
           {isAlignerProduct ? (
             <>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Superior</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.plannedUpperQty}
-                  onChange={(event) => setForm((current) => ({ ...current, plannedUpperQty: event.target.value }))}
-                  disabled={readOnly}
-                />
-              </div>
+              {form.arch !== 'inferior' ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Superior</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.plannedUpperQty}
+                    onChange={(event) => setForm((current) => ({ ...current, plannedUpperQty: event.target.value }))}
+                    disabled={readOnly}
+                  />
+                </div>
+              ) : null}
 
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Inferior</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.plannedLowerQty}
-                  onChange={(event) => setForm((current) => ({ ...current, plannedLowerQty: event.target.value }))}
-                  disabled={readOnly}
-                />
-              </div>
+              {form.arch !== 'superior' ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Inferior</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.plannedLowerQty}
+                    onChange={(event) => setForm((current) => ({ ...current, plannedLowerQty: event.target.value }))}
+                    disabled={readOnly}
+                  />
+                </div>
+              ) : null}
             </>
           ) : null}
 
