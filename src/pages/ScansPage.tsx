@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Search } from 'lucide-react'
 import { useToast } from '../app/ToastProvider'
 import CreateCaseFromScanModal from '../components/scans/CreateCaseFromScanModal'
 import ScanDetailsModal from '../components/scans/ScanDetailsModal'
@@ -67,6 +68,10 @@ export default function ScansPage() {
   const canCreateCase = can(currentUser, 'cases.write')
   const isSupabaseMode = DATA_MODE === 'supabase'
   const [createOpen, setCreateOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'todos' | Scan['status']>('todos')
+  const [archFilter, setArchFilter] = useState<'todos' | Scan['arch']>('todos')
+  const [purposeFilter, setPurposeFilter] = useState('todos')
   const [details, setDetails] = useState<Scan | null>(null)
   const [createCaseTarget, setCreateCaseTarget] = useState<Scan | null>(null)
   const [supabaseScans, setSupabaseScans] = useState<Scan[]>([])
@@ -138,6 +143,9 @@ export default function ScansPage() {
           dentistId: row.dentist_id ?? undefined,
           requestedByDentistId: row.requested_by_dentist_id ?? undefined,
           patientName: (data.patientName as string | undefined) ?? (row.patient_id ? patientsById.get(row.patient_id) ?? '-' : '-'),
+          purposeProductId: data.purposeProductId as string | undefined,
+          purposeProductType: data.purposeProductType as string | undefined,
+          purposeLabel: data.purposeLabel as string | undefined,
           serviceOrderCode: data.serviceOrderCode as string | undefined,
           scanDate: (data.scanDate as string | undefined) ?? (row.created_at ?? new Date().toISOString()).slice(0, 10),
           arch: (data.arch as Scan['arch'] | undefined) ?? 'ambos',
@@ -159,6 +167,17 @@ export default function ScansPage() {
   }, [isSupabaseMode, supabaseRefreshKey])
 
   const scans = useMemo(() => (canRead ? (isSupabaseMode ? supabaseScans : listScansForUser(db, currentUser)) : []), [canRead, isSupabaseMode, supabaseScans, db, currentUser])
+  const purposeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          scans
+            .map((scan) => scan.purposeLabel?.trim() || (scan.purposeProductType ? scan.purposeProductType : 'Alinhador'))
+            .filter((item) => item.length > 0),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
+    [scans],
+  )
   const caseLookupSource = useMemo(
     () => (isSupabaseMode ? supabaseCases : db.cases.map((item) => ({ id: item.id, treatmentCode: item.treatmentCode }))),
     [isSupabaseMode, supabaseCases, db.cases],
@@ -175,6 +194,25 @@ export default function ScansPage() {
     () => new Map(patientLookupSource.map((item) => [item.id, item.name])),
     [patientLookupSource],
   )
+  const filteredScans = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return scans.filter((scan) => {
+      const patientName = (scan.patientId ? patientsById.get(scan.patientId) ?? scan.patientName : scan.patientName).toLowerCase()
+      const serviceOrder = (scan.serviceOrderCode ?? '').toLowerCase()
+      const purposeLabel = (scan.purposeLabel ?? scan.purposeProductType ?? 'Alinhador').toLowerCase()
+      const matchesQuery =
+        query.length === 0 ||
+        patientName.includes(query) ||
+        serviceOrder.includes(query) ||
+        purposeLabel.includes(query)
+      const matchesStatus = statusFilter === 'todos' || scan.status === statusFilter
+      const matchesArch = archFilter === 'todos' || scan.arch === archFilter
+      const matchesPurpose =
+        purposeFilter === 'todos' ||
+        (scan.purposeLabel?.trim() || (scan.purposeProductType ? scan.purposeProductType : 'Alinhador')) === purposeFilter
+      return matchesQuery && matchesStatus && matchesArch && matchesPurpose
+    })
+  }, [archFilter, patientsById, scans, search, statusFilter, purposeFilter])
   const dentists = useMemo(
     () => (isSupabaseMode ? supabaseDentists : db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt)),
     [isSupabaseMode, supabaseDentists, db.dentists],
@@ -332,12 +370,47 @@ export default function ScansPage() {
 
       <section className="mt-6">
         <Card className="overflow-hidden p-0">
+          <div className="border-b border-slate-200 p-4">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+              <div className="relative lg:col-span-2">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar por paciente, O.S ou finalidade"
+                  className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                />
+              </div>
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'todos' | Scan['status'])} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                <option value="todos">Status: Todos</option>
+                <option value="pendente">Pendente</option>
+                <option value="aprovado">Aprovado</option>
+                <option value="reprovado">Reprovado</option>
+                <option value="convertido">Convertido</option>
+              </select>
+              <div className="grid grid-cols-2 gap-3">
+                <select value={archFilter} onChange={(event) => setArchFilter(event.target.value as 'todos' | Scan['arch'])} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                  <option value="todos">Arcada: Todas</option>
+                  <option value="superior">Superior</option>
+                  <option value="inferior">Inferior</option>
+                  <option value="ambos">Ambos</option>
+                </select>
+                <select value={purposeFilter} onChange={(event) => setPurposeFilter(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                  <option value="todos">Finalidade: Todas</option>
+                  {purposeOptions.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
               <thead className="bg-slate-50">
                 <tr>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">O.S</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Paciente</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Finalidade</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Data</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Arcada</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
@@ -346,7 +419,7 @@ export default function ScansPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {scans.map((scan) => {
+                {filteredScans.map((scan) => {
                   const comp = scanCompleteness(scan)
                   const linkedCaseCode = scan.linkedCaseId ? caseById.get(scan.linkedCaseId)?.treatmentCode : undefined
                   const serviceOrderCode = scan.serviceOrderCode ?? linkedCaseCode ?? '-'
@@ -356,6 +429,7 @@ export default function ScansPage() {
                       <td className="px-4 py-4 text-sm font-medium text-slate-900">
                         {scan.patientId ? (patientsById.get(scan.patientId) ?? scan.patientName) : scan.patientName}
                       </td>
+                      <td className="px-4 py-4 text-sm text-slate-700">{scan.purposeLabel ?? scan.purposeProductType ?? 'Alinhador'}</td>
                       <td className="px-4 py-4 text-sm text-slate-700">{new Date(`${scan.scanDate}T00:00:00`).toLocaleDateString('pt-BR')}</td>
                       <td className="px-4 py-4">
                         <Badge tone={archTone(scan.arch)}>{scan.arch}</Badge>
@@ -443,6 +517,13 @@ export default function ScansPage() {
                     </tr>
                   )
                 })}
+                {filteredScans.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
+                      Nenhum exame encontrado com os filtros atuais.
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>

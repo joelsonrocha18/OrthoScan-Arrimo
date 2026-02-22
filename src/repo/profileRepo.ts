@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabaseClient'
 import type { CaseTray } from '../types/Case'
 import type { LabItem } from '../types/Lab'
 import type { ProductType } from '../types/Product'
-import { normalizeProductType } from '../types/Product'
+import { isAlignerProductType, normalizeProductType } from '../types/Product'
 import type { Scan, ScanAttachment } from '../types/Scan'
 
 export type ProfileRecord = {
@@ -183,6 +183,9 @@ export async function createScanSupabase(scan: Omit<Scan, 'id' | 'createdAt' | '
       data: {
         patientName: scan.patientName,
         serviceOrderCode: scan.serviceOrderCode,
+        purposeProductId: scan.purposeProductId,
+        purposeProductType: scan.purposeProductType,
+        purposeLabel: scan.purposeLabel,
         scanDate: scan.scanDate,
         arch: scan.arch,
         complaint: scan.complaint,
@@ -221,28 +224,30 @@ export async function createCaseFromScanSupabase(
     return { ok: false as const, error: 'Exame incompleto. Envie STL(s) obrigatorios e fotos intra/extra antes de criar o pedido.' }
   }
 
+  const selectedProductType = asProductType(scan.purposeProductType ?? scan.purposeProductId)
+  const isAlignerFlow = isAlignerProductType(selectedProductType)
   const upper = payload.totalTraysUpper ?? 0
   const lower = payload.totalTraysLower ?? 0
-  const normalizedUpper = scan.arch === 'inferior' ? 0 : upper
-  const normalizedLower = scan.arch === 'superior' ? 0 : lower
+  const normalizedUpper = isAlignerFlow ? (scan.arch === 'inferior' ? 0 : upper) : 0
+  const normalizedLower = isAlignerFlow ? (scan.arch === 'superior' ? 0 : lower) : 0
   const totalTrays = Math.max(normalizedUpper, normalizedLower)
-  if (totalTrays <= 0) return { ok: false as const, error: 'Informe total de placas superior e/ou inferior.' }
+  if (isAlignerFlow && totalTrays <= 0) return { ok: false as const, error: 'Informe total de placas superior e/ou inferior.' }
 
   const now = new Date().toISOString()
   const treatmentCode = scan.serviceOrderCode ?? undefined
   const status = 'planejamento'
   const phase = 'planejamento'
   const nextData = {
-    productType: 'alinhador_12m' as ProductType,
-    productId: 'alinhador_12m' as ProductType,
+    productType: selectedProductType as ProductType,
+    productId: selectedProductType as ProductType,
     treatmentCode,
     patientName: scan.patientName,
     scanDate: scan.scanDate,
-    totalTrays,
+    totalTrays: isAlignerFlow ? totalTrays : 0,
     totalTraysUpper: normalizedUpper || undefined,
     totalTraysLower: normalizedLower || undefined,
-    changeEveryDays: payload.changeEveryDays,
-    attachmentBondingTray: payload.attachmentBondingTray,
+    changeEveryDays: isAlignerFlow ? payload.changeEveryDays : 0,
+    attachmentBondingTray: isAlignerFlow ? payload.attachmentBondingTray : false,
     planningNote: payload.planningNote,
     status,
     phase,
@@ -250,7 +255,7 @@ export async function createCaseFromScanSupabase(
     contract: { status: 'pendente' as const },
     deliveryLots: [],
     installation: undefined,
-    trays: buildPendingTrays(totalTrays, scan.scanDate, payload.changeEveryDays),
+    trays: isAlignerFlow ? buildPendingTrays(totalTrays, scan.scanDate, payload.changeEveryDays) : [],
     attachments: [],
     sourceScanId: scan.id,
     arch: scan.arch,
@@ -270,12 +275,12 @@ export async function createCaseFromScanSupabase(
       requested_by_dentist_id: scan.requestedByDentistId ?? null,
       scan_id: scan.id,
       status,
-      change_every_days: payload.changeEveryDays,
-      total_trays_upper: normalizedUpper || null,
-      total_trays_lower: normalizedLower || null,
-      attachments_tray: payload.attachmentBondingTray,
-      product_type: 'alinhador_12m',
-      product_id: 'alinhador_12m',
+      change_every_days: isAlignerFlow ? payload.changeEveryDays : 0,
+      total_trays_upper: isAlignerFlow ? (normalizedUpper || null) : null,
+      total_trays_lower: isAlignerFlow ? (normalizedLower || null) : null,
+      attachments_tray: isAlignerFlow ? payload.attachmentBondingTray : false,
+      product_type: selectedProductType,
+      product_id: selectedProductType,
       data: nextData,
       updated_at: now,
     })
@@ -287,6 +292,9 @@ export async function createCaseFromScanSupabase(
   const scanDataNext = {
     patientName: scan.patientName,
     serviceOrderCode: scan.serviceOrderCode,
+    purposeProductId: scan.purposeProductId,
+    purposeProductType: scan.purposeProductType,
+    purposeLabel: scan.purposeLabel,
     scanDate: scan.scanDate,
     arch: scan.arch,
     complaint: scan.complaint,

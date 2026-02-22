@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Scan } from '../../types/Scan'
+import { isAlignerProductType, normalizeProductType } from '../../types/Product'
 import Button from '../Button'
 import Card from '../Card'
 import Input from '../Input'
@@ -44,6 +45,7 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
   }, [open, scan])
 
   if (!open || !scan) return null
+  const isAlignerFlow = isAlignerProductType(normalizeProductType(scan.purposeProductType))
 
   const submit = () => {
     const upperNum = Number(upper)
@@ -53,28 +55,28 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
     const upperValue = Number.isFinite(upperNum) && upperNum > 0 ? upperNum : undefined
     const lowerValue = Number.isFinite(lowerNum) && lowerNum > 0 ? lowerNum : undefined
 
-    if (!Number.isFinite(days) || days <= 0) {
+    if (isAlignerFlow && (!Number.isFinite(days) || days <= 0)) {
       setError('Troca em dias deve ser maior que zero.')
       return
     }
 
-    if (scan.arch === 'superior' && !upperValue) {
+    if (isAlignerFlow && scan.arch === 'superior' && !upperValue) {
       setError('Informe total de placas superior.')
       return
     }
-    if (scan.arch === 'inferior' && !lowerValue) {
+    if (isAlignerFlow && scan.arch === 'inferior' && !lowerValue) {
       setError('Informe total de placas inferior.')
       return
     }
-    if (scan.arch === 'ambos' && !upperValue && !lowerValue) {
+    if (isAlignerFlow && scan.arch === 'ambos' && !upperValue && !lowerValue) {
       setError('Informe total de placas superior e/ou inferior.')
       return
     }
 
     onConfirm({
-      totalTraysUpper: upperValue,
-      totalTraysLower: lowerValue,
-      changeEveryDays: days,
+      totalTraysUpper: isAlignerFlow ? upperValue : undefined,
+      totalTraysLower: isAlignerFlow ? lowerValue : undefined,
+      changeEveryDays: isAlignerFlow ? days : 0,
       attachmentBondingTray,
       planningNote: planningNote.trim() || undefined,
     })
@@ -86,16 +88,18 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
       <Card className="w-full max-w-lg">
         <h3 className="text-xl font-semibold text-slate-900">Criar Caso a partir do Scan</h3>
         <p className="mt-1 text-sm text-slate-500">
-          {scan.arch === 'ambos'
-            ? 'Planejamento inicial de placas para superior/inferior.'
-            : `Planejamento inicial de placas para arcada ${scan.arch}.`}
+          {isAlignerFlow
+            ? scan.arch === 'ambos'
+              ? 'Planejamento inicial de placas para superior/inferior.'
+              : `Planejamento inicial de placas para arcada ${scan.arch}.`
+            : 'Produto sem fluxo de placas. O caso seguira com registro de instalacao.'}
         </p>
-        {scan.arch === 'ambos' ? (
+        {isAlignerFlow && scan.arch === 'ambos' ? (
           <p className="mt-1 text-xs text-slate-500">Superior e inferior podem ter quantidades diferentes.</p>
         ) : null}
 
         <div className="mt-4 grid gap-4">
-          {scan.arch === 'ambos' ? (
+          {isAlignerFlow && scan.arch === 'ambos' ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">Total de placas Superior</label>
@@ -116,7 +120,7 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
                 />
               </div>
             </div>
-          ) : scan.arch === 'superior' ? (
+          ) : isAlignerFlow && scan.arch === 'superior' ? (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Total de placas Superior</label>
               <Input
@@ -126,7 +130,7 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
                 onChange={(event) => setUpper(event.target.value)}
               />
             </div>
-          ) : (
+          ) : isAlignerFlow ? (
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Total de placas Inferior</label>
               <Input
@@ -136,21 +140,29 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
                 onChange={(event) => setLower(event.target.value)}
               />
             </div>
-          )}
+          ) : null}
 
-          <div>
+          {isAlignerFlow ? (
+            <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Troca a cada (dias)</label>
             <Input type="number" min={1} value={changeEveryDays} onChange={(event) => setChangeEveryDays(event.target.value)} />
-          </div>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Este produto vai direto para o fluxo de pedido/instalacao, sem esteira de placas de alinhadores.
+            </p>
+          )}
 
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={attachmentBondingTray}
-              onChange={(event) => setAttachmentBondingTray(event.target.checked)}
-            />
-            Incluir placa para colar attachments antes do inicio
-          </label>
+          {isAlignerFlow ? (
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={attachmentBondingTray}
+                onChange={(event) => setAttachmentBondingTray(event.target.checked)}
+              />
+              Incluir placa para colar attachments antes do inicio
+            </label>
+          ) : null}
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Observacao do planejamento (opcional)</label>

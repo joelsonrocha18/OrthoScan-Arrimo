@@ -33,6 +33,9 @@ export type PhotoSlot = {
 export type Scan = {
   id: string
   serviceOrderCode?: string
+  purposeProductId?: string
+  purposeProductType?: string
+  purposeLabel?: string
   patientName: string
   patientId?: string
   dentistId?: string

@@ -124,6 +124,9 @@ type LegacyCase = {
 type LegacyScan = Partial<Scan> & {
   id: string
   serviceOrderCode?: string
+  purposeProductId?: string
+  purposeProductType?: string
+  purposeLabel?: string
   patientId?: string
   dentistId?: string
   requestedByDentistId?: string
@@ -750,6 +753,9 @@ function migrateScan(raw: LegacyScan): Scan {
   return {
     id: raw.id,
     serviceOrderCode: raw.serviceOrderCode,
+    purposeProductId: raw.purposeProductId,
+    purposeProductType: raw.purposeProductType,
+    purposeLabel: raw.purposeLabel,
     patientName: raw.patientName ?? 'Paciente sem nome',
     patientId: raw.patientId,
     dentistId: raw.dentistId,

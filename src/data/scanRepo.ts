@@ -2,6 +2,7 @@ import { loadDb, saveDb } from './db'
 import { pushAudit } from './audit'
 import type { Case, CaseTray } from '../types/Case'
 import type { Scan, ScanAttachment } from '../types/Scan'
+import { isAlignerProductType, normalizeProductType } from '../types/Product'
 import { uploadFileToStorage } from '../lib/storageUpload'
 
 function nowIso() {
@@ -252,12 +253,14 @@ export function createCaseFromScan(
     return { ok: false, error: 'Exame incompleto. Envie STL(s) obrigatorios e fotos intra/extra antes de criar o pedido.' }
   }
 
+  const selectedProductType = normalizeProductType(scan.purposeProductType, 'alinhador_12m')
+  const isAlignerFlow = isAlignerProductType(selectedProductType)
   const upper = payload.totalTraysUpper ?? 0
   const lower = payload.totalTraysLower ?? 0
-  const normalizedUpper = scan.arch === 'inferior' ? 0 : upper
-  const normalizedLower = scan.arch === 'superior' ? 0 : lower
+  const normalizedUpper = isAlignerFlow ? (scan.arch === 'inferior' ? 0 : upper) : 0
+  const normalizedLower = isAlignerFlow ? (scan.arch === 'superior' ? 0 : lower) : 0
   const fallback = Math.max(normalizedUpper, normalizedLower)
-  if (fallback <= 0) return { ok: false, error: 'Informe total de placas superior e/ou inferior.' }
+  if (isAlignerFlow && fallback <= 0) return { ok: false, error: 'Informe total de placas superior e/ou inferior.' }
 
   const internal = isInternalClinic(db, scan.clinicId)
   const treatmentCode = scan.serviceOrderCode ?? nextTreatmentCode(db, internal ? 'A' : 'C')
@@ -285,8 +288,8 @@ export function createCaseFromScan(
 
   const newCase: Case = {
     id: caseId,
-    productType: 'alinhador_12m',
-    productId: 'alinhador_12m',
+    productType: selectedProductType,
+    productId: selectedProductType,
     treatmentCode,
     treatmentOrigin: internal ? 'interno' : 'externo',
     patientName: scan.patientName,
@@ -295,18 +298,18 @@ export function createCaseFromScan(
     requestedByDentistId: scan.requestedByDentistId,
     clinicId: scan.clinicId,
     scanDate: scan.scanDate,
-    totalTrays: fallback,
+    totalTrays: isAlignerFlow ? fallback : 0,
     totalTraysUpper: normalizedUpper || undefined,
     totalTraysLower: normalizedLower || undefined,
-    changeEveryDays: payload.changeEveryDays,
-    attachmentBondingTray: payload.attachmentBondingTray,
+    changeEveryDays: isAlignerFlow ? payload.changeEveryDays : 0,
+    attachmentBondingTray: isAlignerFlow ? payload.attachmentBondingTray : false,
     status: 'planejamento',
     phase: 'planejamento',
     budget: undefined,
     contract: { status: 'pendente' },
     deliveryLots: [],
     installation: undefined,
-    trays: buildPendingTrays(fallback, scan.scanDate, payload.changeEveryDays),
+    trays: isAlignerFlow ? buildPendingTrays(fallback, scan.scanDate, payload.changeEveryDays) : [],
     attachments: [],
     sourceScanId: scan.id,
     arch: scan.arch,

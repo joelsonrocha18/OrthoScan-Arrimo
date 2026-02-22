@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { DATA_MODE } from '../../data/dataMode'
 import { buildPhotoSlotsFromItems, loadDevPhotoSlots, mergePhotoSlots } from '../../lib/photoSlots'
+import { loadSystemSettings } from '../../lib/systemSettings'
 import type { Scan, ScanArch, ScanAttachment } from '../../types/Scan'
 import type { PhotoSlot } from '../../types/Scan'
 import Button from '../Button'
@@ -25,6 +26,9 @@ type ScanModalProps = {
 }
 
 type FormState = {
+  purposeProductId?: string
+  purposeProductType?: string
+  purposeLabel?: string
   patientName: string
   patientId?: string
   dentistId?: string
@@ -39,6 +43,9 @@ type FormState = {
 }
 
 const emptyForm: FormState = {
+  purposeProductId: undefined,
+  purposeProductType: undefined,
+  purposeLabel: undefined,
   patientName: '',
   patientId: undefined,
   dentistId: undefined,
@@ -100,12 +107,29 @@ export default function ScanModal({
   const [setPrimaryDentist, setSetPrimaryDentist] = useState(false)
   const [draftId, setDraftId] = useState('')
   const [devPhotoSlots, setDevPhotoSlots] = useState<PhotoSlot[]>([])
+  const purposeOptions = useMemo(() => {
+    const settings = loadSystemSettings()
+    const active = (settings.priceCatalog ?? []).filter((item) => item.isActive !== false)
+    const options = [
+      { id: 'alinhador_padrao', label: 'Alinhador', productType: 'alinhador_12m' },
+      ...active.map((item) => ({ id: item.id, label: item.name, productType: item.productType })),
+    ]
+    const seen = new Set<string>()
+    return options.filter((item) => {
+      if (seen.has(item.id)) return false
+      seen.add(item.id)
+      return true
+    })
+  }, [])
 
   useEffect(() => {
     if (!open) return
 
     if (mode === 'edit' && initialScan) {
       setForm({
+        purposeProductId: initialScan.purposeProductId ?? purposeOptions[0]?.id,
+        purposeProductType: initialScan.purposeProductType ?? purposeOptions[0]?.productType,
+        purposeLabel: initialScan.purposeLabel ?? purposeOptions[0]?.label,
         patientName: initialScan.patientName,
         patientId: initialScan.patientId,
         dentistId: initialScan.dentistId,
@@ -123,11 +147,17 @@ export default function ScanModal({
       return
     }
 
-    setForm({ ...emptyForm, scanDate: new Date().toISOString().slice(0, 10) })
+    setForm({
+      ...emptyForm,
+      scanDate: new Date().toISOString().slice(0, 10),
+      purposeProductId: purposeOptions[0]?.id,
+      purposeProductType: purposeOptions[0]?.productType,
+      purposeLabel: purposeOptions[0]?.label,
+    })
     setError('')
     setSetPrimaryDentist(false)
     setDraftId(`draft_${Date.now()}`)
-  }, [open, mode, initialScan])
+  }, [open, mode, initialScan, purposeOptions])
 
   useEffect(() => {
     if (!import.meta.env.DEV) return
@@ -242,8 +272,15 @@ export default function ScanModal({
       setError('Paciente e data do scan sao obrigatorios.')
       return
     }
+    if (!form.purposeProductId || !form.purposeLabel) {
+      setError('Cadastre pelo menos um produto ativo na Politica de preco para definir a finalidade do exame.')
+      return
+    }
 
     const saved = await onSubmit({
+      purposeProductId: form.purposeProductId,
+      purposeProductType: form.purposeProductType,
+      purposeLabel: form.purposeLabel,
       patientName: form.patientName.trim(),
       patientId: form.patientId,
       dentistId: form.dentistId,
@@ -423,7 +460,7 @@ export default function ScanModal({
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">{mode === 'create' ? 'Novo Exame' : 'Editar Exame'}</h2>
-            <p className="mt-1 text-sm text-slate-500">Documentacao completa para alinhadores.</p>
+            <p className="mt-1 text-sm text-slate-500">Documentacao completa vinculada ao produto selecionado.</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
             Fechar
@@ -432,7 +469,7 @@ export default function ScanModal({
 
         <div className="mt-5 rounded-xl border border-slate-200 p-4">
           <h3 className="text-sm font-semibold text-slate-900">Vinculos</h3>
-          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Clinica</label>
               <select
@@ -482,6 +519,29 @@ export default function ScanModal({
                 {dentists.map((dentist) => (
                   <option key={dentist.id} value={dentist.id}>
                     {dentist.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Finalidade</label>
+              <select
+                value={form.purposeProductId ?? ''}
+                onChange={(event) => {
+                  const selected = purposeOptions.find((item) => item.id === event.target.value)
+                  setForm((current) => ({
+                    ...current,
+                    purposeProductId: selected?.id,
+                    purposeProductType: selected?.productType,
+                    purposeLabel: selected?.label,
+                  }))
+                }}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"
+              >
+                {purposeOptions.length === 0 ? <option value="">Cadastre produtos na politica de preco</option> : null}
+                {purposeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
                   </option>
                 ))}
               </select>

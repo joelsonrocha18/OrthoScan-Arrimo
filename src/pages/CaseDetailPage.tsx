@@ -21,7 +21,7 @@ import { listCasesForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
 import { deleteCaseSupabase, generateCaseLabOrderSupabase, listCaseLabItemsSupabase, patchCaseDataSupabase } from '../repo/profileRepo'
 import type { LabItem } from '../types/Lab'
-import { normalizeProductType, PRODUCT_TYPE_LABEL } from '../types/Product'
+import { isAlignerProductType, normalizeProductType, PRODUCT_TYPE_LABEL } from '../types/Product'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
@@ -322,6 +322,10 @@ export default function CaseDetailPage() {
   const currentCase = useMemo(
     () => (isSupabaseMode ? supabaseCase : params.id ? db.cases.find((item) => item.id === params.id) ?? null : null),
     [isSupabaseMode, supabaseCase, params.id, db.cases],
+  )
+  const isAlignerCase = useMemo(
+    () => (currentCase ? isAlignerProductType(normalizeProductType(currentCase.productId ?? currentCase.productType)) : false),
+    [currentCase],
   )
   const scopedCases = useMemo(() => listCasesForUser(db, currentUser), [db, currentUser])
 
@@ -1503,6 +1507,7 @@ export default function CaseDetailPage() {
 
       </section>
 
+      {isAlignerCase ? (
       <section className="mt-6">
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Reposicao prevista</h2>
@@ -1547,6 +1552,7 @@ export default function CaseDetailPage() {
           </div>
         </Card>
       </section>
+      ) : null}
 
       <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
@@ -1575,20 +1581,28 @@ export default function CaseDetailPage() {
                 {requester ? `${requesterPrefix} ${requester.name}` : '-'}
               </p>
             </div>
-            <p>
-              <span className="font-medium">Troca a cada (dias):</span> {currentCase.changeEveryDays}
-            </p>
-            <p>
-              <span className="font-medium">Placas:</span>{' '}
-              {hasUpperArch && hasLowerArch
-                ? `Superior: ${totalUpper} | Inferior: ${totalLower}`
-                : hasUpperArch
-                  ? `Superior: ${totalUpper}`
-                  : `Inferior: ${totalLower}`}
-            </p>
-            <p>
-              <span className="font-medium">Placa de attachments:</span> {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
-            </p>
+            {isAlignerCase ? (
+              <>
+                <p>
+                  <span className="font-medium">Troca a cada (dias):</span> {currentCase.changeEveryDays}
+                </p>
+                <p>
+                  <span className="font-medium">Placas:</span>{' '}
+                  {hasUpperArch && hasLowerArch
+                    ? `Superior: ${totalUpper} | Inferior: ${totalLower}`
+                    : hasUpperArch
+                      ? `Superior: ${totalUpper}`
+                      : `Inferior: ${totalLower}`}
+                </p>
+                <p>
+                  <span className="font-medium">Placa de attachments:</span> {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
+                </p>
+              </>
+            ) : (
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                Produto sem fluxo de placas de alinhadores. Fluxo focado em registro de instalacao.
+              </p>
+            )}
             <p>
               <span className="font-medium">Fonte:</span> {currentCase.sourceScanId ? `Scan ${currentCase.sourceScanId}` : 'Nao vinculado'}
             </p>
@@ -1629,6 +1643,7 @@ export default function CaseDetailPage() {
         </Card>
       </section>
 
+      {isAlignerCase ? (
       <section className="mt-6">
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Producao (LAB)</h2>
@@ -1694,6 +1709,7 @@ export default function CaseDetailPage() {
           </div>
         </Card>
       </section>
+      ) : null}
 
       <section className="mt-6">
         <Card>
