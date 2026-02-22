@@ -63,7 +63,7 @@ export default function ScansPage() {
   const canRead = can(currentUser, 'scans.read')
   const canWrite = can(currentUser, 'scans.write')
   const canApprove = can(currentUser, 'scans.approve')
-  const canDelete = can(currentUser, 'scans.delete')
+  const canDelete = can(currentUser, 'scans.delete') && currentUser?.role === 'master_admin'
   const canCreateCase = can(currentUser, 'cases.write')
   const isSupabaseMode = DATA_MODE === 'supabase'
   const [createOpen, setCreateOpen] = useState(false)
@@ -214,7 +214,9 @@ export default function ScansPage() {
 
   const handleDelete = async (scan: Scan) => {
     if (!canDelete) return
-    const confirmed = window.confirm(`Tem certeza que deseja excluir o escaneamento de ${scan.patientName}?`)
+    const confirmed = window.confirm(
+      `Confirma excluir permanentemente este exame de ${scan.patientName}? Esta acao sera registrada no historico do paciente.`,
+    )
     if (!confirmed) return
     if (isSupabaseMode) {
       const result = await deleteScanSupabase(scan.id)

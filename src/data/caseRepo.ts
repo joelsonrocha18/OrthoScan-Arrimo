@@ -91,6 +91,14 @@ export function deleteCase(id: string): RepoResult<null> {
     action: 'case.delete',
     message: `Caso ${target.treatmentCode ?? target.id} excluido com itens LAB vinculados.`,
   })
+  if (target.patientId) {
+    pushAudit(db, {
+      entity: 'patient',
+      entityId: target.patientId,
+      action: 'patient.history.case_delete',
+      message: `Pedido ${target.treatmentCode ?? target.id} excluido com OS vinculadas.`,
+    })
+  }
   saveDb(db)
   return { ok: true, data: null }
 }

@@ -16,11 +16,24 @@ type LabItemModalProps = {
   item: LabItem | null
   open: boolean
   cases: Case[]
+  patientOptions?: Array<{
+    id: string
+    name: string
+    dentistId?: string
+    clinicId?: string
+    dentistName?: string
+    clinicName?: string
+  }>
   readOnly?: boolean
+  allowDelete?: boolean
   onClose: () => void
   onCreate: (payload: {
     caseId?: string
     productType?: ProductType
+    productId?: ProductType
+    patientId?: string
+    dentistId?: string
+    clinicId?: string
     arch: 'superior' | 'inferior' | 'ambos'
     plannedUpperQty?: number
     plannedLowerQty?: number
@@ -37,6 +50,10 @@ type LabItemModalProps = {
 
 type FormState = {
   productType: ProductType
+  productId?: ProductType
+  patientId?: string
+  dentistId?: string
+  clinicId?: string
   arch: 'superior' | 'inferior' | 'ambos'
   plannedUpperQty: string
   plannedLowerQty: string
@@ -79,8 +96,10 @@ export default function LabItemModal({
   item,
   open,
   cases,
+  patientOptions = [],
   onClose,
   readOnly = false,
+  allowDelete = false,
   onCreate,
   onSave,
   onDelete,
@@ -88,6 +107,7 @@ export default function LabItemModal({
   const { addToast } = useToast()
   const [form, setForm] = useState<FormState>(defaultForm)
   const [error, setError] = useState('')
+  const [patientSearch, setPatientSearch] = useState('')
 
   const linkedCaseId = mode === 'edit' ? item?.caseId : undefined
   const selectedCase = useMemo(
@@ -104,6 +124,10 @@ export default function LabItemModal({
       setForm({
         arch: item.arch ?? 'ambos',
         productType: item.productType ?? 'alinhador_12m',
+        productId: item.productId,
+        patientId: item.patientId,
+        dentistId: item.dentistId,
+        clinicId: item.clinicId,
         plannedUpperQty: String(item.plannedUpperQty ?? 0),
         plannedLowerQty: String(item.plannedLowerQty ?? 0),
         patientName: item.patientName,
@@ -114,12 +138,22 @@ export default function LabItemModal({
         status: item.status,
       })
       setError('')
+      setPatientSearch('')
       return
     }
 
     setForm({ ...defaultForm, dueDate: new Date().toISOString().slice(0, 10) })
     setError('')
+    setPatientSearch('')
   }, [mode, item, open])
+
+  const filteredPatientOptions = useMemo(() => {
+    const query = patientSearch.trim().toLowerCase()
+    if (!query) return patientOptions.slice(0, 30)
+    return patientOptions
+      .filter((item) => item.name.toLowerCase().includes(query))
+      .slice(0, 30)
+  }, [patientOptions, patientSearch])
 
   const canDelete = mode === 'edit' && Boolean(item)
   const isReworkItem = useMemo(
@@ -191,6 +225,10 @@ export default function LabItemModal({
       const result = await onCreate({
         caseId: undefined,
         productType: form.productType,
+        productId: form.productId ?? form.productType,
+        patientId: form.patientId,
+        dentistId: form.dentistId,
+        clinicId: form.clinicId,
         arch: form.arch,
         plannedUpperQty: Math.trunc(plannedUpperQty),
         plannedLowerQty: Math.trunc(plannedLowerQty),
@@ -218,6 +256,10 @@ export default function LabItemModal({
     const result = await onSave(item.id, {
       arch: form.arch,
       productType: form.productType,
+      productId: form.productId ?? form.productType,
+      patientId: form.patientId,
+      dentistId: form.dentistId,
+      clinicId: form.clinicId,
       plannedUpperQty: Math.trunc(plannedUpperQty),
       plannedLowerQty: Math.trunc(plannedLowerQty),
       patientName: form.patientName.trim(),
@@ -255,11 +297,11 @@ export default function LabItemModal({
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">
-              {mode === 'create' ? 'Nova Solicitacao' : isReworkItem ? 'Detalhes do Rework' : 'Detalhes do Item'}
+              {mode === 'create' ? 'Solicitacao avulsa' : isReworkItem ? 'Detalhes do Rework' : 'Detalhes do Item'}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
               {mode === 'create'
-                ? 'Cadastre um novo item na fila do laboratorio.'
+                ? 'Cadastre uma solicitacao avulsa na fila do laboratorio.'
                 : isReworkItem
                   ? 'Rework da esteira: ajuste prazo, observacoes e status.'
                   : 'Edite prioridade, prazo, observacoes e status.'}
@@ -316,6 +358,49 @@ export default function LabItemModal({
               disabled={readOnly}
             />
           </div>
+          {!linkedCaseId ? (
+            <>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-slate-700">Buscar no banco de pacientes</label>
+                <Input
+                  value={patientSearch}
+                  onChange={(event) => setPatientSearch(event.target.value)}
+                  placeholder="Digite o nome do paciente"
+                  disabled={readOnly}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium text-slate-700">Paciente cadastrado</label>
+                <select
+                  value={form.patientId ?? ''}
+                  onChange={(event) => {
+                    const selected = patientOptions.find((item) => item.id === event.target.value)
+                    setForm((current) => ({
+                      ...current,
+                      patientId: selected?.id,
+                      patientName: selected?.name ?? current.patientName,
+                      dentistId: selected?.dentistId,
+                      clinicId: selected?.clinicId,
+                    }))
+                  }}
+                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  disabled={readOnly}
+                >
+                  <option value="">Nao vincular paciente</option>
+                  {filteredPatientOptions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                {form.patientId ? (
+                  <p className="mt-1 text-xs text-slate-600">
+                    Vinculos: Dentista {patientOptions.find((item) => item.id === form.patientId)?.dentistName ?? '-'} | Clinica {patientOptions.find((item) => item.id === form.patientId)?.clinicName ?? '-'}
+                  </p>
+                ) : null}
+              </div>
+            </>
+          ) : null}
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Prazo</label>
@@ -405,7 +490,7 @@ export default function LabItemModal({
 
         <div className="mt-6 flex items-center justify-between gap-2">
           <div>
-            {!readOnly && canDelete ? (
+            {!readOnly && canDelete && allowDelete ? (
               <Button variant="secondary" onClick={handleDelete}>
                 Excluir
               </Button>

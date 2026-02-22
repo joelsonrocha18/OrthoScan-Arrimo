@@ -260,6 +260,25 @@ export default function PatientDetailPage() {
         (!caseItem.patientId && caseItem.patientName.toLowerCase() === name),
     )
   }, [db.cases, existing])
+  const relatedAuditEvents = useMemo(() => {
+    if (!existing) return []
+    const scanIds = new Set(scans.map((item) => item.id))
+    const caseIds = new Set(cases.map((item) => item.id))
+    const labIds = new Set(
+      db.labItems
+        .filter((item) => item.caseId && caseIds.has(item.caseId))
+        .map((item) => item.id),
+    )
+    return (db.auditLogs ?? [])
+      .filter((log) => {
+        if (log.entity === 'patient' && log.entityId === existing.id) return true
+        if (log.entity === 'scan' && scanIds.has(log.entityId)) return true
+        if (log.entity === 'case' && caseIds.has(log.entityId)) return true
+        if (log.entity === 'lab' && labIds.has(log.entityId)) return true
+        return false
+      })
+      .slice(0, 20)
+  }, [cases, db.auditLogs, db.labItems, existing, scans])
 
   useEffect(() => {
     if (!existing) {
@@ -820,6 +839,22 @@ export default function PatientDetailPage() {
                 </div>
               ) : null}
             </div>
+          </div>
+        </Card>
+      </section>
+
+      <section className="mt-6">
+        <Card>
+          <h2 className="text-lg font-semibold text-slate-900">Historico - Auditoria</h2>
+          <div className="mt-3 space-y-2">
+            {relatedAuditEvents.map((event) => (
+              <div key={event.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                <p className="font-medium text-slate-900">{event.action}</p>
+                <p className="text-xs text-slate-500">{new Date(event.at).toLocaleString('pt-BR')}</p>
+                {event.message ? <p className="mt-1 text-sm text-slate-700">{event.message}</p> : null}
+              </div>
+            ))}
+            {relatedAuditEvents.length === 0 ? <p className="text-sm text-slate-500">Nenhum evento de auditoria vinculado.</p> : null}
           </div>
         </Card>
       </section>

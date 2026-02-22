@@ -108,6 +108,31 @@ function asProductType(value: unknown, fallback: ProductType = 'alinhador_12m'):
   return normalizeProductType(value, fallback)
 }
 
+function appendHistoryLine(base: string | null | undefined, line: string) {
+  const now = new Date()
+  const stamp = now.toLocaleString('pt-BR')
+  const entry = `[${stamp}] ${line}`
+  const previous = (base ?? '').trim()
+  const merged = previous ? `${previous}\n${entry}` : entry
+  return merged.slice(-8000)
+}
+
+async function appendPatientHistorySupabase(patientId: string | null | undefined, line: string) {
+  if (!supabase || !patientId) return
+  const { data, error } = await supabase
+    .from('patients')
+    .select('id, notes')
+    .eq('id', patientId)
+    .maybeSingle()
+  if (error || !data) return
+  const currentNotes = (data as Record<string, unknown>).notes as string | null | undefined
+  const nextNotes = appendHistoryLine(currentNotes, line)
+  await supabase
+    .from('patients')
+    .update({ notes: nextNotes, updated_at: new Date().toISOString() })
+    .eq('id', patientId)
+}
+
 function normalizeScanAttachments(attachments: ScanAttachment[]) {
   const now = new Date().toISOString()
   return attachments.map((attachment) => ({
@@ -422,6 +447,15 @@ export async function updateScanStatusSupabase(scanId: string, status: 'aprovado
 
 export async function deleteScanSupabase(scanId: string) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const { data: current } = await supabase
+    .from('scans')
+    .select('id, patient_id, data')
+    .eq('id', scanId)
+    .maybeSingle()
+  const currentData = asObject((current as Record<string, unknown> | null)?.data)
+  const patientId = asText((current as Record<string, unknown> | null)?.patient_id, asText(currentData.patientId)) || undefined
+  const patientName = asText(currentData.patientName, '-')
+  const scanDate = asText(currentData.scanDate)
   const now = new Date().toISOString()
   const { data, error } = await supabase
     .from('scans')
@@ -430,6 +464,93 @@ export async function deleteScanSupabase(scanId: string) {
     .select('id')
   if (error) return { ok: false as const, error: error.message }
   if (!data || data.length === 0) return { ok: false as const, error: 'Scan nao excluido. Verifique permissoes.' }
+  await appendPatientHistorySupabase(
+    patientId,
+    `Exame excluido pelo administrador. Paciente: ${patientName}. Data do exame: ${scanDate || '-'}.`,
+  )
+  return { ok: true as const }
+}
+
+export async function deleteCaseSupabase(caseId: string) {
+  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const { data: current, error: readError } = await supabase
+    .from('cases')
+    .select('id, patient_id, treatment_code, data')
+    .eq('id', caseId)
+    .maybeSingle()
+  if (readError || !current) return { ok: false as const, error: readError?.message ?? 'Caso nao encontrado.' }
+
+  const currentData = asObject((current as Record<string, unknown>).data)
+  const patientId = asText((current as Record<string, unknown>).patient_id, asText(currentData.patientId)) || undefined
+  const treatmentCode = asText((current as Record<string, unknown>).treatment_code, asText(currentData.treatmentCode, caseId))
+  const patientName = asText(currentData.patientName, '-')
+  const now = new Date().toISOString()
+
+  const { data: updated, error } = await supabase
+    .from('cases')
+    .update({ deleted_at: now, updated_at: now })
+    .eq('id', caseId)
+    .select('id')
+  if (error) return { ok: false as const, error: error.message }
+  if (!updated || updated.length === 0) return { ok: false as const, error: 'Caso nao excluido. Verifique permissoes.' }
+
+  await supabase
+    .from('lab_items')
+    .update({ deleted_at: now, updated_at: now })
+    .eq('case_id', caseId)
+    .is('deleted_at', null)
+  await supabase
+    .from('scans')
+    .update({ updated_at: now })
+    .eq('data->>linkedCaseId', caseId)
+
+  await appendPatientHistorySupabase(
+    patientId,
+    `Pedido ${treatmentCode} excluido pelo administrador, incluindo OS vinculadas. Paciente: ${patientName}.`,
+  )
+  return { ok: true as const }
+}
+
+export async function deleteLabItemSupabase(labItemId: string) {
+  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const { data: current, error: readError } = await supabase
+    .from('lab_items')
+    .select('id, case_id, tray_number, data')
+    .eq('id', labItemId)
+    .maybeSingle()
+  if (readError || !current) return { ok: false as const, error: readError?.message ?? 'OS nao encontrada.' }
+
+  const meta = asObject((current as Record<string, unknown>).data)
+  const caseId = asText((current as Record<string, unknown>).case_id) || undefined
+  const trayNumber = asNumber((current as Record<string, unknown>).tray_number, asNumber(meta.trayNumber, 1))
+  let patientId: string | undefined
+  let patientName = asText(meta.patientName, '-')
+  if (caseId) {
+    const { data: linkedCase } = await supabase
+      .from('cases')
+      .select('id, patient_id, data')
+      .eq('id', caseId)
+      .maybeSingle()
+    if (linkedCase) {
+      const caseData = asObject((linkedCase as Record<string, unknown>).data)
+      patientId = asText((linkedCase as Record<string, unknown>).patient_id, asText(caseData.patientId)) || undefined
+      patientName = asText(caseData.patientName, patientName)
+    }
+  }
+
+  const now = new Date().toISOString()
+  const { data: updated, error } = await supabase
+    .from('lab_items')
+    .update({ deleted_at: now, updated_at: now })
+    .eq('id', labItemId)
+    .select('id')
+  if (error) return { ok: false as const, error: error.message }
+  if (!updated || updated.length === 0) return { ok: false as const, error: 'OS nao excluida. Verifique permissoes.' }
+
+  await appendPatientHistorySupabase(
+    patientId,
+    `OS de laboratorio excluida pelo administrador (placa #${trayNumber}) para ${patientName}.`,
+  )
   return { ok: true as const }
 }
 

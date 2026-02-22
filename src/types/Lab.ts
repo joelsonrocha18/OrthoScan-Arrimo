@@ -8,6 +8,9 @@ export type LabItem = {
   id: string
   productType?: ProductType
   productId?: ProductType
+  patientId?: string
+  dentistId?: string
+  clinicId?: string
   requestCode?: string
   requestKind?: 'producao' | 'reconfeccao' | 'reposicao_programada'
   expectedReplacementDate?: string

@@ -211,6 +211,14 @@ export function deleteScan(id: string) {
       : item,
   )
   pushAudit(db, { entity: 'scan', entityId: id, action: 'scan.delete', message: 'Exame removido.' })
+  if (target.patientId) {
+    pushAudit(db, {
+      entity: 'patient',
+      entityId: target.patientId,
+      action: 'patient.history.scan_delete',
+      message: `Exame removido: ${target.serviceOrderCode ?? target.id}.`,
+    })
+  }
   saveDb(db)
 }
 

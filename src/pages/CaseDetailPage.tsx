@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useToast } from '../app/ToastProvider'
 import Badge from '../components/Badge'
@@ -18,7 +18,7 @@ import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 import { listCasesForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
-import { generateCaseLabOrderSupabase, listCaseLabItemsSupabase, patchCaseDataSupabase } from '../repo/profileRepo'
+import { deleteCaseSupabase, generateCaseLabOrderSupabase, listCaseLabItemsSupabase, patchCaseDataSupabase } from '../repo/profileRepo'
 import type { LabItem } from '../types/Lab'
 import { normalizeProductType, PRODUCT_TYPE_LABEL } from '../types/Product'
 
@@ -256,7 +256,7 @@ export default function CaseDetailPage() {
   const canWrite = can(currentUser, 'cases.write')
   const canWriteLocalOnly = canWrite && !isSupabaseMode
   const canManageTray = canWrite
-  const canDeleteCase = !isSupabaseMode && can(currentUser, 'cases.delete')
+  const canDeleteCase = can(currentUser, 'cases.delete') && currentUser?.role === 'master_admin'
   const [selectedTray, setSelectedTray] = useState<CaseTray | null>(null)
   const [trayState, setSelectedTrayState] = useState<TrayState>('pendente')
   const [reworkArch, setReworkArch] = useState<'superior' | 'inferior' | 'ambos'>('ambos')
@@ -801,7 +801,7 @@ export default function CaseDetailPage() {
             dueDate: trayInCase.dueDate ?? today,
             status: 'aguardando_iniciar',
             priority: 'Urgente',
-            notes: `OS de produ��o para rework da placa #${selectedTray.trayNumber}. Motivo: ${reworkReason}`,
+            notes: `OS de produção para rework da placa #${selectedTray.trayNumber}. Motivo: ${reworkReason}`,
           })
           if (!production.ok) {
             addToast({ type: 'error', title: 'Rework', message: production.error })
@@ -814,7 +814,7 @@ export default function CaseDetailPage() {
         }
 
         if (!hasOpenRework || !hasOpenReworkProduction) {
-          addToast({ type: 'success', title: 'OS de rework geradas', message: 'Reconfeccao e confec��o adicionadas na esteira.' })
+          addToast({ type: 'success', title: 'OS de rework geradas', message: 'Reconfeccao e confecção adicionadas na esteira.' })
         }
 
         const latestAfterState = getCase(currentCase.id) ?? currentCase
@@ -974,8 +974,20 @@ export default function CaseDetailPage() {
 
   const handleDeleteCase = () => {
     if (!canDeleteCase) return
-    const confirmed = window.confirm('Tem certeza que deseja excluir este pedido? Esta acao remove os itens LAB vinculados.')
+    const confirmed = window.confirm('Confirma excluir este pedido? Esta acao remove itens LAB vinculados e registra no historico do paciente.')
     if (!confirmed) return
+    if (isSupabaseMode) {
+      void (async () => {
+        const result = await deleteCaseSupabase(currentCase.id)
+        if (!result.ok) {
+          addToast({ type: 'error', title: 'Erro ao excluir pedido', message: result.error })
+          return
+        }
+        addToast({ type: 'success', title: 'Pedido excluido' })
+        navigate('/app/cases', { replace: true })
+      })()
+      return
+    }
     const result = deleteCase(currentCase.id)
     if (!result.ok) {
       addToast({ type: 'error', title: 'Erro ao excluir pedido', message: result.error })
@@ -1343,7 +1355,7 @@ export default function CaseDetailPage() {
                   />
                   <textarea
                     rows={2}
-                    placeholder="Observacões do orcamento"
+                    placeholder="ObservacÃµes do orcamento"
                     value={budgetNotes}
                     onChange={(event) => setBudgetNotes(event.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -1362,7 +1374,7 @@ export default function CaseDetailPage() {
                 </p>
                 <textarea
                   rows={2}
-                  placeholder="Observacões do contrato"
+                  placeholder="ObservacÃµes do contrato"
                   value={contractNotes}
                   onChange={(event) => setContractNotes(event.target.value)}
                   className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -1503,7 +1515,7 @@ export default function CaseDetailPage() {
               {supplySummary?.nextDueDate ? new Date(`${supplySummary.nextDueDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'}
             </p>
             {!currentCase.installation?.installedAt ? (
-              <p className="text-sm text-slate-500">Registre a instalacao para calcular reposicões.</p>
+              <p className="text-sm text-slate-500">Registre a instalacao para calcular reposicÃµes.</p>
             ) : null}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -1531,7 +1543,7 @@ export default function CaseDetailPage() {
 
       <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Informacões clinicas</h2>
+          <h2 className="text-lg font-semibold text-slate-900">InformacÃµes clinicas</h2>
           <div className="mt-3 space-y-2 text-sm text-slate-700">
             <p>
               <span className="font-medium">Arcada:</span> {currentCase.arch ? archLabelMap[currentCase.arch] : '-'}
@@ -1873,6 +1885,7 @@ export default function CaseDetailPage() {
     </AppShell>
   )
 }
+
 
 
 

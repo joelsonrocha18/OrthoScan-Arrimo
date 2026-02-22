@@ -23,9 +23,27 @@ export type SystemAuditEntry = {
   details?: string
 }
 
+export type PricingMode = 'unit' | 'arch' | 'tooth'
+
+export type ProductPricingItem = {
+  id: string
+  name: string
+  productType?: string
+  pricingMode: PricingMode
+  unitPrice?: number
+  upperPrice?: number
+  lowerPrice?: number
+  toothUnitPrice?: number
+  selectedTeeth?: string[]
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 export type SystemSettings = {
   theme: AppThemeMode
   labCompany: LabCompanyProfile
+  priceCatalog: ProductPricingItem[]
   audit: SystemAuditEntry[]
 }
 
@@ -45,6 +63,7 @@ const emptyLabCompany: LabCompanyProfile = {
 const defaultSettings: SystemSettings = {
   theme: 'light',
   labCompany: emptyLabCompany,
+  priceCatalog: [],
   audit: [],
 }
 
@@ -77,6 +96,23 @@ export function loadSystemSettings(): SystemSettings {
     }
 
     const auditRaw = Array.isArray(parsed.audit) ? parsed.audit : []
+    const catalogRaw = Array.isArray(parsed.priceCatalog) ? parsed.priceCatalog : []
+    const priceCatalog: ProductPricingItem[] = catalogRaw
+      .filter(isObject)
+      .map((item) => ({
+        id: String(item.id ?? `price_${Date.now()}`),
+        name: String(item.name ?? ''),
+        productType: typeof item.productType === 'string' ? item.productType : undefined,
+        pricingMode: item.pricingMode === 'arch' || item.pricingMode === 'tooth' ? item.pricingMode : 'unit',
+        unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : undefined,
+        upperPrice: typeof item.upperPrice === 'number' ? item.upperPrice : undefined,
+        lowerPrice: typeof item.lowerPrice === 'number' ? item.lowerPrice : undefined,
+        toothUnitPrice: typeof item.toothUnitPrice === 'number' ? item.toothUnitPrice : undefined,
+        selectedTeeth: Array.isArray(item.selectedTeeth) ? item.selectedTeeth.map((tooth) => String(tooth)) : undefined,
+        isActive: item.isActive !== false,
+        createdAt: String(item.createdAt ?? new Date().toISOString()),
+        updatedAt: String(item.updatedAt ?? new Date().toISOString()),
+      }))
     const audit: SystemAuditEntry[] = auditRaw
       .filter(isObject)
       .map((item) => ({
@@ -90,6 +126,7 @@ export function loadSystemSettings(): SystemSettings {
     return {
       theme,
       labCompany,
+      priceCatalog,
       audit,
     }
   } catch {

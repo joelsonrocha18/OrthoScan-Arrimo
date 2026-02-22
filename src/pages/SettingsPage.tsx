@@ -18,7 +18,15 @@ import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
 import { formatCnpj, isValidCnpj } from '../lib/cnpj'
 import { formatFixedPhone, formatMobilePhone, isValidFixedPhone, isValidMobilePhone } from '../lib/phone'
 import { supabase } from '../lib/supabaseClient'
-import { addAuditEntry, applyTheme, loadSystemSettings, saveSystemSettings, type AppThemeMode, type LabCompanyProfile } from '../lib/systemSettings'
+import {
+  addAuditEntry,
+  applyTheme,
+  loadSystemSettings,
+  saveSystemSettings,
+  type AppThemeMode,
+  type LabCompanyProfile,
+  type PricingMode,
+} from '../lib/systemSettings'
 import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUser } from '../repo/userRepo'
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
 import { listClinicsSupabase, listDentistsSupabase, type ClinicOption, type DentistOption } from '../repo/directoryRepo'
@@ -27,7 +35,7 @@ import { PRODUCT_TYPE_LABEL } from '../types/Product'
 import type { Role, User } from '../types/User'
 import { useDb } from '../lib/useDb'
 
-type MainTab = 'registration' | 'users' | 'system_update' | 'system_diagnostics'
+type MainTab = 'registration' | 'users' | 'pricing' | 'system_update' | 'system_diagnostics'
 type ModalTab = 'personal' | 'access' | 'profile' | 'link'
 type PasswordMode = 'auto' | 'manual'
 type ReportDatasetKey = 'patients' | 'dentists' | 'clinics' | 'users' | 'scans' | 'cases' | 'labItems'
@@ -43,6 +51,23 @@ const REPORT_DATASETS: Array<{ key: ReportDatasetKey; label: string }> = [
   { key: 'cases', label: 'Alinhadores' },
   { key: 'labItems', label: 'Laboratorio' },
 ]
+const TOOTH_OPTIONS = [
+  '18', '17', '16', '15', '14', '13', '12', '11',
+  '21', '22', '23', '24', '25', '26', '27', '28',
+  '48', '47', '46', '45', '44', '43', '42', '41',
+  '31', '32', '33', '34', '35', '36', '37', '38',
+]
+
+function parsePriceInput(raw: string) {
+  const normalized = raw.replace(',', '.').replace(/[^\d.]/g, '')
+  const value = Number(normalized)
+  return Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function formatCurrencyBrl(value?: number) {
+  if (!Number.isFinite(value)) return '-'
+  return (value ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
 
 // In Supabase mode, collaborator onboarding via link is for operational profiles only (no admin).
 const INVITE_ROLE_LIST: Role[] = ['dentist_admin', 'dentist_client', 'clinic_client', 'lab_tech', 'receptionist']
@@ -236,6 +261,25 @@ export default function SettingsPage() {
   const [cepError, setCepError] = useState('')
   const [settingsState, setSettingsState] = useState(() => loadSystemSettings())
   const [labForm, setLabForm] = useState<LabCompanyProfile>(() => loadSystemSettings().labCompany)
+  const [priceForm, setPriceForm] = useState<{
+    productType: string
+    customName: string
+    pricingMode: PricingMode
+    unitPrice: string
+    upperPrice: string
+    lowerPrice: string
+    toothUnitPrice: string
+    selectedTeeth: string[]
+  }>({
+    productType: 'alinhador_12m',
+    customName: '',
+    pricingMode: 'unit',
+    unitPrice: '',
+    upperPrice: '',
+    lowerPrice: '',
+    toothUnitPrice: '',
+    selectedTeeth: [],
+  })
 
   const canManageUsers = can(currentUser, 'users.write')
   const canDeleteUsers = can(currentUser, 'users.delete')
@@ -482,6 +526,106 @@ export default function SettingsPage() {
     addToast({ type: 'success', title: 'Cadastro salvo' })
   }
 
+  const addPriceProduct = () => {
+    const productType = priceForm.productType.trim()
+    const name = priceForm.customName.trim() || PRODUCT_TYPE_LABEL[productType as keyof typeof PRODUCT_TYPE_LABEL] || productType
+    if (!name) {
+      addToast({ type: 'error', title: 'Informe o nome do produto.' })
+      return
+    }
+    if (priceForm.pricingMode === 'unit' && parsePriceInput(priceForm.unitPrice) <= 0) {
+      addToast({ type: 'error', title: 'Informe um preco por unidade valido.' })
+      return
+    }
+    if (priceForm.pricingMode === 'arch' && parsePriceInput(priceForm.upperPrice) <= 0 && parsePriceInput(priceForm.lowerPrice) <= 0) {
+      addToast({ type: 'error', title: 'Informe preco por arcada superior e/ou inferior.' })
+      return
+    }
+    if (priceForm.pricingMode === 'tooth') {
+      if (parsePriceInput(priceForm.toothUnitPrice) <= 0) {
+        addToast({ type: 'error', title: 'Informe o preco por dente.' })
+        return
+      }
+      if (!priceForm.selectedTeeth.length) {
+        addToast({ type: 'error', title: 'Selecione ao menos um dente para esta politica.' })
+        return
+      }
+    }
+    const now = new Date().toISOString()
+    const nextCatalog = [
+      {
+        id: `price_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+        name,
+        productType: productType || undefined,
+        pricingMode: priceForm.pricingMode,
+        unitPrice: priceForm.pricingMode === 'unit' ? parsePriceInput(priceForm.unitPrice) : undefined,
+        upperPrice: priceForm.pricingMode === 'arch' ? parsePriceInput(priceForm.upperPrice) : undefined,
+        lowerPrice: priceForm.pricingMode === 'arch' ? parsePriceInput(priceForm.lowerPrice) : undefined,
+        toothUnitPrice: priceForm.pricingMode === 'tooth' ? parsePriceInput(priceForm.toothUnitPrice) : undefined,
+        selectedTeeth: priceForm.pricingMode === 'tooth' ? priceForm.selectedTeeth : undefined,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      ...(settingsState.priceCatalog ?? []),
+    ]
+    const next = addAuditEntry(
+      {
+        ...settingsState,
+        priceCatalog: nextCatalog,
+      },
+      { action: 'settings.pricing.add', actor: currentUser?.email, details: `Produto: ${name}` },
+    )
+    saveSystemSettings(next)
+    setSettingsState(next)
+    setPriceForm({
+      productType: 'alinhador_12m',
+      customName: '',
+      pricingMode: 'unit',
+      unitPrice: '',
+      upperPrice: '',
+      lowerPrice: '',
+      toothUnitPrice: '',
+      selectedTeeth: [],
+    })
+    addToast({ type: 'success', title: 'Produto adicionado na politica de preco.' })
+  }
+
+  const removePriceProduct = (id: string) => {
+    const current = settingsState.priceCatalog ?? []
+    const target = current.find((item) => item.id === id)
+    if (!target) return
+    if (!window.confirm(`Excluir o produto ${target.name} da politica de preco?`)) return
+    const next = addAuditEntry(
+      {
+        ...settingsState,
+        priceCatalog: current.filter((item) => item.id !== id),
+      },
+      { action: 'settings.pricing.delete', actor: currentUser?.email, details: `Produto: ${target.name}` },
+    )
+    saveSystemSettings(next)
+    setSettingsState(next)
+    addToast({ type: 'info', title: 'Produto removido da politica de preco.' })
+  }
+
+  const togglePriceProductActive = (id: string, isActive: boolean) => {
+    const current = settingsState.priceCatalog ?? []
+    const target = current.find((item) => item.id === id)
+    if (!target) return
+    const nextCatalog = current.map((item) =>
+      item.id === id ? { ...item, isActive, updatedAt: new Date().toISOString() } : item,
+    )
+    const next = addAuditEntry(
+      {
+        ...settingsState,
+        priceCatalog: nextCatalog,
+      },
+      { action: 'settings.pricing.toggle', actor: currentUser?.email, details: `${target.name}: ${isActive ? 'ativo' : 'inativo'}` },
+    )
+    saveSystemSettings(next)
+    setSettingsState(next)
+  }
+
   const exportBackup = () => {
     downloadFile(`backup_orthoscan_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ db: JSON.parse(localStorage.getItem(DB_KEY) ?? '{}'), settings: settingsState }, null, 2), 'application/json')
   }
@@ -606,6 +750,7 @@ export default function SettingsPage() {
           {[
             { id: 'registration', label: 'Cadastro' },
             { id: 'users', label: 'Usuarios' },
+            { id: 'pricing', label: 'Politica de preco' },
             { id: 'system_update', label: 'Atualizacao do sistema' },
             { id: 'system_diagnostics', label: 'Diagnostico do sistema' },
           ].map((item) => (
@@ -743,6 +888,157 @@ export default function SettingsPage() {
             <Link to="/legal/privacy" className="text-sm font-semibold text-brand-700 hover:text-brand-500">Privacidade</Link>
             <span className="text-slate-300">|</span>
             <Link to="/legal/lgpd" className="text-sm font-semibold text-brand-700 hover:text-brand-500">Direitos LGPD</Link>
+          </div>
+        </Card>
+      </section> : null}
+
+      {mainTab === 'pricing' ? <section className="mt-4 space-y-4">
+        <Card>
+          <h2 className="text-lg font-semibold text-slate-900">Politica de preco por produto</h2>
+          <p className="mt-1 text-sm text-slate-500">Cadastre produtos e defina regra de cobranca por unidade, arcada ou dentes do modelo enviado.</p>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Tipo base</label>
+              <select
+                value={priceForm.productType}
+                onChange={(event) => setPriceForm((current) => ({ ...current, productType: event.target.value }))}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              >
+                {Object.entries(PRODUCT_TYPE_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Nome comercial (opcional)</label>
+              <Input
+                value={priceForm.customName}
+                onChange={(event) => setPriceForm((current) => ({ ...current, customName: event.target.value }))}
+                placeholder="Ex.: Alinhador Invisivel 12 meses"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Modo de cobranca</label>
+              <select
+                value={priceForm.pricingMode}
+                onChange={(event) => setPriceForm((current) => ({ ...current, pricingMode: event.target.value as PricingMode }))}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              >
+                <option value="unit">Unidade</option>
+                <option value="arch">Arcada</option>
+                <option value="tooth">Dente</option>
+              </select>
+            </div>
+            {priceForm.pricingMode === 'unit' ? (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Preco por unidade (R$)</label>
+                <Input value={priceForm.unitPrice} onChange={(event) => setPriceForm((current) => ({ ...current, unitPrice: event.target.value }))} />
+              </div>
+            ) : null}
+            {priceForm.pricingMode === 'arch' ? (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Preco arcada superior (R$)</label>
+                  <Input value={priceForm.upperPrice} onChange={(event) => setPriceForm((current) => ({ ...current, upperPrice: event.target.value }))} />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Preco arcada inferior (R$)</label>
+                  <Input value={priceForm.lowerPrice} onChange={(event) => setPriceForm((current) => ({ ...current, lowerPrice: event.target.value }))} />
+                </div>
+              </>
+            ) : null}
+            {priceForm.pricingMode === 'tooth' ? (
+              <>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Preco por dente (R$)</label>
+                  <Input value={priceForm.toothUnitPrice} onChange={(event) => setPriceForm((current) => ({ ...current, toothUnitPrice: event.target.value }))} />
+                </div>
+                <div className="sm:col-span-2 rounded-lg border border-slate-200 p-3">
+                  <p className="mb-2 text-sm font-medium text-slate-700">Selecao de dentes (modelo enviado)</p>
+                  <div className="grid grid-cols-8 gap-2">
+                    {TOOTH_OPTIONS.map((tooth) => {
+                      const checked = priceForm.selectedTeeth.includes(tooth)
+                      return (
+                        <label key={tooth} className={`cursor-pointer rounded border px-2 py-1 text-center text-xs ${checked ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-300 text-slate-600'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              setPriceForm((current) => ({
+                                ...current,
+                                selectedTeeth: event.target.checked
+                                  ? [...current.selectedTeeth, tooth]
+                                  : current.selectedTeeth.filter((item) => item !== tooth),
+                              }))
+                            }
+                            className="sr-only"
+                          />
+                          {tooth}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+          <div className="mt-4">
+            <Button onClick={addPriceProduct}>Adicionar produto</Button>
+          </div>
+        </Card>
+
+        <Card className="overflow-hidden p-0">
+          <div className="border-b border-slate-200 px-5 py-4">
+            <h2 className="text-lg font-semibold text-slate-900">Produtos cadastrados</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Produto</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Modo</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Preco</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {(settingsState.priceCatalog ?? []).map((item) => (
+                  <tr key={item.id} className="bg-white">
+                    <td className="px-5 py-4 text-sm text-slate-800">
+                      <p className="font-semibold text-slate-900">{item.name}</p>
+                      <p className="text-xs text-slate-500">{item.productType ? (PRODUCT_TYPE_LABEL[item.productType as keyof typeof PRODUCT_TYPE_LABEL] ?? item.productType) : 'Personalizado'}</p>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-slate-700">
+                      {item.pricingMode === 'unit' ? 'Unidade' : item.pricingMode === 'arch' ? 'Arcada' : 'Dente'}
+                    </td>
+                    <td className="px-5 py-4 text-sm text-slate-700">
+                      {item.pricingMode === 'unit' ? formatCurrencyBrl(item.unitPrice) : null}
+                      {item.pricingMode === 'arch' ? `Sup ${formatCurrencyBrl(item.upperPrice)} | Inf ${formatCurrencyBrl(item.lowerPrice)}` : null}
+                      {item.pricingMode === 'tooth' ? `${formatCurrencyBrl(item.toothUnitPrice)} por dente (${(item.selectedTeeth ?? []).length} selecionados)` : null}
+                    </td>
+                    <td className="px-5 py-4">
+                      <Badge tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Ativo' : 'Inativo'}</Badge>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => togglePriceProductActive(item.id, !item.isActive)}>
+                          {item.isActive ? 'Desativar' : 'Ativar'}
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-red-600" onClick={() => removePriceProduct(item.id)}>
+                          Excluir
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {(settingsState.priceCatalog ?? []).length === 0 ? (
+                  <tr>
+                    <td className="px-5 py-6 text-sm text-slate-500" colSpan={5}>Nenhum produto cadastrado na politica de preco.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
           </div>
         </Card>
       </section> : null}

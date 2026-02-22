@@ -21,6 +21,7 @@ import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 import { listCasesForUser, listLabItemsForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
+import { deleteLabItemSupabase } from '../repo/profileRepo'
 
 type ModalState =
   | { open: false; mode: 'create' | 'edit'; item: null }
@@ -32,6 +33,15 @@ type ProductionConfirmState = {
   productLabel: string
   archLabel: string
   resolver: ((confirmed: boolean) => void) | null
+}
+
+type PatientOption = {
+  id: string
+  name: string
+  dentistId?: string
+  clinicId?: string
+  dentistName?: string
+  clinicName?: string
 }
 
 function isOverdue(item: LabItem) {
@@ -106,6 +116,24 @@ function hasRevisionSuffix(code?: string) {
   return /\/\d+$/.test(code)
 }
 
+function isDeliveredToProfessionalItem(
+  item: LabItem,
+  caseById: Map<string, {
+    deliveryLots?: Array<{ arch: 'superior' | 'inferior' | 'ambos'; quantity: number }>
+    trays?: Array<{ trayNumber: number; state: string }>
+  }>,
+) {
+  if (!item.caseId) return false
+  if (item.status !== 'prontas') return false
+  const caseItem = caseById.get(item.caseId)
+  const hasAnyDeliveryLot = (caseItem?.deliveryLots?.length ?? 0) > 0
+  if ((item.requestKind ?? 'producao') === 'producao' && hasAnyDeliveryLot && !hasRevisionSuffix(item.requestCode)) {
+    return true
+  }
+  const tray = caseItem?.trays?.find((current) => current.trayNumber === item.trayNumber)
+  return tray?.state === 'entregue'
+}
+
 function hasRemainingByArch(caseItem?: {
   totalTrays: number
   totalTraysUpper?: number
@@ -144,6 +172,7 @@ export default function LabPage() {
   const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'lab.write')
+  const canDeleteLab = currentUser?.role === 'master_admin'
   const [search, setSearch] = useState('')
   const [priority, setPriority] = useState<'todos' | 'urgente' | 'medio' | 'baixo'>('todos')
   const [overdueOnly, setOverdueOnly] = useState(false)
@@ -159,6 +188,7 @@ export default function LabPage() {
   const [advanceLowerQty, setAdvanceLowerQty] = useState('1')
   const [supabaseItems, setSupabaseItems] = useState<LabItem[]>([])
   const [supabaseCases, setSupabaseCases] = useState<typeof db.cases>([])
+  const [supabasePatientOptions, setSupabasePatientOptions] = useState<PatientOption[]>([])
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
   const [productionConfirm, setProductionConfirm] = useState<ProductionConfirmState>({
     open: false,
@@ -200,21 +230,41 @@ export default function LabPage() {
     if (!isSupabaseMode || !supabase) {
       setSupabaseItems([])
       setSupabaseCases([])
+      setSupabasePatientOptions([])
       return
     }
     let active = true
     void (async () => {
-      const [casesRes, labRes] = await Promise.all([
+      const [casesRes, labRes, patientsRes, dentistsRes, clinicsRes] = await Promise.all([
         supabase
           .from('cases')
           .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, product_type, product_id, data, deleted_at')
           .is('deleted_at', null),
         supabase
           .from('lab_items')
-          .select('id, case_id, tray_number, status, priority, notes, product_type, product_id, created_at, updated_at, deleted_at, data')
+          .select('id, clinic_id, case_id, tray_number, status, priority, notes, product_type, product_id, created_at, updated_at, deleted_at, data')
           .is('deleted_at', null),
+        supabase.from('patients').select('id, name, clinic_id, primary_dentist_id, deleted_at').is('deleted_at', null),
+        supabase.from('dentists').select('id, name, deleted_at').is('deleted_at', null),
+        supabase.from('clinics').select('id, trade_name, deleted_at').is('deleted_at', null),
       ])
       if (!active) return
+
+      const dentistsById = new Map(
+        ((dentistsRes.data ?? []) as Array<{ id: string; name?: string }>).map((row) => [row.id, row.name ?? '-']),
+      )
+      const clinicsById = new Map(
+        ((clinicsRes.data ?? []) as Array<{ id: string; trade_name?: string }>).map((row) => [row.id, row.trade_name ?? '-']),
+      )
+      const patientOptions = ((patientsRes.data ?? []) as Array<{ id: string; name?: string; clinic_id?: string; primary_dentist_id?: string }>).map((row) => ({
+        id: row.id,
+        name: row.name ?? '-',
+        clinicId: row.clinic_id ?? undefined,
+        dentistId: row.primary_dentist_id ?? undefined,
+        clinicName: row.clinic_id ? clinicsById.get(row.clinic_id) : undefined,
+        dentistName: row.primary_dentist_id ? dentistsById.get(row.primary_dentist_id) : undefined,
+      }))
+      setSupabasePatientOptions(patientOptions)
 
       const mappedCases = ((casesRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
         const data = asObject(row.data)
@@ -223,13 +273,13 @@ export default function LabPage() {
           id: asText(row.id),
           productType: normalizeProductType(row.product_type ?? row.product_id ?? data.productType ?? data.productId),
           productId: normalizeProductType(row.product_id ?? row.product_type ?? data.productId ?? data.productType),
+          patientId: asText(data.patientId, asText(row.patient_id)) || undefined,
+          dentistId: asText(data.dentistId, asText(row.dentist_id)) || undefined,
+          clinicId: asText(data.clinicId, asText(row.clinic_id)) || undefined,
           treatmentCode: asText(data.treatmentCode) || undefined,
           treatmentOrigin: (asText(data.treatmentOrigin, 'externo') as 'interno' | 'externo'),
           patientName: asText(data.patientName, '-'),
-          patientId: asText(row.patient_id) || undefined,
-          dentistId: asText(row.dentist_id) || undefined,
           requestedByDentistId: asText(row.requested_by_dentist_id) || undefined,
-          clinicId: asText(row.clinic_id) || undefined,
           scanDate: asText(data.scanDate, createdAt.slice(0, 10)),
           totalTrays: asNumber(data.totalTrays, 0),
           changeEveryDays: asNumber(data.changeEveryDays, 7),
@@ -262,6 +312,9 @@ export default function LabPage() {
           id: asText(row.id),
           productType: normalizeProductType(row.product_type ?? row.product_id ?? data.productType ?? data.productId),
           productId: normalizeProductType(row.product_id ?? row.product_type ?? data.productId ?? data.productType),
+          patientId: asText(data.patientId) || undefined,
+          dentistId: asText(data.dentistId) || undefined,
+          clinicId: asText(row.clinic_id, asText(data.clinicId)) || undefined,
           requestCode: asText(data.requestCode) || undefined,
           requestKind: (asText(data.requestKind, 'producao') as 'producao' | 'reconfeccao' | 'reposicao_programada'),
           expectedReplacementDate: asText(data.expectedReplacementDate) || undefined,
@@ -299,6 +352,24 @@ export default function LabPage() {
     [isSupabaseMode, supabaseCases, db, currentUser],
   )
   const caseById = useMemo(() => new Map(caseSource.map((item) => [item.id, item])), [caseSource])
+  const patientOptions = useMemo<PatientOption[]>(
+    () =>
+      isSupabaseMode
+        ? supabasePatientOptions
+        : db.patients.map((patient) => {
+            const dentist = patient.primaryDentistId ? db.dentists.find((item) => item.id === patient.primaryDentistId) : undefined
+            const clinic = patient.clinicId ? db.clinics.find((item) => item.id === patient.clinicId) : undefined
+            return {
+              id: patient.id,
+              name: patient.name,
+              dentistId: patient.primaryDentistId,
+              clinicId: patient.clinicId,
+              dentistName: dentist?.name,
+              clinicName: clinic?.tradeName,
+            }
+          }),
+    [isSupabaseMode, supabasePatientOptions, db.patients, db.dentists, db.clinics],
+  )
   const visibleCases = caseSource
   const readyDeliveryItems = useMemo(
     () =>
@@ -306,12 +377,8 @@ export default function LabPage() {
         (item) => {
           if (!item.caseId) return false
           if (item.status !== 'prontas') return false
-          const caseItem = caseById.get(item.caseId)
-          const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
-          if (isReworkItem(item) || isReworkProductionItem(item)) {
-            return tray?.state === 'rework' || tray?.state === 'pronta' || tray?.state === 'entregue'
-          }
-          return tray?.state === 'pronta'
+          if (isReworkItem(item)) return false
+          return !isDeliveredToProfessionalItem(item, caseById)
         },
       ),
     [caseById, items],
@@ -367,17 +434,7 @@ export default function LabPage() {
     })
   }, [alertsOnly, casesWithAlerts, items, overdueOnly, priority, search, status])
   const isDeliveredToProfessional = useCallback((item: LabItem) => {
-    if (!item.caseId) return false
-    // Itens ainda em fluxo operacional (aguardando/producao/CQ) devem permanecer visiveis na esteira.
-    if (item.status !== 'prontas') return false
-    const caseItem = caseById.get(item.caseId)
-    const hasAnyDeliveryLot = (caseItem?.deliveryLots?.length ?? 0) > 0
-    // Oculta apenas a OS base (sem revisao) apos primeira entrega.
-    if ((item.requestKind ?? 'producao') === 'producao' && hasAnyDeliveryLot && !hasRevisionSuffix(item.requestCode)) {
-      return true
-    }
-    const tray = caseItem?.trays.find((current) => current.trayNumber === item.trayNumber)
-    return tray?.state === 'entregue'
+    return isDeliveredToProfessionalItem(item, caseById)
   }, [caseById])
   const pipelineItems = useMemo(
     () => filteredItems.filter((item) => !isDeliveredToProfessional(item) && !isReworkItem(item)),
@@ -471,6 +528,9 @@ export default function LabPage() {
     caseId?: string
     productType?: ProductType
     productId?: ProductType
+    patientId?: string
+    dentistId?: string
+    clinicId?: string
     arch: 'superior' | 'inferior' | 'ambos'
     plannedUpperQty?: number
     plannedLowerQty?: number
@@ -499,6 +559,9 @@ export default function LabPage() {
         planningDefinedAt: undefined,
         trayNumber: payload.trayNumber,
         patientName: payload.patientName,
+        patientId: payload.patientId,
+        dentistId: payload.dentistId,
+        clinicId: payload.clinicId,
         plannedDate: today,
         dueDate: payload.dueDate,
         priority: payload.priority,
@@ -508,6 +571,7 @@ export default function LabPage() {
       const { error } = await supabase
         .from('lab_items')
         .insert({
+          clinic_id: payload.clinicId ?? null,
           case_id: payload.caseId ?? null,
           tray_number: payload.trayNumber,
           status: payload.status,
@@ -521,6 +585,20 @@ export default function LabPage() {
       if (error) {
         return { ok: false, message: error.message }
       }
+      if (payload.status === 'em_producao') {
+        const seed = await seedInitialReplenishmentSupabase({
+          caseId: payload.caseId,
+          trayNumber: payload.trayNumber,
+          status: payload.status,
+          productType: resolvedProductType,
+          productId: resolvedProductType,
+          priority: payload.priority,
+          data: nextData as Record<string, unknown>,
+        })
+        if (!seed.ok) {
+          addToast({ type: 'info', title: 'Reposicao inicial', message: seed.error })
+        }
+      }
       setSupabaseRefreshKey((currentKey) => currentKey + 1)
       setModal({ open: false, mode: 'create', item: null })
       return { ok: true }
@@ -531,6 +609,9 @@ export default function LabPage() {
       caseId: payload.caseId,
       productType: payload.productType,
       productId: payload.productId,
+      patientId: payload.patientId,
+      dentistId: payload.dentistId,
+      clinicId: payload.clinicId,
       arch: payload.arch,
       plannedUpperQty: payload.plannedUpperQty,
       plannedLowerQty: payload.plannedLowerQty,
@@ -558,7 +639,7 @@ export default function LabPage() {
       if (!supabase) return { ok: false, message: 'Supabase não configurado.' }
       const { data: current, error: readError } = await supabase
         .from('lab_items')
-        .select('id, tray_number, status, priority, notes, product_type, product_id, data')
+        .select('id, case_id, tray_number, status, priority, notes, product_type, product_id, data')
         .eq('id', id)
         .maybeSingle()
       if (readError || !current) {
@@ -596,6 +677,9 @@ export default function LabPage() {
             : asText(currentData.planningDefinedAt) || undefined,
         trayNumber: nextTray,
         patientName: patch.patientName ?? asText(currentData.patientName, '-'),
+        patientId: patch.patientId ?? (asText(currentData.patientId) || undefined),
+        dentistId: patch.dentistId ?? (asText(currentData.dentistId) || undefined),
+        clinicId: patch.clinicId ?? (asText(currentData.clinicId) || undefined),
         dueDate: patch.dueDate ?? asText(currentData.dueDate, nowIso.slice(0, 10)),
         plannedDate: patch.plannedDate ?? asText(currentData.plannedDate, nowIso.slice(0, 10)),
         priority: nextPriority,
@@ -619,6 +703,7 @@ export default function LabPage() {
           status: nextStatus,
           priority: nextPriority,
           notes: nextNotes || null,
+          clinic_id: asText(nextData.clinicId) || null,
           product_type: nextProductType,
           product_id: nextProductType,
           data: nextData,
@@ -627,6 +712,20 @@ export default function LabPage() {
         .eq('id', id)
       if (error) {
         return { ok: false, message: error.message }
+      }
+      if (nextStatus === 'em_producao') {
+        const seed = await seedInitialReplenishmentSupabase({
+          caseId: asText((current as Record<string, unknown>).case_id) || undefined,
+          trayNumber: nextTray,
+          status: nextStatus,
+          productType: nextProductType,
+          productId: nextProductType,
+          priority: nextPriority,
+          data: nextData as Record<string, unknown>,
+        })
+        if (!seed.ok) {
+          addToast({ type: 'info', title: 'Reposicao inicial', message: seed.error })
+        }
       }
       setSupabaseRefreshKey((currentKey) => currentKey + 1)
       setModal({ open: false, mode: 'create', item: null })
@@ -645,10 +744,29 @@ export default function LabPage() {
   }
 
   const handleDelete = (id: string) => {
-    if (!canWrite) return
+    if (!canWrite || !canDeleteLab) return
+    const confirmed = window.confirm('Confirma excluir esta OS? O evento sera registrado no historico do paciente.')
+    if (!confirmed) return
+    if (isSupabaseMode) {
+      if (!supabase) {
+        addToast({ type: 'error', title: 'Exclusao', message: 'Supabase nao configurado.' })
+        return
+      }
+      void (async () => {
+        const result = await deleteLabItemSupabase(id)
+        if (!result.ok) {
+          addToast({ type: 'error', title: 'Exclusao', message: result.error })
+          return
+        }
+        setSupabaseRefreshKey((currentKey) => currentKey + 1)
+        setModal({ open: false, mode: 'create', item: null })
+        addToast({ type: 'info', title: 'Solicitacao removida' })
+      })()
+      return
+    }
     deleteLabItem(id)
     setModal({ open: false, mode: 'create', item: null })
-    addToast({ type: 'info', title: 'Solicitação removida' })
+    addToast({ type: 'info', title: 'Solicitacao removida' })
   }
 
   const nextRangeByArch = (
@@ -668,12 +786,102 @@ export default function LabPage() {
     return { fromTray, toTray }
   }
 
+  const seedInitialReplenishmentSupabase = useCallback(
+    async (source: {
+      caseId?: string
+      trayNumber: number
+      status: LabStatus
+      productType?: ProductType
+      productId?: ProductType
+      priority?: 'Baixo' | 'Medio' | 'Urgente'
+      data: Record<string, unknown>
+    }) => {
+      if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+      if (!source.caseId) return { ok: true as const }
+      if (asText(source.data.requestKind, 'producao') !== 'producao') return { ok: true as const }
+      if (source.status !== 'em_producao') return { ok: true as const }
+
+      const trayNumber = Math.max(1, Math.trunc(source.trayNumber))
+      const [caseRes, rowsRes] = await Promise.all([
+        supabase.from('cases').select('id, clinic_id, data').eq('id', source.caseId).maybeSingle(),
+        supabase.from('lab_items').select('id, tray_number, data').eq('case_id', source.caseId),
+      ])
+      if (caseRes.error || !caseRes.data) {
+        return { ok: false as const, error: caseRes.error?.message ?? 'Caso vinculado nao encontrado.' }
+      }
+      if (rowsRes.error) {
+        return { ok: false as const, error: rowsRes.error.message }
+      }
+
+      const caseData = asObject(caseRes.data.data)
+      const caseRows = (rowsRes.data ?? []) as Array<Record<string, unknown>>
+      const alreadySeeded = caseRows.some((row) => {
+        const rowData = asObject(row.data)
+        return (
+          asText(rowData.requestKind, 'producao') === 'reposicao_programada'
+          && asNumber(row.tray_number, asNumber(rowData.trayNumber, -1)) === trayNumber
+        )
+      })
+      if (alreadySeeded) return { ok: true as const }
+
+      const today = new Date().toISOString().slice(0, 10)
+      const trays = Array.isArray(caseData.trays) ? (caseData.trays as Array<Record<string, unknown>>) : []
+      const trayFromCase = trays.find((tray) => asNumber(tray.trayNumber, -1) === trayNumber)
+      const expectedReplacementDate = asText(
+        trayFromCase?.dueDate,
+        asText(source.data.expectedReplacementDate, asText(source.data.dueDate, today)),
+      )
+      const baseCode = asText(caseData.treatmentCode, asText(caseRes.data.id, source.caseId))
+      const escapedBase = baseCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const revisionRegex = new RegExp(`^${escapedBase}/(\\d+)$`)
+      const nextRevision = caseRows.reduce((acc, row) => {
+        const rowData = asObject(row.data)
+        const code = asText(rowData.requestCode)
+        const match = code.match(revisionRegex)
+        if (!match) return acc
+        return Math.max(acc, Number(match[1]))
+      }, 0) + 1
+
+      const nowIso = new Date().toISOString()
+      const resolvedProductType = normalizeProductType(source.productId ?? source.productType)
+      const seedData = {
+        ...source.data,
+        requestCode: `${baseCode}/${nextRevision}`,
+        requestKind: 'reposicao_programada',
+        expectedReplacementDate,
+        plannedUpperQty: 0,
+        plannedLowerQty: 0,
+        planningDefinedAt: undefined,
+        plannedDate: today,
+        dueDate: expectedReplacementDate,
+        status: 'aguardando_iniciar',
+        notes: `Reposicao inicial gerada no inicio da confeccao da placa #${trayNumber}.`,
+      }
+
+      const { error } = await supabase.from('lab_items').insert({
+        clinic_id: asText(source.data.clinicId, asText(caseRes.data.clinic_id)) || null,
+        case_id: source.caseId,
+        tray_number: trayNumber,
+        status: 'aguardando_iniciar',
+        priority: source.priority ?? (asText(source.data.priority, 'Medio') as 'Baixo' | 'Medio' | 'Urgente'),
+        notes: asText(seedData.notes) || null,
+        product_type: resolvedProductType,
+        product_id: resolvedProductType,
+        data: seedData,
+        updated_at: nowIso,
+      })
+      if (error) return { ok: false as const, error: error.message }
+      return { ok: true as const }
+    },
+    [],
+  )
+
   const handleMoveStatusSupabase = useCallback(
     async (id: string, next: LabStatus) => {
       if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
       const { data: current, error: readError } = await supabase
         .from('lab_items')
-        .select('id, status, product_type, product_id, data')
+        .select('id, case_id, tray_number, status, priority, product_type, product_id, data')
         .eq('id', id)
         .maybeSingle()
       if (readError || !current) return { ok: false as const, error: readError?.message ?? 'Item LAB nao encontrado.' }
@@ -712,10 +920,24 @@ export default function LabPage() {
         .update({ status: next, updated_at: new Date().toISOString() })
         .eq('id', id)
       if (error) return { ok: false as const, error: error.message }
+      if (next === 'em_producao') {
+        const seed = await seedInitialReplenishmentSupabase({
+          caseId: asText((current as Record<string, unknown>).case_id) || undefined,
+          trayNumber: asNumber((current as Record<string, unknown>).tray_number, asNumber(currentData.trayNumber, 1)),
+          status: next,
+          productType: normalizeProductType(current.product_type ?? current.product_id ?? currentData.productType ?? currentData.productId),
+          productId: normalizeProductType(current.product_id ?? current.product_type ?? currentData.productId ?? currentData.productType),
+          priority: asText((current as Record<string, unknown>).priority, asText(currentData.priority, 'Medio')) as 'Baixo' | 'Medio' | 'Urgente',
+          data: currentData,
+        })
+        if (!seed.ok) {
+          addToast({ type: 'info', title: 'Reposicao inicial', message: seed.error })
+        }
+      }
       setSupabaseRefreshKey((currentKey) => currentKey + 1)
       return { ok: true as const }
     },
-    [askProductionConfirmation],
+    [addToast, askProductionConfirmation, seedInitialReplenishmentSupabase],
   )
 
   const handleMoveStatusLocal = useCallback(
@@ -759,7 +981,7 @@ export default function LabPage() {
             </Button>
           ) : null}
           {canWrite ? (
-            <Button className="w-full sm:w-auto" onClick={() => setModal({ open: true, mode: 'create', item: null })}>Nova Solicitação</Button>
+            <Button className="w-full sm:w-auto" onClick={() => setModal({ open: true, mode: 'create', item: null })}>Solicitacao avulsa</Button>
           ) : null}
         </div>
       </section>
@@ -934,11 +1156,13 @@ export default function LabPage() {
         item={modal.item}
         open={modal.open}
         cases={caseSource}
+        patientOptions={patientOptions}
         readOnly={!canWrite}
         onClose={() => setModal({ open: false, mode: 'create', item: null })}
         onCreate={handleCreate}
         onSave={handleSave}
         onDelete={handleDelete}
+        allowDelete={canDeleteLab}
       />
       <RegisterDeliveryLotModal
         open={deliveryOpen}

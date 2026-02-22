@@ -204,6 +204,51 @@ function removeLegacyAutoReworkItems(db: ReturnType<typeof loadDb>) {
   return db.labItems.length !== before
 }
 
+function ensureInitialReplenishmentSeed(
+  db: ReturnType<typeof loadDb>,
+  source: LabItem,
+): LabItem | null {
+  if (!source.caseId) return null
+  if ((source.requestKind ?? 'producao') !== 'producao') return null
+  if (source.status !== 'em_producao') return null
+  const linkedCase = db.cases.find((item) => item.id === source.caseId)
+  if (!linkedCase) return null
+
+  const expectedReplacementDate =
+    linkedCase.trays.find((tray) => tray.trayNumber === source.trayNumber)?.dueDate
+    ?? source.expectedReplacementDate
+    ?? source.dueDate
+  const dueDate = expectedReplacementDate ?? source.dueDate
+  const exists = db.labItems.some(
+    (item) =>
+      item.caseId === source.caseId &&
+      item.requestKind === 'reposicao_programada' &&
+      item.trayNumber === source.trayNumber,
+  )
+  if (exists) return null
+
+  const now = nowIso()
+  const baseCode = caseCode(linkedCase)
+  const seeded: LabItem = {
+    ...source,
+    id: `lab_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+    requestCode: `${baseCode}/${nextRequestRevision(db, baseCode)}`,
+    requestKind: 'reposicao_programada',
+    expectedReplacementDate,
+    plannedUpperQty: 0,
+    plannedLowerQty: 0,
+    planningDefinedAt: undefined,
+    plannedDate: now.slice(0, 10),
+    dueDate,
+    status: 'aguardando_iniciar',
+    notes: `Reposicao inicial gerada no inicio da confeccao da placa #${source.trayNumber}.`,
+    createdAt: now,
+    updatedAt: now,
+  }
+  db.labItems = [seeded, ...db.labItems]
+  return seeded
+}
+
 export function canMoveToStatus(current: LabStatus, next: LabStatus) {
   const currentIndex = statusFlow.indexOf(current)
   const nextIndex = statusFlow.indexOf(next)
@@ -306,12 +351,21 @@ export function addLabItem(item: Omit<LabItem, 'id' | 'createdAt' | 'updatedAt'>
     )
   }
   const sync = syncLabItemToCaseTray(newItem, db)
+  const seededReplenishment = ensureInitialReplenishmentSeed(db, newItem)
   pushAudit(db, {
     entity: 'lab',
     entityId: newItem.id,
     action: 'lab.create',
     message: `OS ${newItem.requestCode ?? newItem.id} criada para ${newItem.patientName}.`,
   })
+  if (seededReplenishment) {
+    pushAudit(db, {
+      entity: 'lab',
+      entityId: seededReplenishment.id,
+      action: 'lab.replenishment_seeded',
+      message: `Reposicao inicial ${seededReplenishment.requestCode ?? seededReplenishment.id} gerada automaticamente.`,
+    })
+  }
   saveDb(db)
   return { ok: true as const, item: newItem, sync }
 }
@@ -387,12 +441,21 @@ export function updateLabItem(id: string, patch: Partial<LabItem>) {
 
   const updatedItem = db.labItems.find((item) => item.id === id) ?? null
   const sync = changed ? syncLabItemToCaseTray(changed, db) : { ok: true as const }
+  const seededReplenishment = changed ? ensureInitialReplenishmentSeed(db, changed) : null
   if (updatedItem) {
     pushAudit(db, {
       entity: 'lab',
       entityId: updatedItem.id,
       action: 'lab.update',
       message: `OS ${updatedItem.requestCode ?? updatedItem.id} atualizada para status ${updatedItem.status}.`,
+    })
+  }
+  if (seededReplenishment) {
+    pushAudit(db, {
+      entity: 'lab',
+      entityId: seededReplenishment.id,
+      action: 'lab.replenishment_seeded',
+      message: `Reposicao inicial ${seededReplenishment.requestCode ?? seededReplenishment.id} gerada automaticamente.`,
     })
   }
   saveDb(db)
@@ -439,12 +502,21 @@ export function moveLabItem(id: string, status: LabStatus) {
 
   const movedItem = db.labItems.find((item) => item.id === id) ?? null
   const sync = changed ? syncLabItemToCaseTray(changed, db) : { ok: true as const }
+  const seededReplenishment = changed ? ensureInitialReplenishmentSeed(db, changed) : null
   if (movedItem) {
     pushAudit(db, {
       entity: 'lab',
       entityId: movedItem.id,
       action: 'lab.move',
       message: `OS ${movedItem.requestCode ?? movedItem.id} movida para ${movedItem.status}.`,
+    })
+  }
+  if (seededReplenishment) {
+    pushAudit(db, {
+      entity: 'lab',
+      entityId: seededReplenishment.id,
+      action: 'lab.replenishment_seeded',
+      message: `Reposicao inicial ${seededReplenishment.requestCode ?? seededReplenishment.id} gerada automaticamente.`,
     })
   }
   saveDb(db)
@@ -495,6 +567,15 @@ export function deleteLabItem(id: string) {
       action: 'lab.delete',
       message: `OS ${item.requestCode ?? item.id} removida.`,
     })
+    const linkedCase = item.caseId ? db.cases.find((current) => current.id === item.caseId) : null
+    if (linkedCase?.patientId) {
+      pushAudit(db, {
+        entity: 'patient',
+        entityId: linkedCase.patientId,
+        action: 'patient.history.lab_delete',
+        message: `OS LAB removida (${item.requestCode ?? item.id}) - placa #${item.trayNumber}.`,
+      })
+    }
   })
   saveDb(db)
 }
