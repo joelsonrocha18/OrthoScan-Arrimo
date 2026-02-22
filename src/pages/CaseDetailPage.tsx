@@ -1273,11 +1273,6 @@ export default function CaseDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {canDeleteCase ? (
-            <Button variant="secondary" className="text-red-600 hover:text-red-700" onClick={handleDeleteCase}>
-              Excluir pedido
-            </Button>
-          ) : null}
           <Link
             to="/app/cases"
             className="inline-flex h-10 items-center rounded-lg bg-slate-200 px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-300"
@@ -1774,6 +1769,21 @@ export default function CaseDetailPage() {
           </div>
         </Card>
       </section>
+
+      {canDeleteCase ? (
+        <section className="mt-6">
+          <Card>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-600">
+                Exclusao administrativa: remove pedido e registros vinculados do fluxo.
+              </p>
+              <Button variant="secondary" className="text-red-600 hover:text-red-700" onClick={handleDeleteCase}>
+                Excluir pedido
+              </Button>
+            </div>
+          </Card>
+        </section>
+      ) : null}
 
       {attachmentModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">

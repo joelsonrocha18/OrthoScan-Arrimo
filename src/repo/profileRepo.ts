@@ -539,14 +539,14 @@ export async function deleteCaseSupabase(caseId: string) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
   const { data: current, error: readError } = await supabase
     .from('cases')
-    .select('id, patient_id, treatment_code, data')
+    .select('id, patient_id, data')
     .eq('id', caseId)
     .maybeSingle()
   if (readError || !current) return { ok: false as const, error: readError?.message ?? 'Caso nao encontrado.' }
 
   const currentData = asObject((current as Record<string, unknown>).data)
   const patientId = asText((current as Record<string, unknown>).patient_id, asText(currentData.patientId)) || undefined
-  const treatmentCode = asText((current as Record<string, unknown>).treatment_code, asText(currentData.treatmentCode, caseId))
+  const treatmentCode = asText(currentData.treatmentCode, caseId)
   const patientName = asText(currentData.patientName, '-')
   const now = new Date().toISOString()
 
