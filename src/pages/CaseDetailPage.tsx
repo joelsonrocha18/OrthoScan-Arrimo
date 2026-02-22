@@ -1073,6 +1073,14 @@ export default function CaseDetailPage() {
       })
       return
     }
+    if (!currentCase.installation && Math.trunc(upperCount + lowerCount) <= 0) {
+      addToast({
+        type: 'error',
+        title: 'Instalacao',
+        message: 'Na primeira instalacao, informe ao menos 1 alinhador entregue ao paciente.',
+      })
+      return
+    }
     if (isSupabaseMode) {
       if (!hasProductionOrder) {
         addToast({ type: 'error', title: 'Instalacao', message: 'Ordem de servico do LAB ainda nao foi gerada para este pedido.' })
@@ -1436,7 +1444,7 @@ export default function CaseDetailPage() {
             )}
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
-                {currentCase.installation ? 'Data da entrega ao paciente' : 'Data de inicio do pedido'}
+                {currentCase.installation ? 'Data da entrega ao paciente' : 'Data da instalacao inicial'}
               </label>
               <Input
                 type="date"
@@ -1492,7 +1500,7 @@ export default function CaseDetailPage() {
                       : ''
                 }
               >
-                {currentCase.installation ? 'Registrar reposicao paciente' : 'Registrar inicio do pedido'}
+                {currentCase.installation ? 'Registrar reposicao paciente' : 'Registrar instalacao inicial'}
               </Button>
               {!hasProductionOrder ? <p className="mt-2 text-xs text-amber-700">Ordem de servico do LAB ainda nao gerada.</p> : null}
               {!hasDentistDelivery ? <p className="mt-1 text-xs text-amber-700">Registre antes a entrega ao dentista.</p> : null}

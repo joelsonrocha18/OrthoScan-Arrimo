@@ -325,6 +325,9 @@ export function registerCaseInstallation(
   const currentDeliveredLower = currentInstallation?.deliveredLower ?? 0
   const inputUpper = payload.deliveredUpper ?? 0
   const inputLower = payload.deliveredLower ?? 0
+  if (isFirstInstallation && Math.trunc(inputUpper + inputLower) <= 0) {
+    return { ok: false, error: 'Na primeira instalacao, informe ao menos 1 alinhador entregue ao paciente.' }
+  }
   if (!Number.isFinite(inputUpper) || inputUpper < 0) {
     return { ok: false, error: `Quantidade superior invalida. Informe entre 0 e ${upperTotal}.` }
   }
