@@ -38,6 +38,7 @@
         "test": "vitest",
         "test:ui": "vitest --ui",
         "test:e2e": "playwright test",
+        "migrate": "supabase db push",
         "preflight:prod": "node ./scripts/preflightProd.mjs",
         "desktop:icon": "node ./desktop/make-icon.cjs",
         "desktop:dev": "node ./desktop/start-dev.cjs",
