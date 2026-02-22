@@ -467,9 +467,10 @@ export default function LabPage() {
     return item.requestCode ?? treatment
   }
 
-  const handleCreate = (payload: {
+  const handleCreate = async (payload: {
     caseId?: string
     productType?: ProductType
+    productId?: ProductType
     arch: 'superior' | 'inferior' | 'ambos'
     plannedUpperQty?: number
     plannedLowerQty?: number
@@ -481,10 +482,55 @@ export default function LabPage() {
     status: LabStatus
   }) => {
     if (!canWrite) return { ok: false, message: 'Sem permissão para criar solicitações.' }
+    if (isSupabaseMode) {
+      if (!supabase) return { ok: false, message: 'Supabase nao configurado.' }
+      const nowIso = new Date().toISOString()
+      const today = nowIso.slice(0, 10)
+      const resolvedProductType = normalizeProductType(payload.productId ?? payload.productType)
+      const nextData = {
+        requestCode: undefined,
+        requestKind: 'producao',
+        expectedReplacementDate: payload.dueDate,
+        productType: resolvedProductType,
+        productId: resolvedProductType,
+        arch: payload.arch,
+        plannedUpperQty: payload.plannedUpperQty ?? 0,
+        plannedLowerQty: payload.plannedLowerQty ?? 0,
+        planningDefinedAt: undefined,
+        trayNumber: payload.trayNumber,
+        patientName: payload.patientName,
+        plannedDate: today,
+        dueDate: payload.dueDate,
+        priority: payload.priority,
+        notes: payload.notes,
+        status: payload.status,
+      }
+      const { error } = await supabase
+        .from('lab_items')
+        .insert({
+          case_id: payload.caseId ?? null,
+          tray_number: payload.trayNumber,
+          status: payload.status,
+          priority: payload.priority,
+          notes: payload.notes ?? null,
+          product_type: resolvedProductType,
+          product_id: resolvedProductType,
+          data: nextData,
+          updated_at: nowIso,
+        })
+      if (error) {
+        return { ok: false, message: error.message }
+      }
+      setSupabaseRefreshKey((currentKey) => currentKey + 1)
+      setModal({ open: false, mode: 'create', item: null })
+      return { ok: true }
+    }
+
     const today = new Date().toISOString().slice(0, 10)
     const result = addLabItem({
       caseId: payload.caseId,
       productType: payload.productType,
+      productId: payload.productId,
       arch: payload.arch,
       plannedUpperQty: payload.plannedUpperQty,
       plannedLowerQty: payload.plannedLowerQty,
@@ -707,12 +753,12 @@ export default function LabPage() {
           <p className="mt-2 text-sm text-slate-500">Fila de produção e entregas</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-          {canWrite && !isSupabaseMode ? (
+          {canWrite ? (
             <Button className="w-full sm:w-auto" variant="secondary" onClick={() => setDeliveryOpen(true)}>
               Registrar entrega ao profissional
             </Button>
           ) : null}
-          {canWrite && !isSupabaseMode ? (
+          {canWrite ? (
             <Button className="w-full sm:w-auto" onClick={() => setModal({ open: true, mode: 'create', item: null })}>Nova Solicitação</Button>
           ) : null}
         </div>
@@ -894,7 +940,6 @@ export default function LabPage() {
         onSave={handleSave}
         onDelete={handleDelete}
       />
-
       <RegisterDeliveryLotModal
         open={deliveryOpen}
         caseOptions={deliveryCaseOptions}
@@ -903,80 +948,136 @@ export default function LabPage() {
         onCaseChange={setDeliveryCaseId}
         onClose={() => setDeliveryOpen(false)}
         onConfirm={(payload) => {
-          if (!canWrite) return
-          if (!deliveryCaseId) {
-            addToast({ type: 'error', title: 'Entrega de lote', message: 'Selecione um pedido.' })
-            return
-          }
-          const selectedReadyItem = readyDeliveryItems.find((item) => item.id === deliveryCaseId)
-          if (!selectedReadyItem?.caseId) {
-            addToast({ type: 'error', title: 'Entrega de lote', message: 'Selecione uma OS pronta valida.' })
-            return
-          }
-          const selectedCaseId = selectedReadyItem.caseId
-          const caseItem = caseById.get(selectedCaseId)
-          if (!caseItem) {
-            addToast({ type: 'error', title: 'Entrega de lote', message: 'Pedido não encontrado.' })
-            return
-          }
-          const caseTotals = getCaseTotalsByArch(caseItem)
-          const selectedIsRework = isReworkItem(selectedReadyItem) || isReworkProductionItem(selectedReadyItem)
-          const upperQty = Math.max(0, Math.trunc(payload.upperQty))
-          const lowerQty = Math.max(0, Math.trunc(payload.lowerQty))
-          if (!selectedIsRework && upperQty + lowerQty <= 0) {
-            addToast({ type: 'error', title: 'Entrega de lote', message: 'Informe quantidade superior e/ou inferior.' })
-            return
-          }
-
-          const ops: Array<{ arch: 'superior' | 'inferior'; fromTray: number; toTray: number }> = []
-          if (selectedIsRework) {
-            if (selectedReadyItem.arch === 'superior' || selectedReadyItem.arch === 'ambos') {
-              ops.push({ arch: 'superior', fromTray: selectedReadyItem.trayNumber, toTray: selectedReadyItem.trayNumber })
-            }
-            if (selectedReadyItem.arch === 'inferior' || selectedReadyItem.arch === 'ambos') {
-              ops.push({ arch: 'inferior', fromTray: selectedReadyItem.trayNumber, toTray: selectedReadyItem.trayNumber })
-            }
-          }
-          if (!selectedIsRework && upperQty > 0) {
-            const range = nextRangeByArch(caseItem, 'superior', upperQty)
-            if (range.toTray > caseTotals.upper) {
-              addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade superior excede o total da arcada superior (${caseTotals.upper}).` })
+          void (async () => {
+            if (!canWrite) return
+            if (!deliveryCaseId) {
+              addToast({ type: 'error', title: 'Entrega de lote', message: 'Selecione um pedido.' })
               return
             }
-            ops.push({ arch: 'superior', ...range })
-          }
-          if (!selectedIsRework && lowerQty > 0) {
-            const range = nextRangeByArch(caseItem, 'inferior', lowerQty)
-            if (range.toTray > caseTotals.lower) {
-              addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade inferior excede o total da arcada inferior (${caseTotals.lower}).` })
+            const selectedReadyItem = readyDeliveryItems.find((item) => item.id === deliveryCaseId)
+            if (!selectedReadyItem?.caseId) {
+              addToast({ type: 'error', title: 'Entrega de lote', message: 'Selecione uma OS pronta valida.' })
               return
             }
-            ops.push({ arch: 'inferior', ...range })
-          }
-
-          for (const op of ops) {
-            const result = registerCaseDeliveryLot(selectedCaseId, {
-              arch: op.arch,
-              fromTray: op.fromTray,
-              toTray: op.toTray,
-              deliveredToDoctorAt: payload.deliveredToDoctorAt,
-              note: payload.note,
-            })
-            if (!result.ok) {
-              addToast({ type: 'error', title: 'Entrega de lote', message: result.error })
+            const selectedCaseId = selectedReadyItem.caseId
+            const caseItem = caseById.get(selectedCaseId)
+            if (!caseItem) {
+              addToast({ type: 'error', title: 'Entrega de lote', message: 'Pedido nao encontrado.' })
               return
             }
-          }
+            const caseTotals = getCaseTotalsByArch(caseItem)
+            const selectedIsRework = isReworkItem(selectedReadyItem) || isReworkProductionItem(selectedReadyItem)
+            const upperQty = Math.max(0, Math.trunc(payload.upperQty))
+            const lowerQty = Math.max(0, Math.trunc(payload.lowerQty))
+            if (!selectedIsRework && upperQty + lowerQty <= 0) {
+              addToast({ type: 'error', title: 'Entrega de lote', message: 'Informe quantidade superior e/ou inferior.' })
+              return
+            }
 
-          if (!ops.length) {
-            addToast({ type: 'error', title: 'Entrega de lote', message: 'Nenhum lote valido para registrar.' })
-            return
-          }
-          setDeliveryOpen(false)
-          setDeliveryCaseId('')
-          addToast({ type: 'success', title: 'Entrega registrada pelo laboratório' })
+            const ops: Array<{ arch: 'superior' | 'inferior'; fromTray: number; toTray: number }> = []
+            if (selectedIsRework) {
+              if (selectedReadyItem.arch === 'superior' || selectedReadyItem.arch === 'ambos') {
+                ops.push({ arch: 'superior', fromTray: selectedReadyItem.trayNumber, toTray: selectedReadyItem.trayNumber })
+              }
+              if (selectedReadyItem.arch === 'inferior' || selectedReadyItem.arch === 'ambos') {
+                ops.push({ arch: 'inferior', fromTray: selectedReadyItem.trayNumber, toTray: selectedReadyItem.trayNumber })
+              }
+            }
+            if (!selectedIsRework && upperQty > 0) {
+              const range = nextRangeByArch(caseItem, 'superior', upperQty)
+              if (range.toTray > caseTotals.upper) {
+                addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade superior excede o total da arcada superior (${caseTotals.upper}).` })
+                return
+              }
+              ops.push({ arch: 'superior', ...range })
+            }
+            if (!selectedIsRework && lowerQty > 0) {
+              const range = nextRangeByArch(caseItem, 'inferior', lowerQty)
+              if (range.toTray > caseTotals.lower) {
+                addToast({ type: 'error', title: 'Entrega de lote', message: `Quantidade inferior excede o total da arcada inferior (${caseTotals.lower}).` })
+                return
+              }
+              ops.push({ arch: 'inferior', ...range })
+            }
+            if (!ops.length) {
+              addToast({ type: 'error', title: 'Entrega de lote', message: 'Nenhum lote valido para registrar.' })
+              return
+            }
+
+            if (isSupabaseMode) {
+              if (!supabase) {
+                addToast({ type: 'error', title: 'Entrega de lote', message: 'Supabase nao configurado.' })
+                return
+              }
+              const nextLots = [...(caseItem.deliveryLots ?? [])]
+              const nextTrays = (caseItem.trays ?? []).map((tray) => ({ ...tray }))
+              ops.forEach((op) => {
+                nextLots.push({
+                  id: `lot_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
+                  arch: op.arch,
+                  fromTray: op.fromTray,
+                  toTray: op.toTray,
+                  quantity: op.toTray - op.fromTray + 1,
+                  deliveredToDoctorAt: payload.deliveredToDoctorAt,
+                  note: payload.note,
+                  createdAt: new Date().toISOString(),
+                })
+                for (let trayNumber = op.fromTray; trayNumber <= op.toTray; trayNumber += 1) {
+                  const tray = nextTrays.find((item) => item.trayNumber === trayNumber)
+                  if (tray) {
+                    tray.state = 'entregue'
+                    tray.deliveredAt = payload.deliveredToDoctorAt
+                  }
+                }
+              })
+              const allDelivered = nextTrays.length > 0 && nextTrays.every((item) => item.state === 'entregue')
+              const nextStatus = allDelivered ? 'finalizado' : 'em_entrega'
+              const nextPhase = allDelivered ? 'finalizado' : 'em_producao'
+              const nowIso = new Date().toISOString()
+              const nextData = {
+                ...caseItem,
+                deliveryLots: nextLots,
+                trays: nextTrays,
+                status: nextStatus,
+                phase: nextPhase,
+                updatedAt: nowIso,
+              }
+              const { error } = await supabase
+                .from('cases')
+                .update({
+                  data: nextData,
+                  status: nextStatus,
+                  updated_at: nowIso,
+                })
+                .eq('id', selectedCaseId)
+              if (error) {
+                addToast({ type: 'error', title: 'Entrega de lote', message: error.message })
+                return
+              }
+              setSupabaseRefreshKey((current) => current + 1)
+            } else {
+              for (const op of ops) {
+                const result = registerCaseDeliveryLot(selectedCaseId, {
+                  arch: op.arch,
+                  fromTray: op.fromTray,
+                  toTray: op.toTray,
+                  deliveredToDoctorAt: payload.deliveredToDoctorAt,
+                  note: payload.note,
+                })
+                if (!result.ok) {
+                  addToast({ type: 'error', title: 'Entrega de lote', message: result.error })
+                  return
+                }
+              }
+            }
+
+            setDeliveryOpen(false)
+            setDeliveryCaseId('')
+            addToast({ type: 'success', title: 'Entrega registrada pelo laboratorio' })
+          })()
         }}
       />
+
 
       {productionConfirm.open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
@@ -1046,5 +1147,6 @@ export default function LabPage() {
     </AppShell>
   )
 }
+
 
 
