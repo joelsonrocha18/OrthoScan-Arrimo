@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useToast } from '../app/ToastProvider'
 import Badge from '../components/Badge'
@@ -24,7 +24,7 @@ import { normalizeProductType, PRODUCT_TYPE_LABEL } from '../types/Product'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
-  orcamento: 'OrÃ§amento',
+  orcamento: 'Orcamento',
   contrato_pendente: 'Contrato pendente',
   contrato_aprovado: 'Contrato aprovado',
   em_producao: 'Em producao',
@@ -109,7 +109,7 @@ function scheduleStateForTray(
 
 function scheduleStateLabel(state: TrayState | 'nao_aplica') {
   if (state === 'nao_aplica') return '-'
-  if (state === 'em_producao') return 'Em produÃ§Ã£o'
+  if (state === 'em_producao') return 'Em producao'
   if (state === 'pronta') return 'Pronta'
   if (state === 'entregue') return 'Entregue'
   if (state === 'rework') return 'Rework'
@@ -255,6 +255,7 @@ export default function CaseDetailPage() {
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'cases.write')
   const canWriteLocalOnly = canWrite && !isSupabaseMode
+  const canManageTray = canWrite
   const canDeleteCase = !isSupabaseMode && can(currentUser, 'cases.delete')
   const [selectedTray, setSelectedTray] = useState<CaseTray | null>(null)
   const [trayState, setSelectedTrayState] = useState<TrayState>('pendente')
@@ -344,14 +345,14 @@ export default function CaseDetailPage() {
     () => ({
       upper: Math.max(
         0,
-        (isSupabaseMode && deliveredToDentist.upper <= 0 ? totalUpper : deliveredToDentist.upper) - deliveredUpper,
+        deliveredToDentist.upper - deliveredUpper,
       ),
       lower: Math.max(
         0,
-        (isSupabaseMode && deliveredToDentist.lower <= 0 ? totalLower : deliveredToDentist.lower) - deliveredLower,
+        deliveredToDentist.lower - deliveredLower,
       ),
     }),
-    [deliveredLower, deliveredToDentist.lower, deliveredToDentist.upper, deliveredUpper, isSupabaseMode, totalLower, totalUpper],
+    [deliveredLower, deliveredToDentist.lower, deliveredToDentist.upper, deliveredUpper],
   )
   const actualChangeDateByTray = useMemo(() => {
     const map = new Map<number, string>()
@@ -473,8 +474,8 @@ export default function CaseDetailPage() {
     [linkedLabItems],
   )
   const hasDentistDelivery = useMemo(
-    () => (isSupabaseMode ? hasProductionOrder || (currentCase?.deliveryLots?.length ?? 0) > 0 : (currentCase?.deliveryLots?.length ?? 0) > 0),
-    [currentCase, hasProductionOrder, isSupabaseMode],
+    () => (currentCase?.deliveryLots?.length ?? 0) > 0,
+    [currentCase],
   )
   const labSummary = useMemo(
     () => ({
@@ -585,10 +586,10 @@ export default function CaseDetailPage() {
 
   if (!currentCase) {
     return (
-      <AppShell breadcrumb={['InÃ­cio', 'Alinhadores']}>
+      <AppShell breadcrumb={['Inicio', 'Alinhadores']}>
         <Card>
-          <h1 className="text-xl font-semibold text-slate-900">Pedido nÃ£o encontrado</h1>
-          <p className="mt-2 text-sm text-slate-500">O pedido solicitado nÃ£o existe ou foi removido.</p>
+          <h1 className="text-xl font-semibold text-slate-900">Pedido nao encontrado</h1>
+          <p className="mt-2 text-sm text-slate-500">O pedido solicitado nao existe ou foi removido.</p>
           <Button className="mt-4" onClick={() => navigate('/app/cases')}>
             Voltar
           </Button>
@@ -602,7 +603,7 @@ export default function CaseDetailPage() {
       <AppShell breadcrumb={['Inicio', 'Alinhadores']}>
         <Card>
           <h1 className="text-xl font-semibold text-slate-900">Sem acesso</h1>
-          <p className="mt-2 text-sm text-slate-500">Seu perfil nÃ£o permite visualizar este pedido.</p>
+          <p className="mt-2 text-sm text-slate-500">Seu perfil nao permite visualizar este pedido.</p>
           <Button className="mt-4" onClick={() => navigate('/app/cases')}>
             Voltar
           </Button>
@@ -612,21 +613,127 @@ export default function CaseDetailPage() {
   }
 
   const openTrayModal = (tray: CaseTray) => {
-    if (!canWriteLocalOnly) return
+    if (!canManageTray) return
     setSelectedTray(tray)
     setSelectedTrayState(tray.state)
     setReworkArch(currentCase.arch ?? 'ambos')
     setTrayNote(tray.notes ?? '')
   }
 
-  const saveTrayChanges = () => {
-    if (!canWriteLocalOnly) return
+  const saveTrayChanges = async () => {
+    if (!canManageTray) return
     if (!selectedTray) {
       return
     }
 
     const trayInCase = currentCase.trays.find((item) => item.trayNumber === selectedTray.trayNumber)
     if (!trayInCase) {
+      return
+    }
+
+    if (isSupabaseMode) {
+      const nextTrays = currentCase.trays.map((item) =>
+        item.trayNumber === selectedTray.trayNumber
+          ? { ...item, state: trayState, notes: trayNote.trim() || undefined }
+          : item,
+      )
+      const nextPatch: Record<string, unknown> = { trays: nextTrays }
+
+      if (trayState === 'rework' && trayInCase.state !== 'rework' && supabase) {
+        const hasOpenRework = linkedLabItems.some(
+          (item) => item.trayNumber === selectedTray.trayNumber && item.requestKind === 'reconfeccao' && item.status !== 'prontas',
+        )
+        const hasOpenReworkProduction = linkedLabItems.some(
+          (item) =>
+            item.trayNumber === selectedTray.trayNumber &&
+            (item.requestKind ?? 'producao') === 'producao' &&
+            (item.notes ?? '').toLowerCase().includes('rework') &&
+            item.status !== 'prontas',
+        )
+        const today = new Date().toISOString().slice(0, 10)
+        const reworkReason = trayNote.trim().length > 0
+          ? trayNote.trim()
+          : `Rework solicitado via timeline da placa #${selectedTray.trayNumber}.`
+        const productType = currentCase.productId ?? currentCase.productType ?? 'alinhador_12m'
+
+        if (!hasOpenRework) {
+          const { error } = await supabase.from('lab_items').insert({
+            case_id: currentCase.id,
+            tray_number: selectedTray.trayNumber,
+            status: 'aguardando_iniciar',
+            priority: 'Urgente',
+            notes: reworkReason,
+            product_type: productType,
+            product_id: productType,
+            data: {
+              requestKind: 'reconfeccao',
+              arch: reworkArch,
+              plannedUpperQty: 0,
+              plannedLowerQty: 0,
+              patientName: currentCase.patientName,
+              trayNumber: selectedTray.trayNumber,
+              plannedDate: today,
+              dueDate: trayInCase.dueDate ?? today,
+              status: 'aguardando_iniciar',
+            },
+          })
+          if (error) {
+            addToast({ type: 'error', title: 'Rework', message: error.message })
+            return
+          }
+        }
+        if (!hasOpenReworkProduction) {
+          const { error } = await supabase.from('lab_items').insert({
+            case_id: currentCase.id,
+            tray_number: selectedTray.trayNumber,
+            status: 'aguardando_iniciar',
+            priority: 'Urgente',
+            notes: `OS de producao para rework da placa #${selectedTray.trayNumber}. Motivo: ${reworkReason}`,
+            product_type: productType,
+            product_id: productType,
+            data: {
+              requestKind: 'producao',
+              arch: reworkArch,
+              plannedUpperQty: 0,
+              plannedLowerQty: 0,
+              patientName: currentCase.patientName,
+              trayNumber: selectedTray.trayNumber,
+              plannedDate: today,
+              dueDate: trayInCase.dueDate ?? today,
+              status: 'aguardando_iniciar',
+            },
+          })
+          if (error) {
+            addToast({ type: 'error', title: 'Rework', message: error.message })
+            return
+          }
+        }
+
+        const nextLots = removeTrayFromDeliveryLots(currentCase.deliveryLots ?? [], selectedTray.trayNumber, reworkArch)
+        let nextInstallation = currentCase.installation
+        if (currentCase.installation) {
+          const currentUpper = currentCase.installation.deliveredUpper ?? 0
+          const currentLower = currentCase.installation.deliveredLower ?? 0
+          const affectUpper = (reworkArch === 'superior' || reworkArch === 'ambos') && selectedTray.trayNumber <= currentUpper
+          const affectLower = (reworkArch === 'inferior' || reworkArch === 'ambos') && selectedTray.trayNumber <= currentLower
+          nextInstallation = {
+            ...currentCase.installation,
+            deliveredUpper: Math.max(0, currentUpper - (affectUpper ? 1 : 0)),
+            deliveredLower: Math.max(0, currentLower - (affectLower ? 1 : 0)),
+          }
+        }
+        nextPatch.deliveryLots = nextLots
+        nextPatch.installation = nextInstallation
+      }
+
+      const result = await patchCaseDataSupabase(currentCase.id, nextPatch)
+      if (!result.ok) {
+        addToast({ type: 'error', title: 'Placa', message: result.error })
+        return
+      }
+      setSupabaseRefreshKey((current) => current + 1)
+      addToast({ type: 'success', title: 'Placa atualizada' })
+      setSelectedTray(null)
       return
     }
 
@@ -671,11 +778,11 @@ export default function CaseDetailPage() {
             notes: reworkReason,
           })
           if (!created.ok) {
-            addToast({ type: 'error', title: 'Reconfecção', message: created.error })
+            addToast({ type: 'error', title: 'Reconfeccao', message: created.error })
             return
           }
           if (!created.sync.ok) {
-            addToast({ type: 'error', title: 'Reconfecção', message: created.sync.message })
+            addToast({ type: 'error', title: 'Reconfeccao', message: created.sync.message })
             return
           }
         }
@@ -694,7 +801,7 @@ export default function CaseDetailPage() {
             dueDate: trayInCase.dueDate ?? today,
             status: 'aguardando_iniciar',
             priority: 'Urgente',
-            notes: `OS de produção para rework da placa #${selectedTray.trayNumber}. Motivo: ${reworkReason}`,
+            notes: `OS de produ��o para rework da placa #${selectedTray.trayNumber}. Motivo: ${reworkReason}`,
           })
           if (!production.ok) {
             addToast({ type: 'error', title: 'Rework', message: production.error })
@@ -707,7 +814,7 @@ export default function CaseDetailPage() {
         }
 
         if (!hasOpenRework || !hasOpenReworkProduction) {
-          addToast({ type: 'success', title: 'OS de rework geradas', message: 'Reconfecção e confecção adicionadas na esteira.' })
+          addToast({ type: 'success', title: 'OS de rework geradas', message: 'Reconfeccao e confec��o adicionadas na esteira.' })
         }
 
         const latestAfterState = getCase(currentCase.id) ?? currentCase
@@ -801,7 +908,7 @@ export default function CaseDetailPage() {
     if (!canWrite) return
     const parsed = parseBrlCurrencyInput(budgetValue)
     if (!Number.isFinite(parsed) || parsed <= 0) {
-      addToast({ type: 'error', title: 'OrÃ§amento', message: 'Informe um valor vÃ¡lido para o orÃ§amento.' })
+      addToast({ type: 'error', title: 'Orcamento', message: 'Informe um valor valido para o orcamento.' })
       return
     }
     if (isSupabaseMode) {
@@ -831,7 +938,7 @@ export default function CaseDetailPage() {
       budget: { value: parsed, notes: budgetNotes.trim() || undefined, createdAt: new Date().toISOString() },
       contract: { ...(currentCase.contract ?? { status: 'pendente' }), status: 'pendente', notes: contractNotes.trim() || undefined },
     })
-    addToast({ type: 'success', title: 'OrÃ§amento fechado' })
+    addToast({ type: 'success', title: 'Orcamento fechado' })
   }
 
   const approveContract = () => {
@@ -867,7 +974,7 @@ export default function CaseDetailPage() {
 
   const handleDeleteCase = () => {
     if (!canDeleteCase) return
-    const confirmed = window.confirm('Tem certeza que deseja excluir este pedido? Esta aÃ§Ã£o remove os itens LAB vinculados.')
+    const confirmed = window.confirm('Tem certeza que deseja excluir este pedido? Esta acao remove os itens LAB vinculados.')
     if (!confirmed) return
     const result = deleteCase(currentCase.id)
     if (!result.ok) {
@@ -935,22 +1042,22 @@ export default function CaseDetailPage() {
     const upperCount = hasUpperArch ? Number(installationDeliveredUpper) : 0
     const lowerCount = hasLowerArch ? Number(installationDeliveredLower) : 0
     if (!Number.isFinite(upperCount) || !Number.isFinite(lowerCount) || upperCount < 0 || lowerCount < 0) {
-      addToast({ type: 'error', title: 'InstalaÃ§Ã£o', message: 'Informe quantidades vÃ¡lidas por arcada.' })
+      addToast({ type: 'error', title: 'Instalacao', message: 'Informe quantidades validas por arcada.' })
       return
     }
     if (hasUpperArch && Math.trunc(upperCount) > readyToDeliverPatient.upper) {
       addToast({
         type: 'error',
-        title: 'InstalaÃ§Ã£o',
-        message: `Superior disponÃ­vel para paciente: ${readyToDeliverPatient.upper} (entregue pelo LAB ao profissional e ainda nÃ£o consumido).`,
+        title: 'Instalacao',
+        message: `Superior disponivel para paciente: ${readyToDeliverPatient.upper} (entregue pelo LAB ao profissional e ainda nao consumido).`,
       })
       return
     }
     if (hasLowerArch && Math.trunc(lowerCount) > readyToDeliverPatient.lower) {
       addToast({
         type: 'error',
-        title: 'InstalaÃ§Ã£o',
-        message: `Inferior disponÃ­vel para paciente: ${readyToDeliverPatient.lower} (entregue pelo LAB ao profissional e ainda nÃ£o consumido).`,
+        title: 'Instalacao',
+        message: `Inferior disponivel para paciente: ${readyToDeliverPatient.lower} (entregue pelo LAB ao profissional e ainda nao consumido).`,
       })
       return
     }
@@ -1017,10 +1124,10 @@ export default function CaseDetailPage() {
       deliveredLower: Math.trunc(lowerCount),
     })
     if (!result.ok) {
-      addToast({ type: 'error', title: 'InstalaÃ§Ã£o', message: result.error })
+      addToast({ type: 'error', title: 'Instalacao', message: result.error })
       return
     }
-    addToast({ type: 'success', title: 'InstalaÃ§Ã£o registrada' })
+    addToast({ type: 'success', title: 'Instalacao registrada' })
   }
 
   const saveActualChangeDate = (trayNumber: number, changedAt: string) => {
@@ -1056,7 +1163,7 @@ export default function CaseDetailPage() {
       },
     })
     if (!updated) {
-      addToast({ type: 'error', title: 'Troca real', message: 'NÃ£o foi possÃ­vel atualizar a data real de troca.' })
+      addToast({ type: 'error', title: 'Troca real', message: 'Nao foi possivel atualizar a data real de troca.' })
       return
     }
     addToast({ type: 'success', title: 'Troca real atualizada' })
@@ -1122,13 +1229,13 @@ export default function CaseDetailPage() {
   )
 
   return (
-    <AppShell breadcrumb={['InÃ­cio', 'Alinhadores', patientDisplayName]}>
+    <AppShell breadcrumb={['Inicio', 'Alinhadores', patientDisplayName]}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Paciente: {patientDisplayName}</h1>
           {currentCase.treatmentCode ? (
             <p className="mt-1 text-sm font-semibold text-slate-700">
-              IdentificaÃ§Ã£o: {currentCase.treatmentCode} ({currentCase.treatmentOrigin === 'interno' ? 'Interno ARRIMO' : 'Externo'})
+              Identificacao: {currentCase.treatmentCode} ({currentCase.treatmentOrigin === 'interno' ? 'Interno ARRIMO' : 'Externo'})
             </p>
           ) : null}
           <p className="mt-1 text-sm font-medium text-slate-600">
@@ -1143,12 +1250,12 @@ export default function CaseDetailPage() {
                 : hasLowerArch
                   ? `Inferior ${totalLower}`
                   : '-'}{' '}
-            | Troca {currentCase.changeEveryDays} dias | Attachments: {currentCase.attachmentBondingTray ? 'Sim' : 'NÃ£o'}
+            | Troca {currentCase.changeEveryDays} dias | Attachments: {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
           </p>
           <div className="mt-3 flex items-center gap-3">
             <Badge tone={phaseToneMap[currentCase.phase]}>{phaseLabelMap[currentCase.phase]}</Badge>
             <span className="text-xs text-slate-500">
-              Ãšltima atualizaÃ§Ã£o: {new Date(currentCase.updatedAt).toLocaleString('pt-BR')}
+              Ultima atualizacao: {new Date(currentCase.updatedAt).toLocaleString('pt-BR')}
             </span>
           </div>
         </div>
@@ -1197,7 +1304,7 @@ export default function CaseDetailPage() {
 
         <Card>
           <p className="text-sm text-slate-500">Resumo</p>
-          <p className="mt-2 text-sm text-slate-700">Em produÃ§Ã£o/CQ: {inProductionCount}</p>
+          <p className="mt-2 text-sm text-slate-700">Em producao/CQ: {inProductionCount}</p>
           <p className="mt-1 text-sm text-slate-700">Prontas: {readyCount}</p>
           <p className="mt-1 text-sm text-slate-700">
             Entregues:{' '}
@@ -1225,7 +1332,7 @@ export default function CaseDetailPage() {
               </div>
 
               <div className="rounded-lg border border-slate-200 p-3">
-                <p className="text-sm font-semibold text-slate-800">Etapa 2 - OrÃ§amento</p>
+                <p className="text-sm font-semibold text-slate-800">Etapa 2 - Orcamento</p>
                 <div className="mt-2 grid gap-2">
                   <Input
                     type="text"
@@ -1236,7 +1343,7 @@ export default function CaseDetailPage() {
                   />
                   <textarea
                     rows={2}
-                    placeholder="ObservaÃ§Ãµes do orÃ§amento"
+                    placeholder="Observacões do orcamento"
                     value={budgetNotes}
                     onChange={(event) => setBudgetNotes(event.target.value)}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -1255,7 +1362,7 @@ export default function CaseDetailPage() {
                 </p>
                 <textarea
                   rows={2}
-                  placeholder="ObservaÃ§Ãµes do contrato"
+                  placeholder="Observacões do contrato"
                   value={contractNotes}
                   onChange={(event) => setContractNotes(event.target.value)}
                   className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -1320,7 +1427,7 @@ export default function CaseDetailPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">ObservaÃ§Ã£o</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Observacao</label>
               <textarea
                 rows={3}
                 value={installationNote}
@@ -1369,7 +1476,7 @@ export default function CaseDetailPage() {
               >
                 {currentCase.installation ? 'Registrar reposicao paciente' : 'Registrar inicio do pedido'}
               </Button>
-              {!hasProductionOrder ? <p className="mt-2 text-xs text-amber-700">Ordem de serviÃ§o do LAB ainda nÃ£o gerada.</p> : null}
+              {!hasProductionOrder ? <p className="mt-2 text-xs text-amber-700">Ordem de servico do LAB ainda nao gerada.</p> : null}
               {!hasDentistDelivery ? <p className="mt-1 text-xs text-amber-700">Registre antes a entrega ao dentista.</p> : null}
             </div>
           </div>
@@ -1396,7 +1503,7 @@ export default function CaseDetailPage() {
               {supplySummary?.nextDueDate ? new Date(`${supplySummary.nextDueDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'}
             </p>
             {!currentCase.installation?.installedAt ? (
-              <p className="text-sm text-slate-500">Registre a instalaÃ§Ã£o para calcular reposiÃ§Ãµes.</p>
+              <p className="text-sm text-slate-500">Registre a instalacao para calcular reposicões.</p>
             ) : null}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -1424,7 +1531,7 @@ export default function CaseDetailPage() {
 
       <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">InformaÃ§Ãµes clÃ­nicas</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Informacões clinicas</h2>
           <div className="mt-3 space-y-2 text-sm text-slate-700">
             <p>
               <span className="font-medium">Arcada:</span> {currentCase.arch ? archLabelMap[currentCase.arch] : '-'}
@@ -1433,15 +1540,15 @@ export default function CaseDetailPage() {
               <span className="font-medium">Queixa do paciente:</span> {currentCase.complaint || '-'}
             </p>
             <p>
-              <span className="font-medium">OrientaÃ§Ã£o do dentista:</span> {currentCase.dentistGuidance || '-'}
+              <span className="font-medium">Orientacao do dentista:</span> {currentCase.dentistGuidance || '-'}
             </p>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profissional / ClÃ­nica</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profissional / Clinica</p>
               <p className="mt-1">
-                <span className="font-medium">ClÃ­nica:</span> {clinicName || '-'}
+                <span className="font-medium">Clinica:</span> {clinicName || '-'}
               </p>
               <p>
-                <span className="font-medium">Dentista responsÃ¡vel:</span>{' '}
+                <span className="font-medium">Dentista responsavel:</span>{' '}
                 {dentist ? `${dentistPrefix} ${dentist.name}` : '-'}
               </p>
               <p>
@@ -1461,10 +1568,10 @@ export default function CaseDetailPage() {
                   : `Inferior: ${totalLower}`}
             </p>
             <p>
-              <span className="font-medium">Placa de attachments:</span> {currentCase.attachmentBondingTray ? 'Sim' : 'NÃ£o'}
+              <span className="font-medium">Placa de attachments:</span> {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
             </p>
             <p>
-              <span className="font-medium">Fonte:</span> {currentCase.sourceScanId ? `Scan ${currentCase.sourceScanId}` : 'NÃ£o vinculado'}
+              <span className="font-medium">Fonte:</span> {currentCase.sourceScanId ? `Scan ${currentCase.sourceScanId}` : 'Nao vinculado'}
             </p>
           </div>
         </Card>
@@ -1505,10 +1612,10 @@ export default function CaseDetailPage() {
 
       <section className="mt-6">
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">ProduÃ§Ã£o (LAB)</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Producao (LAB)</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
             <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">Aguardando: {labSummary.aguardando_iniciar}</div>
-            <div className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">Em produÃ§Ã£o: {labSummary.em_producao}</div>
+            <div className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">Em producao: {labSummary.em_producao}</div>
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">CQ: {labSummary.controle_qualidade}</div>
             <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Prontas: {labSummary.prontas}</div>
             <div className="rounded-lg bg-emerald-100 px-3 py-2 text-sm text-emerald-800">Entregues: {labSummary.entregues}</div>
@@ -1523,14 +1630,15 @@ export default function CaseDetailPage() {
                   <th className="px-3 py-2 font-semibold">Data real de troca</th>
                   {hasUpperArch ? <th className="px-3 py-2 font-semibold">Superior</th> : null}
                   {hasLowerArch ? <th className="px-3 py-2 font-semibold">Inferior</th> : null}
+                  <th className="px-3 py-2 font-semibold">Concluido LAB</th>
                   <th className="px-3 py-2 font-semibold">Data de entrega</th>
                 </tr>
               </thead>
               <tbody>
                 {changeSchedule.length === 0 ? (
                   <tr>
-                    <td colSpan={hasUpperArch && hasLowerArch ? 6 : 5} className="px-3 py-4 text-slate-500">
-                      Registre a instalaÃ§Ã£o para gerar agenda de trocas.
+                    <td colSpan={hasUpperArch && hasLowerArch ? 7 : 6} className="px-3 py-4 text-slate-500">
+                      Registre a instalacao para gerar agenda de trocas.
                     </td>
                   </tr>
                 ) : (
@@ -1548,6 +1656,9 @@ export default function CaseDetailPage() {
                       </td>
                       {hasUpperArch ? <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.superiorState)}`}>{scheduleStateLabel(row.superiorState)}</td> : null}
                       {hasLowerArch ? <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.inferiorState)}`}>{scheduleStateLabel(row.inferiorState)}</td> : null}
+                      <td className="px-3 py-2 text-slate-700">
+                        {(!hasUpperArch || row.superiorState === 'entregue') && (!hasLowerArch || row.inferiorState === 'entregue') ? 'Sim' : 'Nao'}
+                      </td>
                       <td className="px-3 py-2 text-slate-700">
                         {row.trayNumber <= deliveredScheduleCount
                           ? (() => {
@@ -1571,7 +1682,7 @@ export default function CaseDetailPage() {
           <p className="mt-1 text-sm text-slate-500">Clique em uma placa para ver detalhes e alterar estado.</p>
           <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
             <span className="rounded px-2 py-1 bg-slate-100 text-slate-700">Pendente</span>
-            <span className="rounded px-2 py-1 bg-blue-100 text-blue-700">Em produÃ§Ã£o</span>
+            <span className="rounded px-2 py-1 bg-blue-100 text-blue-700">Em producao</span>
             <span className="rounded px-2 py-1 bg-brand-500 text-white">Pronta</span>
             <span className="rounded px-2 py-1 bg-emerald-100 text-emerald-700">Entregue</span>
             <span className="rounded px-2 py-1 bg-red-100 text-red-700">Rework</span>
@@ -1581,8 +1692,8 @@ export default function CaseDetailPage() {
               <button
                 key={tray.trayNumber}
                 type="button"
-                onClick={canWriteLocalOnly ? () => openTrayModal(tray) : undefined}
-                disabled={!canWriteLocalOnly}
+                onClick={canManageTray ? () => openTrayModal(tray) : undefined}
+                disabled={!canManageTray}
                 className={`h-10 rounded-lg text-xs font-semibold transition ${trayStateClasses[timelineStateForTray(tray, hasUpperArch ? progressUpper.delivered : 0, hasLowerArch ? progressLower.delivered : 0)]}`}
               >
                 {tray.trayNumber}
@@ -1659,7 +1770,7 @@ export default function CaseDetailPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">ObservaÃ§Ã£o</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Observacao</label>
                 <textarea
                   rows={3}
                   value={attachmentNote}
@@ -1712,7 +1823,7 @@ export default function CaseDetailPage() {
                   className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 >
                   <option value="pendente">Pendente</option>
-                  <option value="em_producao">Em produÃ§Ã£o</option>
+                  <option value="em_producao">Em producao</option>
                   <option value="pronta">Pronta</option>
                   <option value="entregue">Entregue</option>
                   <option value="rework">Rework</option>
@@ -1754,7 +1865,7 @@ export default function CaseDetailPage() {
               <Button variant="secondary" onClick={() => setSelectedTray(null)}>
                 Cancelar
               </Button>
-              <Button onClick={saveTrayChanges} disabled={!canWriteLocalOnly}>Salvar</Button>
+              <Button onClick={() => void saveTrayChanges()} disabled={!canManageTray}>Salvar</Button>
             </div>
           </Card>
         </div>
@@ -1762,6 +1873,7 @@ export default function CaseDetailPage() {
     </AppShell>
   )
 }
+
 
 
 
