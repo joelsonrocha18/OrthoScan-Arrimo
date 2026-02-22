@@ -23,6 +23,7 @@ import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUse
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
 import { listClinicsSupabase, listDentistsSupabase, type ClinicOption, type DentistOption } from '../repo/directoryRepo'
 import { inviteUser, listProfiles, setProfileActive, softDeleteProfile, updateProfile } from '../repo/profileRepo'
+import { PRODUCT_TYPE_LABEL } from '../types/Product'
 import type { Role, User } from '../types/User'
 import { useDb } from '../lib/useDb'
 
@@ -32,14 +33,14 @@ type PasswordMode = 'auto' | 'manual'
 type ReportDatasetKey = 'patients' | 'dentists' | 'clinics' | 'users' | 'scans' | 'cases' | 'labItems'
 type ReportFieldOption = { key: string; label: string }
 const ROLE_LIST: Role[] = ['master_admin', 'dentist_admin', 'dentist_client', 'clinic_client', 'lab_tech', 'receptionist']
-const MODULE_ORDER: PermissionModule[] = ['Dashboard', 'Pacientes', 'Scans', 'Casos', 'Laboratorio', 'Usuarios', 'Configuracoes']
+const MODULE_ORDER: PermissionModule[] = ['Dashboard', 'Pacientes', 'Scans', 'Alinhadores', 'Laboratorio', 'Usuarios', 'Configuracoes']
 const REPORT_DATASETS: Array<{ key: ReportDatasetKey; label: string }> = [
   { key: 'patients', label: 'Pacientes' },
   { key: 'dentists', label: 'Dentistas' },
   { key: 'clinics', label: 'Clinicas' },
   { key: 'users', label: 'Usuarios' },
   { key: 'scans', label: 'Scans' },
-  { key: 'cases', label: 'Tratamentos' },
+  { key: 'cases', label: 'Alinhadores' },
   { key: 'labItems', label: 'Laboratorio' },
 ]
 
@@ -152,6 +153,18 @@ function createdAtDate(input: Record<string, unknown>) {
   return parsed
 }
 
+function reportRowProductType(input: Record<string, unknown>) {
+  const data = (input.data && typeof input.data === 'object') ? (input.data as Record<string, unknown>) : {}
+  const value = input.productType ?? input.product_type ?? data.productType
+  return typeof value === 'string' ? value : ''
+}
+
+function reportRowProductionStatus(input: Record<string, unknown>) {
+  const data = (input.data && typeof input.data === 'object') ? (input.data as Record<string, unknown>) : {}
+  const value = input.status ?? data.status
+  return typeof value === 'string' ? value : ''
+}
+
 function mapProfilesToUsers(profiles: Awaited<ReturnType<typeof listProfiles>>): User[] {
   return profiles
     .filter((profile) => profile.deleted_at == null)
@@ -208,6 +221,8 @@ export default function SettingsPage() {
   const [reportDataset, setReportDataset] = useState<ReportDatasetKey>('patients')
   const [reportStartDate, setReportStartDate] = useState('')
   const [reportEndDate, setReportEndDate] = useState('')
+  const [reportProductType, setReportProductType] = useState('')
+  const [reportProductionStatus, setReportProductionStatus] = useState('')
   const [selectedReportFields, setSelectedReportFields] = useState<string[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
@@ -504,6 +519,24 @@ export default function SettingsPage() {
       .map((key) => ({ key, label: prettifyFieldLabel(key) }))
   }, [reportRows])
 
+  const reportProductTypeOptions = useMemo(() => {
+    const options = new Set<string>()
+    reportRows.forEach((row) => {
+      const value = reportRowProductType(row)
+      if (value) options.add(value)
+    })
+    return Array.from(options).sort((a, b) => a.localeCompare(b))
+  }, [reportRows])
+
+  const reportStatusOptions = useMemo(() => {
+    const options = new Set<string>()
+    reportRows.forEach((row) => {
+      const value = reportRowProductionStatus(row)
+      if (value) options.add(value)
+    })
+    return Array.from(options).sort((a, b) => a.localeCompare(b))
+  }, [reportRows])
+
   useEffect(() => {
     setSelectedReportFields((current) => {
       const allowed = new Set(reportFieldOptions.map((item) => item.key))
@@ -534,6 +567,12 @@ export default function SettingsPage() {
       if (startDate && created < startDate) return false
       if (endDate && created > endDate) return false
       return true
+    }).filter((row) => {
+      if (!reportProductType) return true
+      return reportRowProductType(row) === reportProductType
+    }).filter((row) => {
+      if (!reportProductionStatus) return true
+      return reportRowProductionStatus(row) === reportProductionStatus
     })
     if (!filteredRows.length) {
       addToast({ type: 'error', title: 'Nenhum registro encontrado para os filtros selecionados.' })
@@ -722,10 +761,12 @@ export default function SettingsPage() {
             <button type="button" className="text-xl leading-none text-white/90 hover:text-white" onClick={() => setReportModalOpen(false)} aria-label="Fechar">x</button>
           </div>
           <div className="space-y-4 p-5">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
               <div><label className="mb-1 block text-sm font-medium text-slate-700">Base de dados</label><select value={reportDataset} onChange={(event) => setReportDataset(event.target.value as ReportDatasetKey)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{REPORT_DATASETS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></div>
               <div><label className="mb-1 block text-sm font-medium text-slate-700">Data inicial (criacao)</label><Input type="date" value={reportStartDate} onChange={(event) => setReportStartDate(event.target.value)} /></div>
               <div><label className="mb-1 block text-sm font-medium text-slate-700">Data final (criacao)</label><Input type="date" value={reportEndDate} onChange={(event) => setReportEndDate(event.target.value)} /></div>
+              <div><label className="mb-1 block text-sm font-medium text-slate-700">Tipo de produto</label><select value={reportProductType} onChange={(event) => setReportProductType(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Todos</option>{reportProductTypeOptions.map((value) => <option key={value} value={value}>{PRODUCT_TYPE_LABEL[value as keyof typeof PRODUCT_TYPE_LABEL] ?? value}</option>)}</select></div>
+              <div><label className="mb-1 block text-sm font-medium text-slate-700">Status de produção</label><select value={reportProductionStatus} onChange={(event) => setReportProductionStatus(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Todos</option>{reportStatusOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
             </div>
             <div className="rounded-lg border border-slate-200 p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">

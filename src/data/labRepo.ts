@@ -95,6 +95,7 @@ function ensureProgrammedReplenishments(db: ReturnType<typeof loadDb>) {
           {
             id: `lab_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
             caseId: caseItem.id,
+            productType: caseItem.productType ?? 'alinhador_12m',
             requestCode: `${code}/${revision}`,
             requestKind: 'reposicao_programada',
             expectedReplacementDate: expected,
@@ -275,6 +276,7 @@ export function addLabItem(item: Omit<LabItem, 'id' | 'createdAt' | 'updatedAt'>
   const resolvedStatus = planDefined ? (item.status === 'aguardando_iniciar' ? 'em_producao' : item.status) : 'aguardando_iniciar'
   const newItem: LabItem = {
     ...item,
+    productType: item.productType ?? linkedCase?.productType ?? 'alinhador_12m',
     arch: item.arch ?? 'ambos',
     requestCode: resolvedRequestCode,
     requestKind: item.requestKind ?? 'producao',
@@ -396,8 +398,18 @@ export function moveLabItem(id: string, status: LabStatus) {
       error = 'Transicao de status invalida para este item.'
       return item
     }
-    if (item.status === 'aguardando_iniciar' && status === 'em_producao' && !hasProductionPlan(item)) {
-      error = 'Defina quantidades por arcada antes de iniciar producao.'
+    if (item.status === 'aguardando_iniciar' && status === 'em_producao') {
+      if (!item.arch) {
+        error = 'Defina a arcada do produto antes de iniciar producao.'
+        return item
+      }
+      if (!hasProductionPlan(item)) {
+        error = 'Defina quantidades por arcada antes de iniciar producao.'
+        return item
+      }
+    }
+    if (status === 'em_producao' && !item.arch) {
+      error = 'Defina a arcada do produto antes de iniciar producao.'
       return item
     }
 
@@ -559,6 +571,7 @@ export function createAdvanceLabOrder(
   }
   const newItem: LabItem = {
     ...source,
+    productType: source.productType ?? linkedCase.productType ?? 'alinhador_12m',
     id: `lab_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
     requestCode,
     requestKind: 'producao',

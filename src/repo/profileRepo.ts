@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabaseClient'
+import type { CaseTray } from '../types/Case'
+import type { LabItem } from '../types/Lab'
+import type { ProductType } from '../types/Product'
+import type { Scan, ScanAttachment } from '../types/Scan'
 
 export type ProfileRecord = {
   user_id: string
@@ -89,6 +93,306 @@ export async function updateProfile(
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function asText(value: unknown, fallback = '') {
+  return typeof value === 'string' ? value : fallback
+}
+
+function asNumber(value: unknown, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function asProductType(value: unknown, fallback: ProductType = 'alinhador_12m'): ProductType {
+  return typeof value === 'string' && value.length > 0 ? (value as ProductType) : fallback
+}
+
+function normalizeScanAttachments(attachments: ScanAttachment[]) {
+  const now = new Date().toISOString()
+  return attachments.map((attachment) => ({
+    ...attachment,
+    status: attachment.status ?? 'ok',
+    attachedAt: attachment.attachedAt ?? attachment.createdAt ?? now,
+    createdAt: attachment.createdAt ?? now,
+  }))
+}
+
+function buildPendingTrays(totalTrays: number, scanDate: string, changeEveryDays: number): CaseTray[] {
+  const trays: CaseTray[] = []
+  const base = new Date(`${scanDate}T00:00:00`)
+  for (let tray = 1; tray <= totalTrays; tray += 1) {
+    const due = new Date(base)
+    due.setDate(due.getDate() + changeEveryDays * tray)
+    trays.push({ trayNumber: tray, state: 'pendente', dueDate: due.toISOString().slice(0, 10) })
+  }
+  return trays
+}
+
+export async function createScanSupabase(scan: Omit<Scan, 'id' | 'createdAt' | 'updatedAt'>) {
+  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const now = new Date().toISOString()
+  const attachments = normalizeScanAttachments(scan.attachments)
+
+  const { data, error } = await supabase
+    .from('scans')
+    .insert({
+      clinic_id: scan.clinicId ?? null,
+      patient_id: scan.patientId ?? null,
+      dentist_id: scan.dentistId ?? null,
+      requested_by_dentist_id: scan.requestedByDentistId ?? null,
+      arch: scan.arch,
+      complaint: scan.complaint ?? null,
+      dentist_guidance: scan.dentistGuidance ?? null,
+      data: {
+        patientName: scan.patientName,
+        serviceOrderCode: scan.serviceOrderCode,
+        scanDate: scan.scanDate,
+        arch: scan.arch,
+        complaint: scan.complaint,
+        dentistGuidance: scan.dentistGuidance,
+        notes: scan.notes,
+        attachments,
+        status: scan.status ?? 'pendente',
+        linkedCaseId: scan.linkedCaseId,
+        createdAt: now,
+        updatedAt: now,
+      },
+      updated_at: now,
+    })
+    .select('id')
+    .maybeSingle()
+
+  if (error) return { ok: false as const, error: error.message }
+  if (!data?.id) return { ok: false as const, error: 'Scan nao criado. Verifique permissoes.' }
+  return { ok: true as const, id: data.id as string }
+}
+
+export async function createCaseFromScanSupabase(
+  scan: Scan,
+  payload: {
+    totalTraysUpper?: number
+    totalTraysLower?: number
+    changeEveryDays: number
+    attachmentBondingTray: boolean
+    planningNote?: string
+  },
+) {
+  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (scan.status !== 'aprovado') return { ok: false as const, error: 'Apenas scans aprovados podem gerar caso.' }
+  if (scan.linkedCaseId) return { ok: false as const, error: 'Este scan ja foi convertido em caso.' }
+
+  const upper = payload.totalTraysUpper ?? 0
+  const lower = payload.totalTraysLower ?? 0
+  const totalTrays = Math.max(upper, lower)
+  if (totalTrays <= 0) return { ok: false as const, error: 'Informe total de placas superior e/ou inferior.' }
+
+  const now = new Date().toISOString()
+  const treatmentCode = scan.serviceOrderCode ?? undefined
+  const status = 'planejamento'
+  const phase = 'planejamento'
+  const nextData = {
+    productType: 'alinhador_12m' as ProductType,
+    treatmentCode,
+    patientName: scan.patientName,
+    scanDate: scan.scanDate,
+    totalTrays,
+    totalTraysUpper: upper || undefined,
+    totalTraysLower: lower || undefined,
+    changeEveryDays: payload.changeEveryDays,
+    attachmentBondingTray: payload.attachmentBondingTray,
+    planningNote: payload.planningNote,
+    status,
+    phase,
+    budget: undefined,
+    contract: { status: 'pendente' as const },
+    deliveryLots: [],
+    installation: undefined,
+    trays: buildPendingTrays(totalTrays, scan.scanDate, payload.changeEveryDays),
+    attachments: [],
+    sourceScanId: scan.id,
+    arch: scan.arch,
+    complaint: scan.complaint,
+    dentistGuidance: scan.dentistGuidance,
+    scanFiles: normalizeScanAttachments(scan.attachments),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  const { data: created, error: createError } = await supabase
+    .from('cases')
+    .insert({
+      clinic_id: scan.clinicId ?? null,
+      patient_id: scan.patientId ?? null,
+      dentist_id: scan.dentistId ?? null,
+      requested_by_dentist_id: scan.requestedByDentistId ?? null,
+      scan_id: scan.id,
+      status,
+      change_every_days: payload.changeEveryDays,
+      total_trays_upper: upper || null,
+      total_trays_lower: lower || null,
+      attachments_tray: payload.attachmentBondingTray,
+      product_type: 'alinhador_12m',
+      data: nextData,
+      updated_at: now,
+    })
+    .select('id')
+    .maybeSingle()
+  if (createError) return { ok: false as const, error: createError.message }
+  if (!created?.id) return { ok: false as const, error: 'Caso nao criado. Verifique permissoes.' }
+
+  const scanDataNext = {
+    patientName: scan.patientName,
+    serviceOrderCode: scan.serviceOrderCode,
+    scanDate: scan.scanDate,
+    arch: scan.arch,
+    complaint: scan.complaint,
+    dentistGuidance: scan.dentistGuidance,
+    notes: scan.notes,
+    attachments: normalizeScanAttachments(scan.attachments),
+    status: 'convertido',
+    linkedCaseId: created.id,
+    createdAt: scan.createdAt,
+    updatedAt: now,
+  }
+  const { error: scanUpdateError } = await supabase
+    .from('scans')
+    .update({ data: scanDataNext, updated_at: now })
+    .eq('id', scan.id)
+  if (scanUpdateError) return { ok: false as const, error: scanUpdateError.message }
+
+  return { ok: true as const, caseId: created.id as string }
+}
+
+export async function patchCaseDataSupabase(
+  caseId: string,
+  patch: Record<string, unknown>,
+  options?: { status?: string; phase?: string },
+) {
+  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const now = new Date().toISOString()
+  const { data: current, error: readError } = await supabase
+    .from('cases')
+    .select('id, status, data')
+    .eq('id', caseId)
+    .maybeSingle()
+  if (readError || !current) return { ok: false as const, error: readError?.message ?? 'Caso nao encontrado.' }
+
+  const currentData = asObject(current.data)
+  const nextStatus = options?.status ?? asText(currentData.status, asText(current.status, 'planejamento'))
+  const nextPhase = options?.phase ?? asText(currentData.phase, 'planejamento')
+  const nextData = {
+    ...currentData,
+    ...patch,
+    status: nextStatus,
+    phase: nextPhase,
+    updatedAt: now,
+  }
+
+  const { data, error } = await supabase
+    .from('cases')
+    .update({
+      data: nextData,
+      status: nextStatus,
+      updated_at: now,
+    })
+    .eq('id', caseId)
+    .select('id')
+  if (error) return { ok: false as const, error: error.message }
+  if (!data || data.length === 0) return { ok: false as const, error: 'Caso nao atualizado. Verifique permissoes.' }
+  return { ok: true as const }
+}
+
+export async function listCaseLabItemsSupabase(caseId: string): Promise<LabItem[]> {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('lab_items')
+    .select('id, case_id, tray_number, status, priority, notes, product_type, created_at, updated_at, deleted_at, data')
+    .eq('case_id', caseId)
+    .is('deleted_at', null)
+  if (error) return []
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+    const meta = asObject(row.data)
+    const createdAt = asText(row.created_at, new Date().toISOString())
+    const updatedAt = asText(row.updated_at, createdAt)
+    return {
+      id: asText(row.id),
+      requestCode: asText(meta.requestCode) || undefined,
+      productType: asProductType(row.product_type ?? meta.productType),
+      requestKind: asText(meta.requestKind, 'producao') as LabItem['requestKind'],
+      expectedReplacementDate: asText(meta.expectedReplacementDate) || undefined,
+      caseId: asText(row.case_id) || undefined,
+      arch: asText(meta.arch, 'ambos') as LabItem['arch'],
+      plannedUpperQty: asNumber(meta.plannedUpperQty, 0),
+      plannedLowerQty: asNumber(meta.plannedLowerQty, 0),
+      planningDefinedAt: asText(meta.planningDefinedAt) || undefined,
+      trayNumber: asNumber(row.tray_number, asNumber(meta.trayNumber, 1)),
+      patientName: asText(meta.patientName, '-'),
+      plannedDate: asText(meta.plannedDate, createdAt.slice(0, 10)),
+      dueDate: asText(meta.dueDate, createdAt.slice(0, 10)),
+      status: asText(row.status, 'aguardando_iniciar') as LabItem['status'],
+      priority: asText(row.priority, 'Medio') as LabItem['priority'],
+      notes: asText(row.notes, asText(meta.notes)) || undefined,
+      createdAt,
+      updatedAt,
+    } satisfies LabItem
+  })
+}
+
+export async function generateCaseLabOrderSupabase(caseId: string) {
+  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  const { data: current, error: readError } = await supabase
+    .from('cases')
+    .select('id, clinic_id, patient_id, status, data')
+    .eq('id', caseId)
+    .maybeSingle()
+  if (readError || !current) return { ok: false as const, error: readError?.message ?? 'Caso nao encontrado.' }
+
+  const currentData = asObject(current.data)
+  const contract = asObject(currentData.contract)
+  if (asText(contract.status, 'pendente') !== 'aprovado') {
+    return { ok: false as const, error: 'Contrato nao aprovado. Nao e possivel gerar OS para o laboratorio.' }
+  }
+
+  const existingItems = await listCaseLabItemsSupabase(caseId)
+  const existing = existingItems.find((item) => (item.requestKind ?? 'producao') === 'producao')
+  if (existing) return { ok: true as const, alreadyExists: true as const }
+
+  const now = new Date().toISOString()
+  const today = now.slice(0, 10)
+  const due = new Date(`${today}T00:00:00`)
+  due.setDate(due.getDate() + 7)
+  const dueDate = due.toISOString().slice(0, 10)
+
+  const requestCode = asText(currentData.treatmentCode, asText(current.id))
+  const productType = asProductType(currentData.productType)
+  const { error: createError } = await supabase
+    .from('lab_items')
+    .insert({
+      case_id: caseId,
+      clinic_id: current.clinic_id ?? null,
+      tray_number: 1,
+      status: 'aguardando_iniciar',
+      priority: 'Medio',
+      notes: 'OS gerada a partir do fluxo comercial do caso. Defina quantidade por arcada antes de produzir.',
+      product_type: productType,
+      data: {
+        requestCode,
+        productType,
+        requestKind: 'producao',
+        expectedReplacementDate: dueDate,
+        arch: asText(currentData.arch, 'ambos'),
+        patientName: asText(currentData.patientName, '-'),
+        trayNumber: 1,
+        plannedDate: today,
+        dueDate,
+        plannedUpperQty: 0,
+        plannedLowerQty: 0,
+      },
+      updated_at: now,
+    })
+  if (createError) return { ok: false as const, error: createError.message }
+  return { ok: true as const, alreadyExists: false as const }
 }
 
 export async function updateScanStatusSupabase(scanId: string, status: 'aprovado' | 'reprovado') {

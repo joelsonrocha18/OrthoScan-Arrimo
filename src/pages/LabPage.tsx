@@ -8,15 +8,19 @@ import LabKpiRow from '../components/lab/LabKpiRow'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
+import { DATA_MODE } from '../data/dataMode'
 import { registerCaseDeliveryLot } from '../data/caseRepo'
 import { addLabItem, createAdvanceLabOrder, deleteLabItem, listLabItems, updateLabItem } from '../data/labRepo'
 import { getNextDeliveryDueDate, getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
 import type { LabItem, LabStatus } from '../types/Lab'
+import type { ProductType } from '../types/Product'
+import { PRODUCT_TYPE_LABEL } from '../types/Product'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 import { listCasesForUser, listLabItemsForUser } from '../auth/scope'
+import { supabase } from '../lib/supabaseClient'
 
 type ModalState =
   | { open: false; mode: 'create' | 'edit'; item: null }
@@ -108,9 +112,22 @@ function hasRemainingByArch(caseItem?: {
   return Math.max(0, totals.upper - delivered.upper) > 0 || Math.max(0, totals.lower - delivered.lower) > 0
 }
 
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function asText(value: unknown, fallback = '') {
+  return typeof value === 'string' ? value : fallback
+}
+
+function asNumber(value: unknown, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
 export default function LabPage() {
   const { db } = useDb()
   const { addToast } = useToast()
+  const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'lab.write')
   const [search, setSearch] = useState('')
@@ -126,17 +143,118 @@ export default function LabPage() {
   const [advanceTarget, setAdvanceTarget] = useState<LabItem | null>(null)
   const [advanceUpperQty, setAdvanceUpperQty] = useState('1')
   const [advanceLowerQty, setAdvanceLowerQty] = useState('1')
+  const [supabaseItems, setSupabaseItems] = useState<LabItem[]>([])
+  const [supabaseCases, setSupabaseCases] = useState<typeof db.cases>([])
+  const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
   const labSyncSignature = `${db.cases.map((item) => item.updatedAt).join('|')}::${db.labItems.map((item) => item.updatedAt).join('|')}`
 
   useEffect(() => {
+    if (isSupabaseMode) return
     listLabItems()
-  }, [labSyncSignature])
+  }, [isSupabaseMode, labSyncSignature])
+
+  useEffect(() => {
+    if (!isSupabaseMode || !supabase) {
+      setSupabaseItems([])
+      setSupabaseCases([])
+      return
+    }
+    let active = true
+    void (async () => {
+      const [casesRes, labRes] = await Promise.all([
+        supabase
+          .from('cases')
+          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, product_type, data, deleted_at')
+          .is('deleted_at', null),
+        supabase
+          .from('lab_items')
+          .select('id, case_id, tray_number, status, priority, notes, product_type, created_at, updated_at, deleted_at, data')
+          .is('deleted_at', null),
+      ])
+      if (!active) return
+
+      const mappedCases = ((casesRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+        const data = asObject(row.data)
+        const createdAt = new Date().toISOString()
+        return {
+          id: asText(row.id),
+          productType: asText(row.product_type, asText(data.productType, 'alinhador_12m')) as typeof db.cases[number]['productType'],
+          treatmentCode: asText(data.treatmentCode) || undefined,
+          treatmentOrigin: (asText(data.treatmentOrigin, 'externo') as 'interno' | 'externo'),
+          patientName: asText(data.patientName, '-'),
+          patientId: asText(row.patient_id) || undefined,
+          dentistId: asText(row.dentist_id) || undefined,
+          requestedByDentistId: asText(row.requested_by_dentist_id) || undefined,
+          clinicId: asText(row.clinic_id) || undefined,
+          scanDate: asText(data.scanDate, createdAt.slice(0, 10)),
+          totalTrays: asNumber(data.totalTrays, 0),
+          changeEveryDays: asNumber(data.changeEveryDays, 7),
+          totalTraysUpper: asNumber(data.totalTraysUpper, asNumber(data.totalTrays, 0)),
+          totalTraysLower: asNumber(data.totalTraysLower, asNumber(data.totalTrays, 0)),
+          attachmentBondingTray: Boolean(data.attachmentBondingTray),
+          status: (asText(data.status, 'planejamento') as 'planejamento' | 'em_producao' | 'em_entrega' | 'finalizado'),
+          phase: (asText(data.phase, 'planejamento') as 'planejamento' | 'orcamento' | 'contrato_pendente' | 'contrato_aprovado' | 'em_producao' | 'finalizado'),
+          budget: data.budget as typeof db.cases[number]['budget'],
+          contract: data.contract as typeof db.cases[number]['contract'],
+          deliveryLots: (data.deliveryLots as typeof db.cases[number]['deliveryLots']) ?? [],
+          installation: data.installation as typeof db.cases[number]['installation'],
+          trays: (data.trays as typeof db.cases[number]['trays']) ?? [],
+          attachments: [],
+          sourceScanId: asText(data.sourceScanId) || undefined,
+          arch: (asText(data.arch, 'ambos') as 'superior' | 'inferior' | 'ambos'),
+          complaint: asText(data.complaint) || undefined,
+          dentistGuidance: asText(data.dentistGuidance) || undefined,
+          scanFiles: data.scanFiles as typeof db.cases[number]['scanFiles'],
+          createdAt: asText(data.createdAt, createdAt),
+          updatedAt: asText(data.updatedAt, createdAt),
+        }
+      })
+
+      const mappedItems = ((labRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
+        const data = asObject(row.data)
+        const createdAt = asText(row.created_at, new Date().toISOString())
+        const updatedAt = asText(row.updated_at, createdAt)
+        return {
+          id: asText(row.id),
+          productType: asText(row.product_type, asText(data.productType, 'alinhador_12m')) as LabItem['productType'],
+          requestCode: asText(data.requestCode) || undefined,
+          requestKind: (asText(data.requestKind, 'producao') as 'producao' | 'reconfeccao' | 'reposicao_programada'),
+          expectedReplacementDate: asText(data.expectedReplacementDate) || undefined,
+          caseId: asText(row.case_id) || undefined,
+          arch: (asText(data.arch, 'ambos') as 'superior' | 'inferior' | 'ambos'),
+          plannedUpperQty: asNumber(data.plannedUpperQty, 0),
+          plannedLowerQty: asNumber(data.plannedLowerQty, 0),
+          planningDefinedAt: asText(data.planningDefinedAt) || undefined,
+          trayNumber: asNumber(row.tray_number, asNumber(data.trayNumber, 1)),
+          patientName: asText(data.patientName, '-'),
+          plannedDate: asText(data.plannedDate, createdAt.slice(0, 10)),
+          dueDate: asText(data.dueDate, createdAt.slice(0, 10)),
+          status: (asText(row.status, 'aguardando_iniciar') as LabStatus),
+          priority: (asText(row.priority, 'Medio') as 'Baixo' | 'Medio' | 'Urgente'),
+          notes: asText(row.notes, asText(data.notes)) || undefined,
+          createdAt,
+          updatedAt,
+        } satisfies LabItem
+      })
+
+      setSupabaseCases(mappedCases)
+      setSupabaseItems(mappedItems)
+    })()
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode, supabaseRefreshKey])
 
   const items = useMemo(() => {
-    return [...listLabItemsForUser(db, currentUser)].sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-  }, [db, currentUser])
-  const caseById = useMemo(() => new Map(db.cases.map((item) => [item.id, item])), [db.cases])
-  const visibleCases = useMemo(() => listCasesForUser(db, currentUser), [db, currentUser])
+    const source = isSupabaseMode ? supabaseItems : listLabItemsForUser(db, currentUser)
+    return [...source].sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+  }, [isSupabaseMode, supabaseItems, db, currentUser])
+  const caseSource = useMemo(
+    () => (isSupabaseMode ? supabaseCases : listCasesForUser(db, currentUser)),
+    [isSupabaseMode, supabaseCases, db, currentUser],
+  )
+  const caseById = useMemo(() => new Map(caseSource.map((item) => [item.id, item])), [caseSource])
+  const visibleCases = caseSource
   const readyDeliveryItems = useMemo(
     () =>
       items.filter(
@@ -177,19 +295,15 @@ export default function LabPage() {
   )
   const casesWithAlerts = useMemo(
     () =>
-      new Set(
-        db.cases
-          .filter((caseItem) => getReplenishmentAlerts(caseItem).length > 0)
-          .map((caseItem) => caseItem.id),
-      ),
-    [db.cases],
+      new Set(caseSource.filter((caseItem) => getReplenishmentAlerts(caseItem).length > 0).map((caseItem) => caseItem.id)),
+    [caseSource],
   )
   const alertSummaries = useMemo(
     () =>
-      db.cases
+      caseSource
         .flatMap((caseItem) => getReplenishmentAlerts(caseItem).map((alert) => ({ caseId: caseItem.id, patientName: caseItem.patientName, dueDate: alert.dueDate, title: alert.title })))
         .slice(0, 3),
-    [db.cases],
+    [caseSource],
   )
 
   const filteredItems = useMemo(() => {
@@ -310,6 +424,7 @@ export default function LabPage() {
 
   const handleCreate = (payload: {
     caseId?: string
+    productType?: ProductType
     arch: 'superior' | 'inferior' | 'ambos'
     plannedUpperQty?: number
     plannedLowerQty?: number
@@ -324,6 +439,7 @@ export default function LabPage() {
     const today = new Date().toISOString().slice(0, 10)
     const result = addLabItem({
       caseId: payload.caseId,
+      productType: payload.productType,
       arch: payload.arch,
       plannedUpperQty: payload.plannedUpperQty,
       plannedLowerQty: payload.plannedLowerQty,
@@ -345,8 +461,77 @@ export default function LabPage() {
     return { ok: true }
   }
 
-  const handleSave = (id: string, patch: Partial<LabItem>) => {
+  const handleSave = async (id: string, patch: Partial<LabItem>) => {
     if (!canWrite) return { ok: false, message: 'Sem permissão para editar solicitações.' }
+    if (isSupabaseMode) {
+      if (!supabase) return { ok: false, message: 'Supabase não configurado.' }
+      const { data: current, error: readError } = await supabase
+        .from('lab_items')
+        .select('id, tray_number, status, priority, notes, product_type, data')
+        .eq('id', id)
+        .maybeSingle()
+      if (readError || !current) {
+        return { ok: false, message: readError?.message ?? 'Item do laboratório não encontrado.' }
+      }
+
+      const currentData = asObject(current.data)
+      const plannedUpperQty = patch.plannedUpperQty ?? asNumber(currentData.plannedUpperQty, 0)
+      const plannedLowerQty = patch.plannedLowerQty ?? asNumber(currentData.plannedLowerQty, 0)
+      const autoStatus: LabStatus = plannedUpperQty + plannedLowerQty > 0 ? 'em_producao' : 'aguardando_iniciar'
+      const currentStatus = asText(current.status, 'aguardando_iniciar') as LabStatus
+      const nextStatus = currentStatus === 'aguardando_iniciar' ? autoStatus : ((patch.status ?? currentStatus) as LabStatus)
+      const nextPriority = (patch.priority ?? asText(current.priority, asText(currentData.priority, 'Medio'))) as 'Baixo' | 'Medio' | 'Urgente'
+      const nextNotes = patch.notes ?? asText(current.notes, asText(currentData.notes, ''))
+      const nextTray = patch.trayNumber ?? asNumber(current.tray_number, asNumber(currentData.trayNumber, 1))
+      const nowIso = new Date().toISOString()
+      const nextData = {
+        ...currentData,
+        productType: patch.productType ?? asText(current.product_type, asText(currentData.productType, 'alinhador_12m')),
+        arch: patch.arch ?? asText(currentData.arch, 'ambos'),
+        plannedUpperQty,
+        plannedLowerQty,
+        planningDefinedAt:
+          patch.plannedUpperQty !== undefined || patch.plannedLowerQty !== undefined
+            ? nowIso
+            : asText(currentData.planningDefinedAt) || undefined,
+        trayNumber: nextTray,
+        patientName: patch.patientName ?? asText(currentData.patientName, '-'),
+        dueDate: patch.dueDate ?? asText(currentData.dueDate, nowIso.slice(0, 10)),
+        plannedDate: patch.plannedDate ?? asText(currentData.plannedDate, nowIso.slice(0, 10)),
+        priority: nextPriority,
+        notes: nextNotes || undefined,
+        status: nextStatus,
+      }
+      if (nextStatus === 'em_producao') {
+        const nextArch = asText(nextData.arch, '')
+        if (!nextArch) {
+          return { ok: false, message: 'Defina a arcada do produto antes de iniciar producao.' }
+        }
+        if (plannedUpperQty + plannedLowerQty <= 0) {
+          return { ok: false, message: 'Defina quantidades por arcada antes de iniciar producao.' }
+        }
+      }
+
+      const { error } = await supabase
+        .from('lab_items')
+        .update({
+          tray_number: nextTray,
+          status: nextStatus,
+          priority: nextPriority,
+          notes: nextNotes || null,
+          product_type: asText(nextData.productType, 'alinhador_12m'),
+          data: nextData,
+          updated_at: nowIso,
+        })
+        .eq('id', id)
+      if (error) {
+        return { ok: false, message: error.message }
+      }
+      setSupabaseRefreshKey((currentKey) => currentKey + 1)
+      setModal({ open: false, mode: 'create', item: null })
+      return { ok: true }
+    }
+
     const result = updateLabItem(id, patch)
     if (result.error) {
       return { ok: false, message: result.error }
@@ -382,6 +567,46 @@ export default function LabPage() {
     return { fromTray, toTray }
   }
 
+  const handleMoveStatusSupabase = useCallback(
+    async (id: string, next: LabStatus) => {
+      if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+      const { data: current, error: readError } = await supabase
+        .from('lab_items')
+        .select('id, status, data')
+        .eq('id', id)
+        .maybeSingle()
+      if (readError || !current) return { ok: false as const, error: readError?.message ?? 'Item LAB nao encontrado.' }
+
+      const currentData = asObject(current.data)
+      const nextArch = asText(currentData.arch, '')
+      const plannedUpperQty = asNumber(currentData.plannedUpperQty, 0)
+      const plannedLowerQty = asNumber(currentData.plannedLowerQty, 0)
+      const flow: LabStatus[] = ['aguardando_iniciar', 'em_producao', 'controle_qualidade', 'prontas']
+      const currentIndex = flow.indexOf(current.status as LabStatus)
+      const nextIndex = flow.indexOf(next)
+      if (currentIndex < 0 || nextIndex < 0 || Math.abs(nextIndex - currentIndex) > 1) {
+        return { ok: false as const, error: 'Transicao de status invalida para este item.' }
+      }
+      if (next === 'em_producao') {
+        if (!nextArch) {
+          return { ok: false as const, error: 'Defina a arcada do produto antes de iniciar producao.' }
+        }
+        if (plannedUpperQty + plannedLowerQty <= 0) {
+          return { ok: false as const, error: 'Defina quantidades por arcada antes de iniciar producao.' }
+        }
+      }
+
+      const { error } = await supabase
+        .from('lab_items')
+        .update({ status: next, updated_at: new Date().toISOString() })
+        .eq('id', id)
+      if (error) return { ok: false as const, error: error.message }
+      setSupabaseRefreshKey((currentKey) => currentKey + 1)
+      return { ok: true as const }
+    },
+    [],
+  )
+
   return (
     <AppShell breadcrumb={['Início', 'Laboratório']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -390,12 +615,12 @@ export default function LabPage() {
           <p className="mt-2 text-sm text-slate-500">Fila de produção e entregas</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-          {canWrite ? (
+          {canWrite && !isSupabaseMode ? (
             <Button className="w-full sm:w-auto" variant="secondary" onClick={() => setDeliveryOpen(true)}>
               Registrar entrega ao profissional
             </Button>
           ) : null}
-          {canWrite ? (
+          {canWrite && !isSupabaseMode ? (
             <Button className="w-full sm:w-auto" onClick={() => setModal({ open: true, mode: 'create', item: null })}>Nova Solicitação</Button>
           ) : null}
         </div>
@@ -445,8 +670,11 @@ export default function LabPage() {
             items={pipelineItems}
             guideTone={guideTone}
             caseLabel={caseLabel}
-            onItemsChange={() => undefined}
+            onItemsChange={() => {
+              if (isSupabaseMode) setSupabaseRefreshKey((current) => current + 1)
+            }}
             onDetails={(item) => setModal({ open: true, mode: 'edit', item })}
+            onMoveStatus={isSupabaseMode ? handleMoveStatusSupabase : undefined}
             canEdit={canWrite}
           />
         ) : boardTab === 'reconfeccao' ? (
@@ -493,12 +721,13 @@ export default function LabPage() {
                     <tr>
                       <th className="px-3 py-2 font-semibold">OS</th>
                       <th className="px-3 py-2 font-semibold">Paciente</th>
-                      <th className="px-3 py-2 font-semibold">Tratamento (Inf/Sup)</th>
+                      <th className="px-3 py-2 font-semibold">Produto</th>
+                      <th className="px-3 py-2 font-semibold">Pedido (Inf/Sup)</th>
                       <th className="px-3 py-2 font-semibold">Entregue (Inf/Sup)</th>
                       <th className="px-3 py-2 font-semibold">Restante (Inf/Sup)</th>
                       <th className="px-3 py-2 font-semibold">Data instalação</th>
                       <th className="px-3 py-2 font-semibold">Previsão reposição LAB</th>
-                      <th className="px-3 py-2 font-semibold">Status tratamento</th>
+                      <th className="px-3 py-2 font-semibold">Status do pedido</th>
                       <th className="px-3 py-2 font-semibold">Ações</th>
                     </tr>
                   </thead>
@@ -521,13 +750,14 @@ export default function LabPage() {
                           : readyForDelivery
                             ? 'Pronto para entrega'
                           : installationDate
-                            ? 'Em tratamento'
+                            ? 'Em producao'
                             : 'Aguardando instalação'
 
                       return (
                         <tr key={item.id} className="border-t border-slate-100">
                           <td className="px-3 py-2">{item.requestCode ?? '-'}</td>
                           <td className="px-3 py-2">{item.patientName}</td>
+                          <td className="px-3 py-2">{PRODUCT_TYPE_LABEL[item.productType ?? 'alinhador_12m']}</td>
                           <td className="px-3 py-2">{`${totals.lower}/${totals.upper}`}</td>
                           <td className="px-3 py-2">{`${delivered.lower}/${delivered.upper}`}</td>
                           <td className="px-3 py-2">{`${remaining.lower}/${remaining.upper}`}</td>
@@ -535,7 +765,7 @@ export default function LabPage() {
                           <td className="px-3 py-2">{replenishmentLabDate ? formatDate(replenishmentLabDate) : '-'}</td>
                           <td className="px-3 py-2">{treatmentStatus}</td>
                           <td className="px-3 py-2">
-                            {canWrite && item.caseId ? (
+                            {canWrite && !isSupabaseMode && item.caseId ? (
                               <Button
                                 size="sm"
                                 variant="secondary"
@@ -565,7 +795,7 @@ export default function LabPage() {
         mode={modal.mode}
         item={modal.item}
         open={modal.open}
-        cases={db.cases}
+        cases={caseSource}
         readOnly={!canWrite}
         onClose={() => setModal({ open: false, mode: 'create', item: null })}
         onCreate={handleCreate}
@@ -583,7 +813,7 @@ export default function LabPage() {
         onConfirm={(payload) => {
           if (!canWrite) return
           if (!deliveryCaseId) {
-            addToast({ type: 'error', title: 'Entrega de lote', message: 'Selecione um caso.' })
+            addToast({ type: 'error', title: 'Entrega de lote', message: 'Selecione um pedido.' })
             return
           }
           const selectedReadyItem = readyDeliveryItems.find((item) => item.id === deliveryCaseId)
@@ -594,7 +824,7 @@ export default function LabPage() {
           const selectedCaseId = selectedReadyItem.caseId
           const caseItem = caseById.get(selectedCaseId)
           if (!caseItem) {
-            addToast({ type: 'error', title: 'Entrega de lote', message: 'Caso não encontrado.' })
+            addToast({ type: 'error', title: 'Entrega de lote', message: 'Pedido não encontrado.' })
             return
           }
           const caseTotals = getCaseTotalsByArch(caseItem)
@@ -705,4 +935,5 @@ export default function LabPage() {
     </AppShell>
   )
 }
+
 

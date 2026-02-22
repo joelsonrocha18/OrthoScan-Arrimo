@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
+import PatientProductHistory from '../components/patients/PatientProductHistory'
 import WhatsappLink from '../components/WhatsappLink'
 import AppShell from '../layouts/AppShell'
 import { DATA_MODE } from '../data/dataMode'
@@ -46,14 +47,17 @@ export default function PatientsPage() {
     deletedAt?: string
   }>>([])
   const [supabaseDentistsById, setSupabaseDentistsById] = useState<Map<string, string>>(new Map())
+  const [supabaseProductHistoryByPatient, setSupabaseProductHistoryByPatient] = useState<Map<string, string[]>>(new Map())
 
   useEffect(() => {
     let active = true
     if (!isSupabaseMode || !supabase) return
     ;(async () => {
-      const [patientsRes, dentistsRes] = await Promise.all([
+      const [patientsRes, dentistsRes, casesRes, labRes] = await Promise.all([
         supabase.from('patients').select('id, name, cpf, phone, whatsapp, primary_dentist_id, deleted_at'),
         supabase.from('dentists').select('id, name, deleted_at').is('deleted_at', null),
+        supabase.from('cases').select('id, patient_id, product_type, data, deleted_at').is('deleted_at', null),
+        supabase.from('lab_items').select('id, case_id, status, product_type, data, deleted_at').is('deleted_at', null),
       ])
       if (!active) return
       const patients = ((patientsRes.data ?? []) as Array<{
@@ -79,6 +83,27 @@ export default function PatientsPage() {
         dentistsMap.set(row.id, row.name ?? '')
       }
       setSupabaseDentistsById(dentistsMap)
+
+      const caseById = new Map<string, { patientId?: string; productType?: string }>()
+      for (const row of (casesRes.data ?? []) as Array<{ id: string; patient_id?: string; product_type?: string; data?: Record<string, unknown> }>) {
+        const data = row.data ?? {}
+        caseById.set(row.id, {
+          patientId: row.patient_id,
+          productType: row.product_type ?? (data.productType as string | undefined) ?? 'alinhador_12m',
+        })
+      }
+      const history = new Map<string, string[]>()
+      for (const row of (labRes.data ?? []) as Array<{ case_id?: string; status?: string; product_type?: string; data?: Record<string, unknown> }>) {
+        if (row.status !== 'prontas') continue
+        if (!row.case_id) continue
+        const linkedCase = caseById.get(row.case_id)
+        if (!linkedCase?.patientId) continue
+        const data = row.data ?? {}
+        const productType = row.product_type ?? (data.productType as string | undefined) ?? linkedCase.productType ?? 'alinhador_12m'
+        const current = history.get(linkedCase.patientId) ?? []
+        history.set(linkedCase.patientId, [...current, productType])
+      }
+      setSupabaseProductHistoryByPatient(history)
     })()
     return () => {
       active = false
@@ -90,6 +115,20 @@ export default function PatientsPage() {
   const dentistsById = isSupabaseMode
     ? supabaseDentistsById
     : new Map(db.dentists.map((dentist) => [dentist.id, dentist.name]))
+  const localProductHistoryByPatient = useMemo(() => {
+    const caseById = new Map(db.cases.map((item) => [item.id, item]))
+    const history = new Map<string, string[]>()
+    db.labItems.forEach((item) => {
+      if (!item.caseId || item.status !== 'prontas') return
+      const linkedCase = caseById.get(item.caseId)
+      if (!linkedCase?.patientId) return
+      const productType = item.productType ?? linkedCase.productType ?? 'alinhador_12m'
+      const current = history.get(linkedCase.patientId) ?? []
+      history.set(linkedCase.patientId, [...current, productType])
+    })
+    return history
+  }, [db.cases, db.labItems])
+  const productHistoryByPatient = isSupabaseMode ? supabaseProductHistoryByPatient : localProductHistoryByPatient
 
   const patients = useMemo(
     () =>
@@ -291,6 +330,7 @@ export default function PatientsPage() {
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Dentista responsavel</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone fixo</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Historico de produtos</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
                 </tr>
               </thead>
@@ -308,6 +348,9 @@ export default function PatientsPage() {
                       {item.whatsapp ? <WhatsappLink value={item.whatsapp} /> : '-'}
                     </td>
                     <td className="px-5 py-4">
+                      <PatientProductHistory productTypes={productHistoryByPatient.get(item.id) ?? []} />
+                    </td>
+                    <td className="px-5 py-4">
                       <div className="flex gap-2">
                         <Link
                           to={`/app/patients/${item.id}`}
@@ -321,7 +364,7 @@ export default function PatientsPage() {
                 ))}
                 {patients.length === 0 ? (
                   <tr>
-                    <td className="px-5 py-8 text-sm text-slate-500" colSpan={5}>
+                      <td className="px-5 py-8 text-sm text-slate-500" colSpan={6}>
                       Nenhum paciente encontrado.
                     </td>
                   </tr>

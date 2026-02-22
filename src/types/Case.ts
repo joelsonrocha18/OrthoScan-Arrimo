@@ -1,3 +1,5 @@
+import type { ProductType } from './Product'
+
 export type CaseStatus = 'planejamento' | 'em_producao' | 'em_entrega' | 'finalizado'
 export type CasePhase =
   | 'planejamento'
@@ -66,6 +68,7 @@ export type CaseInstallation = {
 
 export type Case = {
   id: string
+  productType?: ProductType
   treatmentCode?: string
   treatmentOrigin?: 'interno' | 'externo'
   patientName: string

@@ -8,6 +8,7 @@ import ImageCaptureInput from '../components/files/ImageCaptureInput'
 import Input from '../components/Input'
 import { addAttachment, clearCaseScanFileError, deleteCase, getCase, markCaseScanFileError, registerCaseInstallation, setTrayState, updateCase } from '../data/caseRepo'
 import { addLabItem, generateLabOrder } from '../data/labRepo'
+import { DATA_MODE } from '../data/dataMode'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
 import { slotLabel as getPhotoSlotLabel } from '../lib/photoSlots'
@@ -16,13 +17,17 @@ import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 import { listCasesForUser } from '../auth/scope'
+import { supabase } from '../lib/supabaseClient'
+import { generateCaseLabOrderSupabase, listCaseLabItemsSupabase, patchCaseDataSupabase } from '../repo/profileRepo'
+import type { LabItem } from '../types/Lab'
+import { PRODUCT_TYPE_LABEL } from '../types/Product'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
   orcamento: 'OrÃ§amento',
   contrato_pendente: 'Contrato pendente',
   contrato_aprovado: 'Contrato aprovado',
-  em_producao: 'Em tratamento',
+  em_producao: 'Em producao',
   finalizado: 'Finalizado',
 }
 
@@ -92,7 +97,7 @@ function scheduleStateForTray(
 ): TrayState | 'nao_aplica' {
   if (trayNumber > maxForArch) return 'nao_aplica'
   const tray = trays.find((item) => item.trayNumber === trayNumber)
-  // Rework sempre prevalece na visao de tratamento/tabela.
+  // Rework sempre prevalece na visao da esteira/tabela.
   if (tray?.state === 'rework') return 'rework'
   if (trayNumber <= deliveredCount) return 'entregue'
   if (!tray) return 'pendente'
@@ -201,14 +206,55 @@ function parseBrlCurrencyInput(raw: string) {
   return Number(digits) / 100
 }
 
+function mapSupabaseCaseRowToCase(row: { id: string; product_type?: string; data?: Record<string, unknown> }): Case {
+  const data = row.data ?? {}
+  const now = new Date().toISOString()
+  const status = (data.status as Case['status'] | undefined) ?? 'planejamento'
+  const phase = (data.phase as CasePhase | undefined) ?? 'planejamento'
+  return {
+    id: row.id,
+    productType: (row.product_type ?? (data.productType as string | undefined) ?? 'alinhador_12m') as Case['productType'],
+    treatmentCode: data.treatmentCode as string | undefined,
+    treatmentOrigin: data.treatmentOrigin as Case['treatmentOrigin'] | undefined,
+    patientName: (data.patientName as string | undefined) ?? '-',
+    patientId: data.patientId as string | undefined,
+    dentistId: data.dentistId as string | undefined,
+    requestedByDentistId: data.requestedByDentistId as string | undefined,
+    clinicId: data.clinicId as string | undefined,
+    scanDate: (data.scanDate as string | undefined) ?? now.slice(0, 10),
+    totalTrays: (data.totalTrays as number | undefined) ?? 0,
+    changeEveryDays: (data.changeEveryDays as number | undefined) ?? 7,
+    totalTraysUpper: data.totalTraysUpper as number | undefined,
+    totalTraysLower: data.totalTraysLower as number | undefined,
+    attachmentBondingTray: data.attachmentBondingTray as boolean | undefined,
+    status,
+    phase,
+    budget: data.budget as Case['budget'] | undefined,
+    contract: data.contract as Case['contract'] | undefined,
+    deliveryLots: (data.deliveryLots as Case['deliveryLots']) ?? [],
+    installation: data.installation as Case['installation'] | undefined,
+    trays: (data.trays as CaseTray[] | undefined) ?? [],
+    attachments: (data.attachments as Case['attachments']) ?? [],
+    sourceScanId: data.sourceScanId as string | undefined,
+    arch: data.arch as Case['arch'] | undefined,
+    complaint: data.complaint as string | undefined,
+    dentistGuidance: data.dentistGuidance as string | undefined,
+    scanFiles: data.scanFiles as Case['scanFiles'] | undefined,
+    createdAt: (data.createdAt as string | undefined) ?? now,
+    updatedAt: (data.updatedAt as string | undefined) ?? now,
+  }
+}
+
 export default function CaseDetailPage() {
   const params = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { db } = useDb()
   const { addToast } = useToast()
+  const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'cases.write')
-  const canDeleteCase = can(currentUser, 'cases.delete')
+  const canWriteLocalOnly = canWrite && !isSupabaseMode
+  const canDeleteCase = !isSupabaseMode && can(currentUser, 'cases.delete')
   const [selectedTray, setSelectedTray] = useState<CaseTray | null>(null)
   const [trayState, setSelectedTrayState] = useState<TrayState>('pendente')
   const [reworkArch, setReworkArch] = useState<'superior' | 'inferior' | 'ambos'>('ambos')
@@ -226,10 +272,53 @@ export default function CaseDetailPage() {
   const [attachmentDate, setAttachmentDate] = useState(new Date().toISOString().slice(0, 10))
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const initializedCaseIdRef = useRef<string | null>(null)
+  const [supabaseCase, setSupabaseCase] = useState<Case | null>(null)
+  const [supabaseLabItems, setSupabaseLabItems] = useState<LabItem[]>([])
+  const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
+
+  useEffect(() => {
+    if (!isSupabaseMode || !supabase || !params.id) {
+      setSupabaseCase(null)
+      return
+    }
+    let active = true
+    void (async () => {
+      const { data } = await supabase
+        .from('cases')
+        .select('id, product_type, data, deleted_at')
+        .eq('id', params.id)
+        .is('deleted_at', null)
+        .maybeSingle()
+      if (!active) return
+      if (!data) {
+        setSupabaseCase(null)
+        return
+      }
+      setSupabaseCase(mapSupabaseCaseRowToCase(data as { id: string; product_type?: string; data?: Record<string, unknown> }))
+    })()
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode, params.id, supabaseRefreshKey])
+
+  useEffect(() => {
+    if (!isSupabaseMode || !params.id) {
+      setSupabaseLabItems([])
+      return
+    }
+    let active = true
+    void listCaseLabItemsSupabase(params.id).then((items) => {
+      if (!active) return
+      setSupabaseLabItems(items)
+    })
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode, params.id, supabaseRefreshKey])
 
   const currentCase = useMemo(
-    () => (params.id ? db.cases.find((item) => item.id === params.id) ?? null : null),
-    [db.cases, params.id],
+    () => (isSupabaseMode ? supabaseCase : params.id ? db.cases.find((item) => item.id === params.id) ?? null : null),
+    [isSupabaseMode, supabaseCase, params.id, db.cases],
   )
   const scopedCases = useMemo(() => listCasesForUser(db, currentUser), [db, currentUser])
 
@@ -252,10 +341,16 @@ export default function CaseDetailPage() {
   const deliveredToDentist = useMemo(() => deliveredToDentistByArch(currentCase), [currentCase])
   const readyToDeliverPatient = useMemo(
     () => ({
-      upper: Math.max(0, deliveredToDentist.upper - deliveredUpper),
-      lower: Math.max(0, deliveredToDentist.lower - deliveredLower),
+      upper: Math.max(
+        0,
+        (isSupabaseMode && deliveredToDentist.upper <= 0 ? totalUpper : deliveredToDentist.upper) - deliveredUpper,
+      ),
+      lower: Math.max(
+        0,
+        (isSupabaseMode && deliveredToDentist.lower <= 0 ? totalLower : deliveredToDentist.lower) - deliveredLower,
+      ),
     }),
-    [deliveredLower, deliveredToDentist.lower, deliveredToDentist.upper, deliveredUpper],
+    [deliveredLower, deliveredToDentist.lower, deliveredToDentist.upper, deliveredUpper, isSupabaseMode, totalLower, totalUpper],
   )
   const actualChangeDateByTray = useMemo(() => {
     const map = new Map<number, string>()
@@ -316,8 +411,8 @@ export default function CaseDetailPage() {
     return 0
   }, [hasLowerArch, hasUpperArch, progressLower.delivered, progressUpper.delivered])
   const linkedLabItems = useMemo(
-    () => (currentCase ? db.labItems.filter((item) => item.caseId === currentCase.id) : []),
-    [currentCase, db.labItems],
+    () => (currentCase ? (isSupabaseMode ? supabaseLabItems : db.labItems.filter((item) => item.caseId === currentCase.id)) : []),
+    [currentCase, isSupabaseMode, supabaseLabItems, db.labItems],
   )
   const deliveredToProfessionalByTray = useMemo(() => {
     const map = new Map<number, number>()
@@ -376,7 +471,10 @@ export default function CaseDetailPage() {
     () => linkedLabItems.some((item) => (item.requestKind ?? 'producao') === 'producao'),
     [linkedLabItems],
   )
-  const hasDentistDelivery = useMemo(() => (currentCase?.deliveryLots?.length ?? 0) > 0, [currentCase])
+  const hasDentistDelivery = useMemo(
+    () => (isSupabaseMode ? hasProductionOrder || (currentCase?.deliveryLots?.length ?? 0) > 0 : (currentCase?.deliveryLots?.length ?? 0) > 0),
+    [currentCase, hasProductionOrder, isSupabaseMode],
+  )
   const labSummary = useMemo(
     () => ({
       aguardando_iniciar: pipelineLabItems.filter((item) => item.status === 'aguardando_iniciar').length,
@@ -486,10 +584,10 @@ export default function CaseDetailPage() {
 
   if (!currentCase) {
     return (
-      <AppShell breadcrumb={['InÃ­cio', 'Tratamentos']}>
+      <AppShell breadcrumb={['InÃ­cio', 'Alinhadores']}>
         <Card>
-          <h1 className="text-xl font-semibold text-slate-900">Caso nÃ£o encontrado</h1>
-          <p className="mt-2 text-sm text-slate-500">O caso solicitado nÃ£o existe ou foi removido.</p>
+          <h1 className="text-xl font-semibold text-slate-900">Pedido nÃ£o encontrado</h1>
+          <p className="mt-2 text-sm text-slate-500">O pedido solicitado nÃ£o existe ou foi removido.</p>
           <Button className="mt-4" onClick={() => navigate('/app/cases')}>
             Voltar
           </Button>
@@ -498,12 +596,12 @@ export default function CaseDetailPage() {
     )
   }
 
-  if (!scopedCases.some((item) => item.id === currentCase.id)) {
+  if (!isSupabaseMode && !scopedCases.some((item) => item.id === currentCase.id)) {
     return (
-      <AppShell breadcrumb={['Inicio', 'Tratamentos']}>
+      <AppShell breadcrumb={['Inicio', 'Alinhadores']}>
         <Card>
           <h1 className="text-xl font-semibold text-slate-900">Sem acesso</h1>
-          <p className="mt-2 text-sm text-slate-500">Seu perfil nÃ£o permite visualizar este caso.</p>
+          <p className="mt-2 text-sm text-slate-500">Seu perfil nÃ£o permite visualizar este pedido.</p>
           <Button className="mt-4" onClick={() => navigate('/app/cases')}>
             Voltar
           </Button>
@@ -513,7 +611,7 @@ export default function CaseDetailPage() {
   }
 
   const openTrayModal = (tray: CaseTray) => {
-    if (!canWrite) return
+    if (!canWriteLocalOnly) return
     setSelectedTray(tray)
     setSelectedTrayState(tray.state)
     setReworkArch(currentCase.arch ?? 'ambos')
@@ -521,7 +619,7 @@ export default function CaseDetailPage() {
   }
 
   const saveTrayChanges = () => {
-    if (!canWrite) return
+    if (!canWriteLocalOnly) return
     if (!selectedTray) {
       return
     }
@@ -558,6 +656,7 @@ export default function CaseDetailPage() {
         if (!hasOpenRework) {
           const created = addLabItem({
             caseId: currentCase.id,
+            productType: currentCase.productType ?? 'alinhador_12m',
             requestKind: 'reconfeccao',
             arch: reworkArch,
             plannedUpperQty: 0,
@@ -583,6 +682,7 @@ export default function CaseDetailPage() {
         if (!hasOpenReworkProduction) {
           const production = addLabItem({
             caseId: currentCase.id,
+            productType: currentCase.productType ?? 'alinhador_12m',
             requestKind: 'producao',
             arch: reworkArch,
             plannedUpperQty: 0,
@@ -648,7 +748,7 @@ export default function CaseDetailPage() {
   }
 
   const handleAttachmentSave = () => {
-    if (!canWrite) return
+    if (!canWriteLocalOnly) return
     if (!attachmentFile) {
       addToast({ type: 'error', title: 'Anexos', message: 'Selecione um arquivo.' })
       return
@@ -680,6 +780,18 @@ export default function CaseDetailPage() {
 
   const concludePlanning = () => {
     if (!canWrite) return
+    if (isSupabaseMode) {
+      void (async () => {
+        const result = await patchCaseDataSupabase(currentCase.id, { phase: 'orcamento', status: 'planejamento' }, { status: 'planejamento', phase: 'orcamento' })
+        if (!result.ok) {
+          addToast({ type: 'error', title: 'Planejamento', message: result.error })
+          return
+        }
+        setSupabaseRefreshKey((current) => current + 1)
+        addToast({ type: 'success', title: 'Planejamento concluido' })
+      })()
+      return
+    }
     updateCase(currentCase.id, { phase: 'orcamento', status: 'planejamento' })
     addToast({ type: 'success', title: 'Planejamento concluido' })
   }
@@ -689,6 +801,27 @@ export default function CaseDetailPage() {
     const parsed = parseBrlCurrencyInput(budgetValue)
     if (!Number.isFinite(parsed) || parsed <= 0) {
       addToast({ type: 'error', title: 'OrÃ§amento', message: 'Informe um valor vÃ¡lido para o orÃ§amento.' })
+      return
+    }
+    if (isSupabaseMode) {
+      void (async () => {
+        const result = await patchCaseDataSupabase(
+          currentCase.id,
+          {
+            phase: 'contrato_pendente',
+            status: 'planejamento',
+            budget: { value: parsed, notes: budgetNotes.trim() || undefined, createdAt: new Date().toISOString() },
+            contract: { ...(currentCase.contract ?? { status: 'pendente' }), status: 'pendente', notes: contractNotes.trim() || undefined },
+          },
+          { status: 'planejamento', phase: 'contrato_pendente' },
+        )
+        if (!result.ok) {
+          addToast({ type: 'error', title: 'Orcamento', message: result.error })
+          return
+        }
+        setSupabaseRefreshKey((current) => current + 1)
+        addToast({ type: 'success', title: 'Orcamento fechado' })
+      })()
       return
     }
     updateCase(currentCase.id, {
@@ -703,6 +836,26 @@ export default function CaseDetailPage() {
   const approveContract = () => {
     if (!canWrite) return
     const approvedAt = new Date().toISOString()
+    if (isSupabaseMode) {
+      void (async () => {
+        const result = await patchCaseDataSupabase(
+          currentCase.id,
+          {
+            phase: 'contrato_aprovado',
+            status: 'planejamento',
+            contract: { status: 'aprovado', approvedAt, notes: contractNotes.trim() || undefined },
+          },
+          { status: 'planejamento', phase: 'contrato_aprovado' },
+        )
+        if (!result.ok) {
+          addToast({ type: 'error', title: 'Contrato', message: result.error })
+          return
+        }
+        setSupabaseRefreshKey((current) => current + 1)
+        addToast({ type: 'success', title: 'Contrato aprovado', message: `Aprovado em ${new Date(approvedAt).toLocaleString('pt-BR')}` })
+      })()
+      return
+    }
     updateCase(currentCase.id, {
       phase: 'contrato_aprovado',
       status: 'planejamento',
@@ -713,19 +866,35 @@ export default function CaseDetailPage() {
 
   const handleDeleteCase = () => {
     if (!canDeleteCase) return
-    const confirmed = window.confirm('Tem certeza que deseja excluir este tratamento? Esta aÃ§Ã£o remove os itens LAB vinculados.')
+    const confirmed = window.confirm('Tem certeza que deseja excluir este pedido? Esta aÃ§Ã£o remove os itens LAB vinculados.')
     if (!confirmed) return
     const result = deleteCase(currentCase.id)
     if (!result.ok) {
-      addToast({ type: 'error', title: 'Erro ao excluir tratamento', message: result.error })
+      addToast({ type: 'error', title: 'Erro ao excluir pedido', message: result.error })
       return
     }
-    addToast({ type: 'success', title: 'Tratamento excluido' })
+    addToast({ type: 'success', title: 'Pedido excluido' })
     navigate('/app/cases', { replace: true })
   }
 
   const createLabOrder = () => {
     if (!canWrite) return
+    if (isSupabaseMode) {
+      void (async () => {
+        const result = await generateCaseLabOrderSupabase(currentCase.id)
+        if (!result.ok) {
+          addToast({ type: 'error', title: 'Gerar OS', message: result.error })
+          return
+        }
+        setSupabaseRefreshKey((current) => current + 1)
+        addToast({
+          type: 'success',
+          title: 'OS do laboratorio',
+          message: result.alreadyExists ? 'OS ja existia para este pedido.' : 'OS gerada com sucesso.',
+        })
+      })()
+      return
+    }
     const result = generateLabOrder(currentCase.id)
     if (!result.ok) {
       addToast({ type: 'error', title: 'Gerar OS', message: result.error })
@@ -734,12 +903,12 @@ export default function CaseDetailPage() {
     addToast({
       type: 'success',
       title: 'OS do laboratorio',
-      message: result.alreadyExists ? 'OS ja existia para este caso.' : 'OS gerada com sucesso.',
+      message: result.alreadyExists ? 'OS ja existia para este pedido.' : 'OS gerada com sucesso.',
     })
   }
 
   const markCaseFileError = (fileId: string) => {
-    if (!canWrite) return
+    if (!canWriteLocalOnly) return
     const reason = window.prompt('Motivo do erro no anexo:')
     if (!reason || !reason.trim()) return
     const result = markCaseScanFileError(currentCase.id, fileId, reason)
@@ -751,7 +920,7 @@ export default function CaseDetailPage() {
   }
 
   const clearCaseFileError = (fileId: string) => {
-    if (!canWrite) return
+    if (!canWriteLocalOnly) return
     const result = clearCaseScanFileError(currentCase.id, fileId)
     if (!result.ok) {
       addToast({ type: 'error', title: 'Anexos', message: result.error })
@@ -784,6 +953,62 @@ export default function CaseDetailPage() {
       })
       return
     }
+    if (isSupabaseMode) {
+      if (!hasProductionOrder) {
+        addToast({ type: 'error', title: 'Instalacao', message: 'Ordem de servico do LAB ainda nao foi gerada para este pedido.' })
+        return
+      }
+      const currentInstallation = currentCase.installation
+      const currentDeliveredUpper = currentInstallation?.deliveredUpper ?? 0
+      const currentDeliveredLower = currentInstallation?.deliveredLower ?? 0
+      const deliveredUpper = Math.trunc(currentDeliveredUpper + upperCount)
+      const deliveredLower = Math.trunc(currentDeliveredLower + lowerCount)
+      const upperTotal = totalUpper
+      const lowerTotal = totalLower
+      const currentPairDelivered = Math.max(0, Math.min(currentDeliveredUpper, currentDeliveredLower))
+      const nextPairDelivered = Math.max(0, Math.min(deliveredUpper, deliveredLower))
+      const newPairQty = Math.max(0, nextPairDelivered - currentPairDelivered)
+      const patientDeliveryLots = [...(currentInstallation?.patientDeliveryLots ?? [])]
+      if (newPairQty > 0) {
+        const fromTray = currentPairDelivered + 1
+        const toTray = fromTray + newPairQty - 1
+        patientDeliveryLots.push({
+          id: `patient_lot_${Date.now()}`,
+          fromTray,
+          toTray,
+          quantity: newPairQty,
+          deliveredAt: installationDate,
+          note: installationNote.trim() || undefined,
+          createdAt: new Date().toISOString(),
+        })
+      }
+      const finished = deliveredUpper >= upperTotal && deliveredLower >= lowerTotal
+      void (async () => {
+        const result = await patchCaseDataSupabase(
+          currentCase.id,
+          {
+            installation: {
+              installedAt: currentInstallation?.installedAt ?? installationDate,
+              note: installationNote.trim() || currentInstallation?.note,
+              deliveredUpper,
+              deliveredLower,
+              patientDeliveryLots,
+              actualChangeDates: currentInstallation?.actualChangeDates,
+            },
+            status: finished ? 'finalizado' : 'em_entrega',
+            phase: finished ? 'finalizado' : 'em_producao',
+          },
+          { status: finished ? 'finalizado' : 'em_entrega', phase: finished ? 'finalizado' : 'em_producao' },
+        )
+        if (!result.ok) {
+          addToast({ type: 'error', title: 'Instalacao', message: result.error })
+          return
+        }
+        setSupabaseRefreshKey((current) => current + 1)
+        addToast({ type: 'success', title: 'Instalacao registrada' })
+      })()
+      return
+    }
     const result = registerCaseInstallation(currentCase.id, {
       installedAt: installationDate,
       note: installationNote.trim() || undefined,
@@ -805,6 +1030,23 @@ export default function CaseDetailPage() {
     )
     if (changedAt) {
       nextActualDates.push({ trayNumber, changedAt })
+    }
+    if (isSupabaseMode) {
+      void (async () => {
+        const result = await patchCaseDataSupabase(currentCase.id, {
+          installation: {
+            ...currentCase.installation,
+            actualChangeDates: nextActualDates.length > 0 ? nextActualDates : undefined,
+          },
+        })
+        if (!result.ok) {
+          addToast({ type: 'error', title: 'Troca real', message: result.error })
+          return
+        }
+        setSupabaseRefreshKey((current) => current + 1)
+        addToast({ type: 'success', title: 'Troca real atualizada' })
+      })()
+      return
     }
     const updated = updateCase(currentCase.id, {
       installation: {
@@ -852,7 +1094,7 @@ export default function CaseDetailPage() {
         )}
         </div>
         </div>
-        {canWrite ? (
+        {canWriteLocalOnly ? (
           <div className="mt-2">
             {status === 'erro' ? (
               <button type="button" className="text-xs font-semibold text-brand-700" onClick={() => clearCaseFileError(item.id)}>
@@ -879,7 +1121,7 @@ export default function CaseDetailPage() {
   )
 
   return (
-    <AppShell breadcrumb={['InÃ­cio', 'Tratamentos', patientDisplayName]}>
+    <AppShell breadcrumb={['InÃ­cio', 'Alinhadores', patientDisplayName]}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Paciente: {patientDisplayName}</h1>
@@ -888,6 +1130,9 @@ export default function CaseDetailPage() {
               IdentificaÃ§Ã£o: {currentCase.treatmentCode} ({currentCase.treatmentOrigin === 'interno' ? 'Interno ARRIMO' : 'Externo'})
             </p>
           ) : null}
+          <p className="mt-1 text-sm font-medium text-slate-600">
+            Produto: {PRODUCT_TYPE_LABEL[currentCase.productType ?? 'alinhador_12m']}
+          </p>
           <p className="mt-2 text-sm font-medium text-slate-600">
             Planejamento:{' '}
             {hasUpperArch && hasLowerArch
@@ -910,7 +1155,7 @@ export default function CaseDetailPage() {
         <div className="flex items-center gap-2">
           {canDeleteCase ? (
             <Button variant="secondary" className="text-red-600 hover:text-red-700" onClick={handleDeleteCase}>
-              Excluir tratamento
+              Excluir pedido
             </Button>
           ) : null}
           <Link
@@ -967,7 +1212,7 @@ export default function CaseDetailPage() {
       {!hasProductionOrder ? (
         <section className="mt-6">
           <Card>
-            <h2 className="text-lg font-semibold text-slate-900">Fluxo do Tratamento</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Fluxo do Pedido</h2>
             <p className="mt-1 text-sm text-slate-500">Fase atual: {phaseLabelMap[currentCase.phase]}</p>
 
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -1025,8 +1270,7 @@ export default function CaseDetailPage() {
                   className="mt-2"
                   size="sm"
                   onClick={createLabOrder}
-                  disabled={!(currentCase.phase === 'contrato_aprovado' || currentCase.phase === 'em_producao') || !canWrite}
-                  title={currentCase.phase === 'contrato_aprovado' || currentCase.phase === 'em_producao' ? '' : 'Contrato precisa estar aprovado para gerar OS'}
+                  disabled={!canWrite}
                 >
                   Gerar OS para o LAB
                 </Button>
@@ -1038,7 +1282,7 @@ export default function CaseDetailPage() {
 
       <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Tratamento e reposicao paciente</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Pedido e reposicao paciente</h2>
           <div className="mt-3 grid gap-3">
             {currentCase.installation ? (
               <p className="text-sm text-slate-700">
@@ -1066,7 +1310,7 @@ export default function CaseDetailPage() {
             )}
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
-                {currentCase.installation ? 'Data da entrega ao paciente' : 'Data de inicio do tratamento'}
+                {currentCase.installation ? 'Data da entrega ao paciente' : 'Data de inicio do pedido'}
               </label>
               <Input
                 type="date"
@@ -1122,7 +1366,7 @@ export default function CaseDetailPage() {
                       : ''
                 }
               >
-                {currentCase.installation ? 'Registrar reposicao paciente' : 'Registrar inicio tratamento'}
+                {currentCase.installation ? 'Registrar reposicao paciente' : 'Registrar inicio do pedido'}
               </Button>
               {!hasProductionOrder ? <p className="mt-2 text-xs text-amber-700">Ordem de serviÃ§o do LAB ainda nÃ£o gerada.</p> : null}
               {!hasDentistDelivery ? <p className="mt-1 text-xs text-amber-700">Registre antes a entrega ao dentista.</p> : null}
@@ -1145,7 +1389,7 @@ export default function CaseDetailPage() {
                   : `Inferior ${progressLower.delivered}/${progressLower.total}`}
             </p>
             <p>Total geral planejado: {Math.max(progressUpper.total, progressLower.total)}</p>
-            <p>Proxima placa necessaria: {supplySummary?.nextTray ? `#${supplySummary.nextTray}` : 'Nenhuma (caso completo)'}</p>
+            <p>Proxima placa necessaria: {supplySummary?.nextTray ? `#${supplySummary.nextTray}` : 'Nenhuma (pedido completo)'}</p>
             <p>
               Proxima reposicao prevista para:{' '}
               {supplySummary?.nextDueDate ? new Date(`${supplySummary.nextDueDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'}
@@ -1336,8 +1580,8 @@ export default function CaseDetailPage() {
               <button
                 key={tray.trayNumber}
                 type="button"
-                onClick={canWrite ? () => openTrayModal(tray) : undefined}
-                disabled={!canWrite}
+                onClick={canWriteLocalOnly ? () => openTrayModal(tray) : undefined}
+                disabled={!canWriteLocalOnly}
                 className={`h-10 rounded-lg text-xs font-semibold transition ${trayStateClasses[timelineStateForTray(tray, hasUpperArch ? progressUpper.delivered : 0, hasLowerArch ? progressLower.delivered : 0)]}`}
               >
                 {tray.trayNumber}
@@ -1354,7 +1598,7 @@ export default function CaseDetailPage() {
               <h2 className="text-lg font-semibold text-slate-900">Anexos</h2>
               <p className="mt-1 text-sm text-slate-500">Arquivos do scan e materiais de apoio.</p>
             </div>
-            <Button onClick={() => setAttachmentModalOpen(true)} disabled={!canWrite}>Adicionar anexo</Button>
+            <Button onClick={() => setAttachmentModalOpen(true)} disabled={!canWriteLocalOnly}>Adicionar anexo</Button>
           </div>
 
           <div className="mt-4 space-y-3">
@@ -1442,7 +1686,7 @@ export default function CaseDetailPage() {
               <Button variant="secondary" onClick={() => setAttachmentModalOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleAttachmentSave} disabled={!canWrite}>Salvar anexo</Button>
+              <Button onClick={handleAttachmentSave} disabled={!canWriteLocalOnly}>Salvar anexo</Button>
             </div>
           </Card>
         </div>
@@ -1509,7 +1753,7 @@ export default function CaseDetailPage() {
               <Button variant="secondary" onClick={() => setSelectedTray(null)}>
                 Cancelar
               </Button>
-              <Button onClick={saveTrayChanges} disabled={!canWrite}>Salvar</Button>
+              <Button onClick={saveTrayChanges} disabled={!canWriteLocalOnly}>Salvar</Button>
             </div>
           </Card>
         </div>

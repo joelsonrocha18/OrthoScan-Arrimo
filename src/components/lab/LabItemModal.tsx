@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { canMoveToStatus } from '../../data/labRepo'
 import type { Case } from '../../types/Case'
 import type { LabItem, LabPriority, LabStatus } from '../../types/Lab'
+import type { ProductType } from '../../types/Product'
+import { PRODUCT_TYPE_LABEL } from '../../types/Product'
 import { useToast } from '../../app/ToastProvider'
 import Button from '../Button'
 import Card from '../Card'
@@ -18,6 +20,7 @@ type LabItemModalProps = {
   onClose: () => void
   onCreate: (payload: {
     caseId?: string
+    productType?: ProductType
     arch: 'superior' | 'inferior' | 'ambos'
     plannedUpperQty?: number
     plannedLowerQty?: number
@@ -27,12 +30,13 @@ type LabItemModalProps = {
     priority: LabPriority
     notes?: string
     status: LabStatus
-  }) => { ok: boolean; message?: string }
-  onSave: (id: string, patch: Partial<LabItem>) => { ok: boolean; message?: string }
+  }) => { ok: boolean; message?: string } | Promise<{ ok: boolean; message?: string }>
+  onSave: (id: string, patch: Partial<LabItem>) => { ok: boolean; message?: string } | Promise<{ ok: boolean; message?: string }>
   onDelete: (id: string) => void
 }
 
 type FormState = {
+  productType: ProductType
   arch: 'superior' | 'inferior' | 'ambos'
   plannedUpperQty: string
   plannedLowerQty: string
@@ -45,6 +49,7 @@ type FormState = {
 }
 
 const defaultForm: FormState = {
+  productType: 'alinhador_12m',
   arch: 'ambos',
   plannedUpperQty: '0',
   plannedLowerQty: '0',
@@ -98,6 +103,7 @@ export default function LabItemModal({
     if (mode === 'edit' && item) {
       setForm({
         arch: item.arch ?? 'ambos',
+        productType: item.productType ?? 'alinhador_12m',
         plannedUpperQty: String(item.plannedUpperQty ?? 0),
         plannedLowerQty: String(item.plannedLowerQty ?? 0),
         patientName: item.patientName,
@@ -137,7 +143,7 @@ export default function LabItemModal({
     return null
   }
 
-  const submit = () => {
+  const submit = async () => {
     if (readOnly) {
       return
     }
@@ -181,8 +187,9 @@ export default function LabItemModal({
       return
     }
     if (mode === 'create') {
-      const result = onCreate({
+      const result = await onCreate({
         caseId: undefined,
+        productType: form.productType,
         arch: form.arch,
         plannedUpperQty: Math.trunc(plannedUpperQty),
         plannedLowerQty: Math.trunc(plannedLowerQty),
@@ -207,8 +214,9 @@ export default function LabItemModal({
       return
     }
 
-    const result = onSave(item.id, {
+    const result = await onSave(item.id, {
       arch: form.arch,
+      productType: form.productType,
       plannedUpperQty: Math.trunc(plannedUpperQty),
       plannedLowerQty: Math.trunc(plannedLowerQty),
       patientName: form.patientName.trim(),
@@ -262,6 +270,22 @@ export default function LabItemModal({
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-700">Tipo de produto</label>
+            <select
+              value={form.productType}
+              onChange={(event) => setForm((current) => ({ ...current, productType: event.target.value as ProductType }))}
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+              disabled={readOnly || Boolean(linkedCaseId)}
+            >
+              {Object.entries(PRODUCT_TYPE_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="sm:col-span-2">
             {mode === 'edit' ? (
               <p className="mb-2 text-sm text-slate-700">

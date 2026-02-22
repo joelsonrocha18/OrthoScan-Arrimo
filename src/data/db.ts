@@ -7,6 +7,7 @@ import type { DentistClinic } from '../types/DentistClinic'
 import type { User } from '../types/User'
 import type { Clinic } from '../types/Clinic'
 import type { AuditLog } from '../types/Audit'
+import type { ProductType } from '../types/Product'
 import { emitDbChanged } from '../lib/events'
 import { DATA_MODE } from './dataMode'
 
@@ -48,6 +49,7 @@ export type AppDb = {
 
 type LegacyCase = {
   id: string
+  productType?: ProductType
   paciente?: { nome?: string }
   data_scan?: string
   planejamento?: { quantidade_total_placas?: number; troca_a_cada_dias?: number }
@@ -669,6 +671,7 @@ function migrateCase(oldCase: LegacyCase): Case {
 
   return {
     id: oldCase.id,
+    productType: oldCase.productType ?? 'alinhador_12m',
     treatmentCode: oldCase.treatmentCode,
     treatmentOrigin: oldCase.treatmentOrigin,
     patientName,
@@ -796,6 +799,7 @@ function migrateLabItem(raw: LegacyLabItem): LabItem {
   const plannedLowerQty = Number.isFinite(raw.plannedLowerQty) ? Math.max(0, Math.trunc(raw.plannedLowerQty as number)) : 0
   return {
     id: raw.id,
+    productType: (raw.productType as ProductType | undefined) ?? 'alinhador_12m',
     requestCode: raw.requestCode,
     requestKind: raw.requestKind,
     expectedReplacementDate: raw.expectedReplacementDate ?? raw.dueDate ?? toIsoDate(new Date()),
@@ -971,6 +975,7 @@ function normalizeDb(raw: unknown): AppDb {
   const byName = new Map(patients.map((item) => [item.name.toLowerCase(), item.id]))
   const linkedCases = cases.map((item) => ({
     ...item,
+    productType: item.productType ?? 'alinhador_12m',
     patientId: item.patientId ?? byName.get(item.patientName.toLowerCase()),
   }))
   const casesWithCode = ensureTreatmentCodes(linkedCases, clinics)
@@ -984,7 +989,7 @@ function normalizeDb(raw: unknown): AppDb {
   return {
     ...input,
     cases: casesWithCode,
-    labItems,
+    labItems: labItems.map((item) => ({ ...item, productType: item.productType ?? 'alinhador_12m' })),
     patients,
     patientDocuments: patientDocuments.length > 0 ? patientDocuments : legacyDocsFromPatients,
     scans: linkedScans,

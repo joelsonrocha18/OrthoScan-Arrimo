@@ -3,6 +3,7 @@ import Badge from '../Badge'
 import Button from '../Button'
 import Card from '../Card'
 import type { LabItem } from '../../types/Lab'
+import { PRODUCT_TYPE_LABEL } from '../../types/Product'
 
 type LabCardProps = {
   item: LabItem
@@ -52,6 +53,7 @@ export default function LabCard({
         <div>
           {item.requestCode ? <p className="text-xs font-medium text-slate-600">Guia: {item.requestCode}</p> : null}
           <p className="text-sm font-semibold text-slate-900">Paciente: {item.patientName}</p>
+          <p className="mt-1 text-xs text-slate-600">Produto: {PRODUCT_TYPE_LABEL[item.productType ?? 'alinhador_12m']}</p>
           {!item.requestCode && !isRework ? (
             <p className="mt-1 text-xs text-slate-500">Placa #{item.trayNumber}</p>
           ) : null}

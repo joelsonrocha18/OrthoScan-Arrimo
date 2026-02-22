@@ -25,9 +25,9 @@ export default function Sidebar({ isOpen, onCloseMobile, onLogout }: SidebarProp
   }
 
   const menuItems = [
-    { to: '/app/dashboard', label: 'Principal', icon: LayoutDashboard, permission: 'dashboard.read' as const },
+    { to: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard.read' as const },
     { to: '/app/scans', label: 'Exames', icon: ScanLine, permission: 'scans.read' as const },
-    { to: '/app/cases', label: 'Tratamentos', icon: Shapes, permission: 'cases.read' as const },
+    { to: '/app/cases', label: 'Alinhadores', icon: Shapes, permission: 'cases.read' as const },
     { to: '/app/dentists', label: 'Dentistas', icon: UserRound, permission: 'dentists.read' as const },
     { to: '/app/clinics', label: 'Clínicas', icon: Building2, permission: 'clinics.read' as const },
     { to: '/app/patients', label: 'Pacientes', icon: Users, permission: 'patients.read' as const },

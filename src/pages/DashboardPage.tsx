@@ -355,7 +355,7 @@ export default function DashboardPage() {
       meta: 'Gerar/enviar proposta',
       osCode: item.treatmentCode ?? '-',
       tone: 'info' as const,
-      href: '/app/alinhadores',
+      href: '/app/cases',
     })),
     ...contractsToCloseItems.slice(0, 3).map((item) => ({
       key: `contract_${item.id}`,
@@ -363,7 +363,7 @@ export default function DashboardPage() {
       meta: 'Aguardando assinatura',
       osCode: item.treatmentCode ?? '-',
       tone: 'neutral' as const,
-      href: '/app/alinhadores',
+      href: '/app/cases',
     })),
     ...reworkItems.slice(0, 3).map((item) => ({
       key: `rework_${item.id}`,
@@ -416,7 +416,7 @@ export default function DashboardPage() {
               title="Orçamentos em aberto"
               value={String(budgetsOpenItems.length)}
               meta="Planejamentos sem proposta"
-              info="Origem: casos na fase de orçamento."
+              info="Origem: alinhadores na fase de orçamento."
               tone={budgetsOpenItems.length > 0 ? 'warning' : 'neutral'}
               icon={<DollarSign className="h-4 w-4" />}
             />
@@ -424,7 +424,7 @@ export default function DashboardPage() {
               title="Contratos a fechar"
               value={String(contractsToCloseItems.length)}
               meta="Propostas enviadas"
-              info="Origem: casos na fase contrato pendente."
+              info="Origem: alinhadores na fase contrato pendente."
               tone={contractsToCloseItems.length > 0 ? 'warning' : 'neutral'}
               icon={<FileSignature className="h-4 w-4" />}
             />
@@ -475,7 +475,7 @@ export default function DashboardPage() {
         <section className="mt-8">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              title="Pacientes em tratamento"
+              title="Pacientes em acompanhamento"
               value={String(visiblePatients.length)}
               meta="Ativos"
               info="Origem: pacientes visiveis para o perfil atual."
@@ -483,10 +483,10 @@ export default function DashboardPage() {
               icon={<UsersRound className="h-4 w-4" />}
             />
             <KpiCard
-              title="Casos concluídos"
+              title="Alinhadores concluídos"
               value={String(completedCases.length)}
               meta="Finalizados"
-              info="Origem: casos com fase/status finalizado."
+              info="Origem: alinhadores com fase/status finalizado."
               tone="neutral"
               icon={<PackageCheck className="h-4 w-4" />}
             />
@@ -524,10 +524,10 @@ export default function DashboardPage() {
                 <p className="mt-1 text-sm text-slate-400">Lista operacional de prioridades.</p>
               </div>
               <Link
-                to="/app/alinhadores"
+                to="/app/cases"
                 className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-900"
               >
-                Ver casos
+                Ver alinhadores
               </Link>
             </div>
 

@@ -32,7 +32,7 @@ export type PermissionModule =
   | 'Dashboard'
   | 'Pacientes'
   | 'Scans'
-  | 'Casos'
+  | 'Alinhadores'
   | 'Laboratorio'
   | 'Usuarios'
   | 'Configuracoes'
@@ -119,9 +119,9 @@ const permissionLabels: Record<Permission, string> = {
   'scans.write': 'Enviar escaneamentos',
   'scans.approve': 'Aprovar escaneamentos',
   'scans.delete': 'Excluir escaneamentos',
-  'cases.read': 'Visualizar casos',
-  'cases.write': 'Criar/editar casos',
-  'cases.delete': 'Excluir casos',
+  'cases.read': 'Visualizar alinhadores',
+  'cases.write': 'Criar/editar alinhadores',
+  'cases.delete': 'Excluir alinhadores',
   'lab.read': 'Visualizar laboratorio',
   'lab.write': 'Gerenciar laboratorio',
   'docs.read': 'Visualizar documentos',
@@ -148,9 +148,9 @@ const permissionModules: Record<Permission, PermissionModule> = {
   'scans.write': 'Scans',
   'scans.approve': 'Scans',
   'scans.delete': 'Scans',
-  'cases.read': 'Casos',
-  'cases.write': 'Casos',
-  'cases.delete': 'Casos',
+  'cases.read': 'Alinhadores',
+  'cases.write': 'Alinhadores',
+  'cases.delete': 'Alinhadores',
   'lab.read': 'Laboratorio',
   'lab.write': 'Laboratorio',
   'docs.read': 'Documentos',

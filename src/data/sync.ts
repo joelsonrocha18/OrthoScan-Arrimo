@@ -29,10 +29,10 @@ function deriveCaseLifecycle(trays: CaseTray[], hasInstallation: boolean) {
   return null
 }
 
-function plannedBatchSize(item: Pick<LabItem, 'plannedUpperQty' | 'plannedLowerQty'>) {
+function plannedBatchByArch(item: Pick<LabItem, 'plannedUpperQty' | 'plannedLowerQty'>) {
   const upper = Math.max(0, Math.trunc(item.plannedUpperQty ?? 0))
   const lower = Math.max(0, Math.trunc(item.plannedLowerQty ?? 0))
-  return Math.max(upper, lower, 1)
+  return { upper, lower }
 }
 
 function deliveredByArch(
@@ -62,16 +62,25 @@ function nextBatchRange(
   },
   labItem: Pick<LabItem, 'arch' | 'trayNumber' | 'plannedUpperQty' | 'plannedLowerQty'>,
 ) {
-  const batch = plannedBatchSize(labItem)
+  const batchByArch = plannedBatchByArch(labItem)
   const delivered = deliveredByArch(caseItem)
-  const fromByArch =
-    labItem.arch === 'superior'
-      ? delivered.upper + 1
-      : labItem.arch === 'inferior'
-        ? delivered.lower + 1
-        : Math.max(delivered.upper, delivered.lower) + 1
-  const fromTray = Math.max(1, fromByArch, labItem.trayNumber)
-  const toTray = Math.min(caseItem.totalTrays, fromTray + batch - 1)
+  if (labItem.arch === 'superior') {
+    const batch = Math.max(batchByArch.upper, 1)
+    const fromTray = Math.max(1, delivered.upper + 1, labItem.trayNumber)
+    const toTray = Math.min(caseItem.totalTrays, fromTray + batch - 1)
+    return { fromTray, toTray }
+  }
+  if (labItem.arch === 'inferior') {
+    const batch = Math.max(batchByArch.lower, 1)
+    const fromTray = Math.max(1, delivered.lower + 1, labItem.trayNumber)
+    const toTray = Math.min(caseItem.totalTrays, fromTray + batch - 1)
+    return { fromTray, toTray }
+  }
+
+  const pairedBatch = Math.min(batchByArch.upper, batchByArch.lower)
+  if (pairedBatch <= 0) return null
+  const fromTray = Math.max(1, Math.min(delivered.upper, delivered.lower) + 1, labItem.trayNumber)
+  const toTray = Math.min(caseItem.totalTrays, fromTray + pairedBatch - 1)
   return { fromTray, toTray }
 }
 
@@ -100,6 +109,9 @@ export function syncLabItemToCaseTray(
   const shouldSyncBatch = (labItem.requestKind ?? 'producao') !== 'reconfeccao'
   if (shouldSyncBatch) {
     const range = nextBatchRange(caseItem, labItem)
+    if (!range) {
+      return { ok: true }
+    }
     caseItem.trays = caseItem.trays.map((tray) => {
       if (tray.trayNumber < range.fromTray || tray.trayNumber > range.toTray) {
         return tray
