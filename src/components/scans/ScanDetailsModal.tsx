@@ -78,7 +78,6 @@ export default function ScanDetailsModal({
   const [devPhotoSlots, setDevPhotoSlots] = useState<PhotoSlot[]>([])
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return
     let active = true
     void loadDevPhotoSlots().then((slots) => {
       if (active) setDevPhotoSlots(slots)

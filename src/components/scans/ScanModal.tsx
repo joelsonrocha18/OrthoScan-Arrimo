@@ -203,7 +203,6 @@ export default function ScanModal({
   }, [open, mode, initialScan, purposeOptions])
 
   useEffect(() => {
-    if (!import.meta.env.DEV) return
     let active = true
     void loadDevPhotoSlots().then((slots) => {
       if (active) setDevPhotoSlots(slots)

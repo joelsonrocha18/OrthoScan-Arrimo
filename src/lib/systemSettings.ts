@@ -24,12 +24,14 @@ export type SystemAuditEntry = {
 }
 
 export type PricingMode = 'unit' | 'arch' | 'tooth'
+export type PricingArchScope = 'ambas' | 'superior' | 'inferior'
 
 export type ProductPricingItem = {
   id: string
   name: string
   productType?: string
   pricingMode: PricingMode
+  archScope?: PricingArchScope
   unitPrice?: number
   upperPrice?: number
   lowerPrice?: number
@@ -104,6 +106,7 @@ export function loadSystemSettings(): SystemSettings {
         name: String(item.name ?? ''),
         productType: typeof item.productType === 'string' ? item.productType : undefined,
         pricingMode: item.pricingMode === 'arch' || item.pricingMode === 'tooth' ? item.pricingMode : 'unit',
+        archScope: item.archScope === 'superior' || item.archScope === 'inferior' ? item.archScope : 'ambas',
         unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : undefined,
         upperPrice: typeof item.upperPrice === 'number' ? item.upperPrice : undefined,
         lowerPrice: typeof item.lowerPrice === 'number' ? item.lowerPrice : undefined,

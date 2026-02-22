@@ -1,4 +1,5 @@
 import type { PhotoSlot } from '../types/Scan'
+import { EXTRA_SLOTS, INTRA_SLOTS } from '../mocks/photoSlots'
 
 type SlotSource = {
   kind?: string
@@ -45,9 +46,7 @@ export function mergePhotoSlots(base: PhotoSlot[], extra: PhotoSlot[]) {
 }
 
 export async function loadDevPhotoSlots() {
-  if (!import.meta.env.DEV) return [] as PhotoSlot[]
-  const module = await import('../mocks/photoSlots')
-  return [...module.INTRA_SLOTS, ...module.EXTRA_SLOTS]
+  return [...INTRA_SLOTS, ...EXTRA_SLOTS]
 }
 
 export function slotLabel(slotId?: string, slots?: PhotoSlot[]) {

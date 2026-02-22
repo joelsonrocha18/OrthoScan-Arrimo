@@ -23,6 +23,7 @@ import {
   applyTheme,
   loadSystemSettings,
   saveSystemSettings,
+  type PricingArchScope,
   type AppThemeMode,
   type LabCompanyProfile,
   type PricingMode,
@@ -59,7 +60,11 @@ const TOOTH_OPTIONS = [
 ]
 
 function parsePriceInput(raw: string) {
-  const normalized = raw.replace(',', '.').replace(/[^\d.]/g, '')
+  const sanitized = raw.replace(/[^\d,.-]/g, '').trim()
+  if (!sanitized) return 0
+  const normalized = sanitized.includes(',')
+    ? sanitized.replace(/\./g, '').replace(',', '.')
+    : sanitized
   const value = Number(normalized)
   return Number.isFinite(value) ? Math.max(0, value) : 0
 }
@@ -262,18 +267,20 @@ export default function SettingsPage() {
   const [settingsState, setSettingsState] = useState(() => loadSystemSettings())
   const [labForm, setLabForm] = useState<LabCompanyProfile>(() => loadSystemSettings().labCompany)
   const [priceForm, setPriceForm] = useState<{
-    productType: string
+    productFlow: 'alinhador' | 'impressoes'
     customName: string
     pricingMode: PricingMode
+    archScope: PricingArchScope
     unitPrice: string
     upperPrice: string
     lowerPrice: string
     toothUnitPrice: string
     selectedTeeth: string[]
   }>({
-    productType: 'alinhador_12m',
+    productFlow: 'impressoes',
     customName: '',
     pricingMode: 'unit',
+    archScope: 'ambas',
     unitPrice: '',
     upperPrice: '',
     lowerPrice: '',
@@ -527,8 +534,8 @@ export default function SettingsPage() {
   }
 
   const addPriceProduct = () => {
-    const productType = priceForm.productType.trim()
-    const name = priceForm.customName.trim() || PRODUCT_TYPE_LABEL[productType as keyof typeof PRODUCT_TYPE_LABEL] || productType
+    const productType = priceForm.productFlow === 'alinhador' ? 'alinhador_12m' : 'biomodelo'
+    const name = priceForm.customName.trim()
     if (!name) {
       addToast({ type: 'error', title: 'Informe o nome do produto.' })
       return
@@ -537,9 +544,21 @@ export default function SettingsPage() {
       addToast({ type: 'error', title: 'Informe um preco por unidade valido.' })
       return
     }
-    if (priceForm.pricingMode === 'arch' && parsePriceInput(priceForm.upperPrice) <= 0 && parsePriceInput(priceForm.lowerPrice) <= 0) {
-      addToast({ type: 'error', title: 'Informe preco por arcada superior e/ou inferior.' })
-      return
+    if (priceForm.pricingMode === 'arch') {
+      const upper = parsePriceInput(priceForm.upperPrice)
+      const lower = parsePriceInput(priceForm.lowerPrice)
+      if (priceForm.archScope === 'superior' && upper <= 0) {
+        addToast({ type: 'error', title: 'Informe preco da arcada superior.' })
+        return
+      }
+      if (priceForm.archScope === 'inferior' && lower <= 0) {
+        addToast({ type: 'error', title: 'Informe preco da arcada inferior.' })
+        return
+      }
+      if (priceForm.archScope === 'ambas' && upper <= 0 && lower <= 0) {
+        addToast({ type: 'error', title: 'Informe preco por arcada superior e/ou inferior.' })
+        return
+      }
     }
     if (priceForm.pricingMode === 'tooth') {
       if (parsePriceInput(priceForm.toothUnitPrice) <= 0) {
@@ -558,9 +577,10 @@ export default function SettingsPage() {
         name,
         productType: productType || undefined,
         pricingMode: priceForm.pricingMode,
+        archScope: priceForm.pricingMode === 'arch' ? priceForm.archScope : undefined,
         unitPrice: priceForm.pricingMode === 'unit' ? parsePriceInput(priceForm.unitPrice) : undefined,
-        upperPrice: priceForm.pricingMode === 'arch' ? parsePriceInput(priceForm.upperPrice) : undefined,
-        lowerPrice: priceForm.pricingMode === 'arch' ? parsePriceInput(priceForm.lowerPrice) : undefined,
+        upperPrice: priceForm.pricingMode === 'arch' && priceForm.archScope !== 'inferior' ? parsePriceInput(priceForm.upperPrice) : undefined,
+        lowerPrice: priceForm.pricingMode === 'arch' && priceForm.archScope !== 'superior' ? parsePriceInput(priceForm.lowerPrice) : undefined,
         toothUnitPrice: priceForm.pricingMode === 'tooth' ? parsePriceInput(priceForm.toothUnitPrice) : undefined,
         selectedTeeth: priceForm.pricingMode === 'tooth' ? priceForm.selectedTeeth : undefined,
         isActive: true,
@@ -579,9 +599,10 @@ export default function SettingsPage() {
     saveSystemSettings(next)
     setSettingsState(next)
     setPriceForm({
-      productType: 'alinhador_12m',
+      productFlow: 'impressoes',
       customName: '',
       pricingMode: 'unit',
+      archScope: 'ambas',
       unitPrice: '',
       upperPrice: '',
       lowerPrice: '',
@@ -898,24 +919,23 @@ export default function SettingsPage() {
           <p className="mt-1 text-sm text-slate-500">Cadastre produtos e defina regra de cobranca por unidade, arcada ou dentes do modelo enviado.</p>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Tipo base</label>
-              <select
-                value={priceForm.productType}
-                onChange={(event) => setPriceForm((current) => ({ ...current, productType: event.target.value }))}
-                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
-              >
-                {Object.entries(PRODUCT_TYPE_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Nome comercial (opcional)</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Produto</label>
               <Input
                 value={priceForm.customName}
                 onChange={(event) => setPriceForm((current) => ({ ...current, customName: event.target.value }))}
-                placeholder="Ex.: Alinhador Invisivel 12 meses"
+                placeholder="Ex.: Contencao premium, Guia cirurgico, Alinhador"
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Fluxo do produto</label>
+              <select
+                value={priceForm.productFlow}
+                onChange={(event) => setPriceForm((current) => ({ ...current, productFlow: event.target.value as 'alinhador' | 'impressoes' }))}
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              >
+                <option value="alinhador">Alinhadores (fluxo de placas)</option>
+                <option value="impressoes">Impressões e demais produtos</option>
+              </select>
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Modo de cobranca</label>
@@ -937,14 +957,30 @@ export default function SettingsPage() {
             ) : null}
             {priceForm.pricingMode === 'arch' ? (
               <>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Aplicacao por arcada</label>
+                  <select
+                    value={priceForm.archScope}
+                    onChange={(event) => setPriceForm((current) => ({ ...current, archScope: event.target.value as PricingArchScope }))}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  >
+                    <option value="ambas">Ambas</option>
+                    <option value="superior">Somente superior</option>
+                    <option value="inferior">Somente inferior</option>
+                  </select>
+                </div>
+                {priceForm.archScope !== 'inferior' ? (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Preco arcada superior (R$)</label>
                   <Input value={priceForm.upperPrice} onChange={(event) => setPriceForm((current) => ({ ...current, upperPrice: event.target.value }))} />
                 </div>
+                ) : null}
+                {priceForm.archScope !== 'superior' ? (
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">Preco arcada inferior (R$)</label>
                   <Input value={priceForm.lowerPrice} onChange={(event) => setPriceForm((current) => ({ ...current, lowerPrice: event.target.value }))} />
                 </div>
+                ) : null}
               </>
             ) : null}
             {priceForm.pricingMode === 'tooth' ? (
@@ -1007,10 +1043,16 @@ export default function SettingsPage() {
                   <tr key={item.id} className="bg-white">
                     <td className="px-5 py-4 text-sm text-slate-800">
                       <p className="font-semibold text-slate-900">{item.name}</p>
-                      <p className="text-xs text-slate-500">{item.productType ? (PRODUCT_TYPE_LABEL[item.productType as keyof typeof PRODUCT_TYPE_LABEL] ?? item.productType) : 'Personalizado'}</p>
+                      <p className="text-xs text-slate-500">
+                        {item.productType === 'alinhador_12m' ? 'Fluxo: Alinhadores' : 'Fluxo: Impressões e demais'}
+                      </p>
                     </td>
                     <td className="px-5 py-4 text-sm text-slate-700">
-                      {item.pricingMode === 'unit' ? 'Unidade' : item.pricingMode === 'arch' ? 'Arcada' : 'Dente'}
+                      {item.pricingMode === 'unit'
+                        ? 'Unidade'
+                        : item.pricingMode === 'arch'
+                          ? `Arcada (${item.archScope === 'superior' ? 'Superior' : item.archScope === 'inferior' ? 'Inferior' : 'Ambas'})`
+                          : 'Dente'}
                     </td>
                     <td className="px-5 py-4 text-sm text-slate-700">
                       {item.pricingMode === 'unit' ? formatCurrencyBrl(item.unitPrice) : null}
