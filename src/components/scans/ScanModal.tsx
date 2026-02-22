@@ -107,20 +107,63 @@ export default function ScanModal({
   const [setPrimaryDentist, setSetPrimaryDentist] = useState(false)
   const [draftId, setDraftId] = useState('')
   const [devPhotoSlots, setDevPhotoSlots] = useState<PhotoSlot[]>([])
-  const purposeOptions = useMemo(() => {
+  const nonAlignerPurposeOptions = useMemo(() => {
     const settings = loadSystemSettings()
     const active = (settings.priceCatalog ?? []).filter((item) => item.isActive !== false)
-    const firstNonAligner = active.find(
-      (item) =>
-        item.productType !== 'alinhador_3m' &&
-        item.productType !== 'alinhador_6m' &&
-        item.productType !== 'alinhador_12m',
-    )
+    return active
+      .filter(
+        (item) =>
+          item.productType !== 'alinhador_3m' &&
+          item.productType !== 'alinhador_6m' &&
+          item.productType !== 'alinhador_12m',
+      )
+      .map((item) => ({ id: item.id, label: item.name, productType: item.productType }))
+  }, [])
+  const purposeOptions = useMemo(() => {
+    const firstNonAligner = nonAlignerPurposeOptions[0]
     return [
       { id: 'alinhador_padrao', label: 'Alinhador', productType: 'alinhador_12m' },
-      { id: 'impressoes_padrao', label: 'Impressões', productType: firstNonAligner?.productType ?? 'biomodelo' },
+      { id: firstNonAligner?.id ?? 'impressoes_padrao', label: 'Impressões', productType: firstNonAligner?.productType ?? 'biomodelo' },
     ]
-  }, [])
+  }, [nonAlignerPurposeOptions])
+
+  const isAlignerPurpose = (value?: string) =>
+    value === 'alinhador_3m' || value === 'alinhador_6m' || value === 'alinhador_12m'
+
+  const finalityMode: 'alinhador' | 'impressoes' = isAlignerPurpose(form.purposeProductType) ? 'alinhador' : 'impressoes'
+
+  const applyFinalityMode = (mode: 'alinhador' | 'impressoes') => {
+    if (mode === 'alinhador') {
+      setForm((current) => ({
+        ...current,
+        purposeProductId: 'alinhador_padrao',
+        purposeProductType: 'alinhador_12m',
+        purposeLabel: 'Alinhador',
+      }))
+      return
+    }
+    const selectedNonAligner =
+      nonAlignerPurposeOptions.find((item) => item.id === form.purposeProductId) ?? nonAlignerPurposeOptions[0]
+    setForm((current) => ({
+      ...current,
+      purposeProductId: selectedNonAligner?.id ?? 'impressoes_padrao',
+      purposeProductType: selectedNonAligner?.productType ?? 'biomodelo',
+      purposeLabel: selectedNonAligner?.label ?? 'Impressões',
+    }))
+  }
+
+  useEffect(() => {
+    if (isAlignerPurpose(form.purposeProductType)) return
+    if ((form.purposeProductId && form.purposeProductId !== 'impressoes_padrao') || nonAlignerPurposeOptions.length === 0) return
+    const fallback = nonAlignerPurposeOptions[0]
+    if (!fallback) return
+    setForm((current) => ({
+      ...current,
+      purposeProductId: fallback.id,
+      purposeProductType: fallback.productType,
+      purposeLabel: fallback.label,
+    }))
+  }, [form.purposeProductId, form.purposeProductType, nonAlignerPurposeOptions])
 
   useEffect(() => {
     if (!open) return
@@ -526,25 +569,41 @@ export default function ScanModal({
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Finalidade</label>
               <select
-                value={form.purposeProductId ?? ''}
-                onChange={(event) => {
-                  const selected = purposeOptions.find((item) => item.id === event.target.value)
-                  setForm((current) => ({
-                    ...current,
-                    purposeProductId: selected?.id,
-                    purposeProductType: selected?.productType,
-                    purposeLabel: selected?.label,
-                  }))
-                }}
+                value={finalityMode}
+                onChange={(event) => applyFinalityMode(event.target.value === 'impressoes' ? 'impressoes' : 'alinhador')}
                 className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"
               >
-                {purposeOptions.length === 0 ? <option value="">Cadastre produtos na politica de preco</option> : null}
                 {purposeOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
+                  <option key={option.id} value={option.label === 'Alinhador' ? 'alinhador' : 'impressoes'}>
                     {option.label}
                   </option>
                 ))}
               </select>
+              {finalityMode === 'impressoes' ? (
+                <div className="mt-2">
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Produto (Impressões)</label>
+                  <select
+                    value={form.purposeProductId ?? ''}
+                    onChange={(event) => {
+                      const selected = nonAlignerPurposeOptions.find((item) => item.id === event.target.value)
+                      setForm((current) => ({
+                        ...current,
+                        purposeProductId: selected?.id ?? current.purposeProductId,
+                        purposeProductType: selected?.productType ?? current.purposeProductType,
+                        purposeLabel: selected?.label ?? current.purposeLabel,
+                      }))
+                    }}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"
+                  >
+                    {nonAlignerPurposeOptions.length === 0 ? <option value="">Cadastre produtos na politica de preco</option> : null}
+                    {nonAlignerPurposeOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
             </div>
           </div>
 
