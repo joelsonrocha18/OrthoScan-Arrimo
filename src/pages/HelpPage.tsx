@@ -24,7 +24,7 @@ const HELP: HelpSection[] = [
       {
         title: '3) Converter exame em tratamento (Caso)',
         steps: ['Abra um exame aprovado.', 'Clique em "Criar Caso".', 'Defina arcada, quantidade de placas e troca.', 'Avance fase/orcamento/contrato conforme combinado.'],
-        links: [{ label: 'Tratamentos', to: '/app/cases' }],
+        links: [{ label: 'Alinhadores Invisiveis', to: '/app/cases' }],
       },
     ],
   },

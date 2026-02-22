@@ -20,7 +20,7 @@ import {
   rejectScan,
 } from '../data/scanRepo'
 import { updatePatient } from '../repo/patientRepo'
-import { deleteScanSupabase, updateScanStatusSupabase } from '../repo/profileRepo'
+import { createCaseFromScanSupabase, createScanSupabase, deleteScanSupabase, updateScanStatusSupabase } from '../repo/profileRepo'
 import AppShell from '../layouts/AppShell'
 import type { Scan, ScanAttachment } from '../types/Scan'
 import { useDb } from '../lib/useDb'
@@ -460,8 +460,14 @@ export default function ScansPage() {
             return false
           }
           if (isSupabaseMode) {
-            addToast({ type: 'info', title: 'Criacao de exame nesta tela sera habilitada no proximo ajuste Supabase.' })
-            return false
+            const created = await createScanSupabase(payload)
+            if (!created.ok) {
+              addToast({ type: 'error', title: created.error })
+              return false
+            }
+            setSupabaseRefreshKey((current) => current + 1)
+            addToast({ type: 'success', title: 'Exame salvo' })
+            return true
           }
           await createScan(payload)
           if (options?.setPrimaryDentist && payload.patientId && payload.dentistId) {
@@ -506,7 +512,16 @@ export default function ScansPage() {
             return
           }
           if (isSupabaseMode) {
-            addToast({ type: 'info', title: 'Criacao de caso a partir do scan nesta tela sera habilitada no proximo ajuste Supabase.' })
+            void (async () => {
+              const result = await createCaseFromScanSupabase(createCaseTarget, payload)
+              if (!result.ok) {
+                addToast({ type: 'error', title: 'Nao foi possivel criar o caso', message: result.error })
+                return
+              }
+              setSupabaseRefreshKey((current) => current + 1)
+              addToast({ type: 'success', title: 'Caso criado a partir do scan' })
+              navigate('/app/cases')
+            })()
             return
           }
           const result = createCaseFromScan(createCaseTarget.id, payload)

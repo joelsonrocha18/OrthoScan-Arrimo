@@ -33,3 +33,4 @@ reports/playwright-html/
 *.sw?
 
 .vercel
+.env*.local
