@@ -1251,7 +1251,7 @@ export default function CaseDetailPage() {
             </p>
           ) : null}
           <p className="mt-1 text-sm font-medium text-slate-600">
-            Produto: {PRODUCT_TYPE_LABEL[currentCase.productType ?? 'alinhador_12m']}
+            Produto: {PRODUCT_TYPE_LABEL[currentCase.productType ?? 'alinhador_12m']} | Nº Caso: {currentCase.treatmentCode ?? currentCase.id}
           </p>
           <p className="mt-2 text-sm font-medium text-slate-600">
             Planejamento:{' '}

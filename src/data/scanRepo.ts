@@ -240,7 +240,9 @@ export function createCaseFromScan(
 
   const upper = payload.totalTraysUpper ?? 0
   const lower = payload.totalTraysLower ?? 0
-  const fallback = Math.max(upper, lower)
+  const normalizedUpper = scan.arch === 'inferior' ? 0 : upper
+  const normalizedLower = scan.arch === 'superior' ? 0 : lower
+  const fallback = Math.max(normalizedUpper, normalizedLower)
   if (fallback <= 0) return { ok: false, error: 'Informe total de placas superior e/ou inferior.' }
 
   const internal = isInternalClinic(db, scan.clinicId)
@@ -280,8 +282,8 @@ export function createCaseFromScan(
     clinicId: scan.clinicId,
     scanDate: scan.scanDate,
     totalTrays: fallback,
-    totalTraysUpper: upper || undefined,
-    totalTraysLower: lower || undefined,
+    totalTraysUpper: normalizedUpper || undefined,
+    totalTraysLower: normalizedLower || undefined,
     changeEveryDays: payload.changeEveryDays,
     attachmentBondingTray: payload.attachmentBondingTray,
     status: 'planejamento',

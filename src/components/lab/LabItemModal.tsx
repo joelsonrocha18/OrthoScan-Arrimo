@@ -114,6 +114,18 @@ export default function LabItemModal({
     () => (linkedCaseId ? cases.find((current) => current.id === linkedCaseId) ?? null : null),
     [cases, linkedCaseId],
   )
+  const selectedCaseUpper = useMemo(() => {
+    if (!selectedCase) return 0
+    if (typeof selectedCase.totalTraysUpper === 'number') return selectedCase.totalTraysUpper
+    if (selectedCase.arch === 'inferior') return 0
+    return selectedCase.totalTrays
+  }, [selectedCase])
+  const selectedCaseLower = useMemo(() => {
+    if (!selectedCase) return 0
+    if (typeof selectedCase.totalTraysLower === 'number') return selectedCase.totalTraysLower
+    if (selectedCase.arch === 'superior') return 0
+    return selectedCase.totalTrays
+  }, [selectedCase])
 
   useEffect(() => {
     if (!open) {
@@ -343,7 +355,7 @@ export default function LabItemModal({
             ) : null}
             {selectedCase ? (
               <p className="text-xs text-slate-600">
-                Tratamento: Sup {selectedCase.totalTraysUpper ?? selectedCase.totalTrays} | Inf {selectedCase.totalTraysLower ?? selectedCase.totalTrays} | Troca a cada {selectedCase.changeEveryDays} dias
+                Tratamento: Sup {selectedCaseUpper} | Inf {selectedCaseLower} | Troca a cada {selectedCase.changeEveryDays} dias
               </p>
             ) : null}
           </div>

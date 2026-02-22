@@ -7,7 +7,7 @@ import Card from '../components/Card'
 import Input from '../components/Input'
 import type { CasePhase } from '../types/Case'
 import type { ProductType } from '../types/Product'
-import { normalizeProductType, PRODUCT_TYPE_LABEL } from '../types/Product'
+import { isAlignerProductType, normalizeProductType } from '../types/Product'
 import { DATA_MODE } from '../data/dataMode'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
@@ -49,6 +49,7 @@ type CaseListItem = {
   changeEveryDays?: number
   deliveryLots?: unknown[]
   installation?: { installedAt?: string }
+  arch?: 'superior' | 'inferior' | 'ambos'
   caseDate: string
 }
 
@@ -57,7 +58,7 @@ function isConcluded(item: CaseListItem) {
 }
 
 function isInProductionFlow(item: CaseListItem) {
-  return item.phase === 'em_producao' || item.status === 'em_producao' || item.status === 'em_entrega'
+  return !isConcluded(item)
 }
 
 function buildLabStatusByCase(items: Array<{ caseId?: string; status?: string }>) {
@@ -79,14 +80,19 @@ function buildLabStatusByCase(items: Array<{ caseId?: string; status?: string }>
   return map
 }
 
-function caseStatusBadge(item: CaseListItem, liveLabStatus: LiveLabStatus) {
+function caseStatusBadge(item: CaseListItem, liveLabStatus: LiveLabStatus, hasLabOrder: boolean) {
   if (isConcluded(item)) return { label: 'Concluido', tone: 'success' as const }
+  if (item.phase === 'planejamento') return { label: 'Planejamento', tone: 'neutral' as const }
+  if (item.phase === 'orcamento') return { label: 'Orcamento', tone: 'neutral' as const }
+  if (item.phase === 'contrato_pendente') return { label: 'Aguardando aprovacao de contrato', tone: 'neutral' as const }
+  if (item.phase === 'contrato_aprovado' && !hasLabOrder) return { label: 'Contrato aprovado - gerar OS', tone: 'info' as const }
+  if (item.phase === 'contrato_aprovado' && hasLabOrder && !liveLabStatus) return { label: 'OS gerada', tone: 'info' as const }
   if (liveLabStatus === 'prontas') return { label: 'Pronto para entrega', tone: 'info' as const }
   if (liveLabStatus === 'controle_qualidade') return { label: 'Controle de qualidade', tone: 'info' as const }
   if (liveLabStatus === 'em_producao') return { label: 'Em producao', tone: 'info' as const }
   if (liveLabStatus === 'aguardando_iniciar') return { label: 'Aguardando iniciar', tone: 'neutral' as const }
   if ((item.deliveryLots?.length ?? 0) > 0 && !item.installation?.installedAt) return { label: 'Pronto para entrega', tone: 'info' as const }
-  if (item.installation?.installedAt) return { label: 'Em producao', tone: 'info' as const }
+  if (item.installation?.installedAt) return { label: 'Em entrega ao paciente', tone: 'info' as const }
   return { label: phaseLabelMap[item.phase], tone: phaseToneMap[item.phase] }
 }
 
@@ -98,8 +104,8 @@ export default function CasesPage() {
   const [supabasePatientsById, setSupabasePatientsById] = useState<Map<string, string>>(new Map())
   const [supabaseDentistsById, setSupabaseDentistsById] = useState<Map<string, { name: string; gender?: string }>>(new Map())
   const [supabaseLabStatusByCase, setSupabaseLabStatusByCase] = useState<Map<string, LiveLabStatus>>(new Map())
+  const [supabaseHasLabOrderByCase, setSupabaseHasLabOrderByCase] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
-  const [productFilter, setProductFilter] = useState<'todos' | ProductType>('todos')
   const [showInTreatment, setShowInTreatment] = useState(true)
   const [showConcluded, setShowConcluded] = useState(false)
 
@@ -139,6 +145,13 @@ export default function CasesPage() {
           })),
         ),
       )
+      setSupabaseHasLabOrderByCase(
+        new Set(
+          ((labRes.data ?? []) as Array<{ case_id?: string }>)
+            .map((row) => row.case_id)
+            .filter((value): value is string => Boolean(value)),
+        ),
+      )
 
       const mapped = ((casesRes.data ?? []) as Array<{ id: string; patient_id?: string; dentist_id?: string; status?: string; product_type?: string; product_id?: string; created_at?: string; data?: Record<string, unknown> }>).map((row) => {
         const data = row.data ?? {}
@@ -164,6 +177,7 @@ export default function CasesPage() {
           changeEveryDays: data.changeEveryDays as number | undefined,
           deliveryLots: (data.deliveryLots as unknown[] | undefined) ?? [],
           installation: (data.installation as { installedAt?: string } | undefined) ?? undefined,
+          arch: (data.arch as 'superior' | 'inferior' | 'ambos' | undefined) ?? 'ambos',
           caseDate,
         } as CaseListItem
       })
@@ -189,6 +203,15 @@ export default function CasesPage() {
       ),
     [db, currentUser],
   )
+  const localHasLabOrderByCase = useMemo(
+    () =>
+      new Set(
+        listLabItemsForUser(db, currentUser)
+          .map((item) => item.caseId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    [db, currentUser],
+  )
   const localCases = useMemo(
     () =>
       listCasesForUser(db, currentUser).map((item) => ({
@@ -203,6 +226,7 @@ export default function CasesPage() {
   const patientsById = isSupabaseMode ? supabasePatientsById : localPatientsById
   const dentistsById = isSupabaseMode ? supabaseDentistsById : localDentistsById
   const liveLabStatusByCase = isSupabaseMode ? supabaseLabStatusByCase : localLabStatusByCase
+  const hasLabOrderByCase = isSupabaseMode ? supabaseHasLabOrderByCase : localHasLabOrderByCase
 
   const filteredCases = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -213,7 +237,7 @@ export default function CasesPage() {
           query.length === 0 ||
           patientName.toLowerCase().includes(query) ||
           (item.treatmentCode ?? item.id).toLowerCase().includes(query)
-        const matchesProduct = productFilter === 'todos' || item.productType === productFilter
+        const matchesProduct = isAlignerProductType(item.productType)
 
         const concluded = isConcluded(item)
         const inProduction = isInProductionFlow(item)
@@ -229,7 +253,7 @@ export default function CasesPage() {
         const bb = b.caseDate || ''
         return bb.localeCompare(aa)
       })
-  }, [cases, patientsById, productFilter, search, showConcluded, showInTreatment])
+  }, [cases, patientsById, search, showConcluded, showInTreatment])
 
   const toggleInTreatment = () => {
     if (showInTreatment && !showConcluded) return
@@ -251,21 +275,17 @@ export default function CasesPage() {
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_240px_auto_auto] md:items-center">
           <Input
-            placeholder="Buscar por paciente ou numero do alinhador"
+            placeholder="Buscar por paciente ou Nº Caso"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
           <select
-            value={productFilter}
-            onChange={(event) => setProductFilter(event.target.value as 'todos' | ProductType)}
+            value="alinhadores"
+            onChange={() => undefined}
+            disabled
             className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
           >
-            <option value="todos">Todos os produtos</option>
-            {Object.entries(PRODUCT_TYPE_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
+            <option value="alinhadores">Alinhadores</option>
           </select>
           <Button
             variant={showInTreatment ? 'primary' : 'secondary'}
@@ -291,12 +311,12 @@ export default function CasesPage() {
             <table className="min-w-full text-left">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Numero do alinhador</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Nº Caso</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Paciente</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Produto</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Placas Sup/Inf</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Troca (dias)</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Etapa do tratamento</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
                 </tr>
               </thead>
@@ -305,8 +325,23 @@ export default function CasesPage() {
                   const patientName = item.patientId ? (patientsById.get(item.patientId) ?? item.patientName) : item.patientName
                   const dentist = item.dentistId ? dentistsById.get(item.dentistId) : undefined
                   const dentistPrefix = dentist?.gender === 'feminino' ? 'Dra.' : dentist ? 'Dr.' : ''
-                  const hasArchCounts = typeof item.totalTraysUpper === 'number' || typeof item.totalTraysLower === 'number'
-                  const badge = caseStatusBadge(item, liveLabStatusByCase.get(item.id) ?? null)
+                  const resolvedUpper =
+                    typeof item.totalTraysUpper === 'number'
+                      ? item.totalTraysUpper
+                      : item.arch === 'inferior'
+                        ? 0
+                        : (item.totalTrays ?? 0)
+                  const resolvedLower =
+                    typeof item.totalTraysLower === 'number'
+                      ? item.totalTraysLower
+                      : item.arch === 'superior'
+                        ? 0
+                        : (item.totalTrays ?? 0)
+                  const badge = caseStatusBadge(
+                    item,
+                    liveLabStatusByCase.get(item.id) ?? null,
+                    hasLabOrderByCase.has(item.id),
+                  )
                   return (
                     <tr key={item.id} className="bg-white">
                       <td className="px-5 py-4 text-sm font-semibold text-slate-800">{item.treatmentCode ?? item.id}</td>
@@ -320,12 +355,10 @@ export default function CasesPage() {
                         ) : null}
                       </td>
                       <td className="px-5 py-4 text-sm text-slate-700">
-                        {PRODUCT_TYPE_LABEL[item.productType]}
+                        Alinhadores
                       </td>
                       <td className="px-5 py-4 text-sm text-slate-700">
-                        {hasArchCounts
-                          ? `Sup ${item.totalTraysUpper ?? 0} | Inf ${item.totalTraysLower ?? 0}`
-                          : `Sup ${item.totalTrays ?? 0} | Inf ${item.totalTrays ?? 0}`}
+                        {`Sup ${resolvedUpper} | Inf ${resolvedLower}`}
                       </td>
                       <td className="px-5 py-4 text-sm text-slate-700">{item.changeEveryDays ?? '-'}</td>
                       <td className="px-5 py-4">

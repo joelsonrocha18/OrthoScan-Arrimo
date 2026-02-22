@@ -209,7 +209,9 @@ export async function createCaseFromScanSupabase(
 
   const upper = payload.totalTraysUpper ?? 0
   const lower = payload.totalTraysLower ?? 0
-  const totalTrays = Math.max(upper, lower)
+  const normalizedUpper = scan.arch === 'inferior' ? 0 : upper
+  const normalizedLower = scan.arch === 'superior' ? 0 : lower
+  const totalTrays = Math.max(normalizedUpper, normalizedLower)
   if (totalTrays <= 0) return { ok: false as const, error: 'Informe total de placas superior e/ou inferior.' }
 
   const now = new Date().toISOString()
@@ -223,8 +225,8 @@ export async function createCaseFromScanSupabase(
     patientName: scan.patientName,
     scanDate: scan.scanDate,
     totalTrays,
-    totalTraysUpper: upper || undefined,
-    totalTraysLower: lower || undefined,
+    totalTraysUpper: normalizedUpper || undefined,
+    totalTraysLower: normalizedLower || undefined,
     changeEveryDays: payload.changeEveryDays,
     attachmentBondingTray: payload.attachmentBondingTray,
     planningNote: payload.planningNote,
@@ -255,8 +257,8 @@ export async function createCaseFromScanSupabase(
       scan_id: scan.id,
       status,
       change_every_days: payload.changeEveryDays,
-      total_trays_upper: upper || null,
-      total_trays_lower: lower || null,
+      total_trays_upper: normalizedUpper || null,
+      total_trays_lower: normalizedLower || null,
       attachments_tray: payload.attachmentBondingTray,
       product_type: 'alinhador_12m',
       product_id: 'alinhador_12m',
