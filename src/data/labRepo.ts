@@ -1,5 +1,6 @@
 import { loadDb, saveDb } from './db'
 import { pushAudit } from './audit'
+import { debitReplacementBankForLabStart } from './replacementBankRepo'
 import { syncLabItemToCaseTray } from './sync'
 import type { LabItem, LabStatus } from '../types/Lab'
 import { isAlignerProductType, normalizeProductType } from '../types/Product'
@@ -342,6 +343,13 @@ export function addLabItem(item: Omit<LabItem, 'id' | 'createdAt' | 'updatedAt'>
     updatedAt: now,
   }
 
+  if (newItem.status === 'em_producao') {
+    const debit = debitReplacementBankForLabStart(newItem, db)
+    if (!debit.ok) {
+      return { ok: false as const, error: debit.error }
+    }
+  }
+
   db.labItems = [newItem, ...db.labItems]
   if (item.caseId && newItem.status !== 'aguardando_iniciar') {
     db.cases = db.cases.map((caseItem) =>
@@ -425,9 +433,31 @@ export function updateLabItem(id: string, patch: Partial<LabItem>) {
       return item
     }
     const now = nowIso()
+    if (item.status !== 'em_producao' && nextStatus === 'em_producao') {
+      const debit = debitReplacementBankForLabStart(
+        {
+          ...item,
+          ...patch,
+          productType: nextProductType,
+          productId: normalizeProductType(patch.productId ?? patch.productType ?? item.productId ?? item.productType),
+          arch: nextArch,
+          plannedUpperQty: mergedPlan.plannedUpperQty,
+          plannedLowerQty: mergedPlan.plannedLowerQty,
+          status: nextStatus,
+        },
+        db,
+      )
+      if (!debit.ok) {
+        error = debit.error
+        return item
+      }
+    }
+
     changed = {
       ...item,
       ...patch,
+      status: nextStatus,
+      arch: nextArch,
       productType: nextProductType,
       productId: normalizeProductType(patch.productId ?? patch.productType ?? item.productId ?? item.productType),
       plannedUpperQty: mergedPlan.plannedUpperQty,
@@ -496,6 +526,13 @@ export function moveLabItem(id: string, status: LabStatus) {
     }
 
     const now = nowIso()
+    if (item.status !== 'em_producao' && status === 'em_producao') {
+      const debit = debitReplacementBankForLabStart({ ...item, status }, db)
+      if (!debit.ok) {
+        error = debit.error
+        return item
+      }
+    }
     changed = { ...item, status, updatedAt: now }
     return changed
   })

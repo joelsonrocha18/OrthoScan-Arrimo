@@ -4,6 +4,7 @@ export function emptyDb(): AppDb {
   return {
     cases: [],
     labItems: [],
+    replacementBank: [],
     patients: [],
     patientDocuments: [],
     scans: [],

@@ -52,7 +52,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-slate-950 px-4 py-10">
+    <div className="relative flex min-h-[100dvh] items-center justify-center overflow-y-auto bg-slate-950 px-3 py-4 sm:px-4 sm:py-6">
       <img
         src={`${import.meta.env.BASE_URL}brand/arrimo.png`}
         alt=""
@@ -60,19 +60,19 @@ export default function LoginPage() {
         className="pointer-events-none absolute inset-0 h-full w-full object-contain opacity-10"
       />
       <div className="relative w-full max-w-md">
-        <Card className="border border-slate-800 bg-slate-900 p-6 sm:p-8">
-          <div className="mb-6 flex flex-col items-center text-center">
+        <Card className="border border-slate-800 bg-slate-900 p-4 sm:p-6">
+          <div className="mb-4 flex flex-col items-center text-center">
             <img
               src={`${import.meta.env.BASE_URL}brand/orthoscan-bg.png`}
               alt="ORTHOSCAN"
-              className="h-auto w-[330px] object-contain sm:w-[450px]"
+              className="h-auto w-[220px] object-contain sm:w-[280px]"
             />
           </div>
 
           <h2 className="text-xl font-semibold text-white">Entrar</h2>
           <p className="mt-1 text-sm text-slate-300">Use suas credenciais para acessar o sistema</p>
 
-          <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
+          <form className="mt-4 space-y-3" onSubmit={handleSubmit} noValidate>
             <div>
               <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-200">
                 Usuario (email)
@@ -120,14 +120,14 @@ export default function LoginPage() {
             </div>
           </form>
 
-          <p className="mt-6 text-center text-sm text-slate-300">
+          <p className="mt-4 text-center text-sm text-slate-300">
             Nao tem uma conta?{' '}
             <Link to="#" className="font-semibold text-brand-700 hover:text-brand-500">
               Cadastre-se
             </Link>
           </p>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-xs">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs">
             <Link to="/legal/terms" className="font-semibold text-slate-300 hover:text-white">
               Termos
             </Link>

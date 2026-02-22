@@ -55,6 +55,7 @@ function removeQaData(db: AppDb) {
   db.scans = keep(db.scans)
   db.cases = keep(db.cases)
   db.labItems = keep(db.labItems)
+  db.replacementBank = db.replacementBank.filter((item) => !item.caseId.startsWith(QA_PREFIX))
   db.patientDocuments = keep(db.patientDocuments)
 }
 

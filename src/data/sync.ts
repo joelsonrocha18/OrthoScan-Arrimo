@@ -23,25 +23,27 @@ function deriveCaseLifecycle(trays: CaseTray[], hasInstallation: boolean) {
 }
 
 function plannedBatchByArch(item: Pick<LabItem, 'plannedUpperQty' | 'plannedLowerQty'>) {
+  const fallbackQty = 1
   return {
-    upper: Math.max(0, Math.trunc(item.plannedUpperQty ?? 0)),
-    lower: Math.max(0, Math.trunc(item.plannedLowerQty ?? 0)),
+    upper: Math.max(0, Math.trunc(item.plannedUpperQty ?? fallbackQty)),
+    lower: Math.max(0, Math.trunc(item.plannedLowerQty ?? fallbackQty)),
   }
 }
 
 function deliveredByArch(
   caseItem: {
-    deliveryLots?: Array<{ arch: 'superior' | 'inferior' | 'ambos'; toTray: number }>
+    deliveryLots?: Array<{ arch: 'superior' | 'inferior' | 'ambos'; quantity?: number; toTray?: number }>
   },
 ) {
   const lots = caseItem.deliveryLots ?? []
   return lots.reduce(
     (acc, lot) => {
-      if (lot.arch === 'superior') acc.upper = Math.max(acc.upper, lot.toTray)
-      if (lot.arch === 'inferior') acc.lower = Math.max(acc.lower, lot.toTray)
+      const qty = Math.max(0, Math.trunc(lot.quantity ?? lot.toTray ?? 0))
+      if (lot.arch === 'superior') acc.upper += qty
+      if (lot.arch === 'inferior') acc.lower += qty
       if (lot.arch === 'ambos') {
-        acc.upper = Math.max(acc.upper, lot.toTray)
-        acc.lower = Math.max(acc.lower, lot.toTray)
+        acc.upper += qty
+        acc.lower += qty
       }
       return acc
     },
@@ -112,8 +114,7 @@ export function syncLabItemToCaseTray(
 
   const shouldSyncBatch = (labItem.requestKind ?? 'producao') !== 'reconfeccao'
   if (shouldSyncBatch) {
-    const range = nextBatchRange(caseItem, labItem)
-    if (!range) return { ok: true }
+    const range = nextBatchRange(caseItem, labItem) ?? { fromTray: labItem.trayNumber, toTray: labItem.trayNumber }
 
     caseItem.trays = caseItem.trays.map((tray) => {
       if (tray.trayNumber < range.fromTray || tray.trayNumber > range.toTray) return tray

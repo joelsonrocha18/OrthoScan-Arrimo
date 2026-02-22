@@ -123,6 +123,7 @@ function isDeliveredToProfessionalItem(
     trays?: Array<{ trayNumber: number; state: string }>
   }>,
 ) {
+  if (item.deliveredToProfessionalAt) return true
   if (!item.caseId) return false
   if (item.status !== 'prontas') return false
   const caseItem = caseById.get(item.caseId)
@@ -318,6 +319,7 @@ export default function LabPage() {
           requestCode: asText(data.requestCode) || undefined,
           requestKind: (asText(data.requestKind, 'producao') as 'producao' | 'reconfeccao' | 'reposicao_programada'),
           expectedReplacementDate: asText(data.expectedReplacementDate) || undefined,
+          deliveredToProfessionalAt: asText(data.deliveredToProfessionalAt) || undefined,
           caseId: asText(row.case_id) || undefined,
           arch: (asText(data.arch, 'ambos') as 'superior' | 'inferior' | 'ambos'),
           plannedUpperQty: asNumber(data.plannedUpperQty, 0),
@@ -375,7 +377,6 @@ export default function LabPage() {
     () =>
       items.filter(
         (item) => {
-          if (!item.caseId) return false
           if (item.status !== 'prontas') return false
           if (isReworkItem(item)) return false
           return !isDeliveredToProfessionalItem(item, caseById)
@@ -390,10 +391,10 @@ export default function LabPage() {
   const deliveryCaseOptions = useMemo(
     () =>
       readyDeliveryItems
-        .filter((item) => item.caseId && visibleCases.some((current) => current.id === item.caseId))
+        .filter((item) => !item.caseId || visibleCases.some((current) => current.id === item.caseId))
         .map((item) => ({
           id: item.id,
-          label: `${item.patientName} (${item.requestCode ?? 'OS sem codigo'})${isReworkItem(item) || isReworkProductionItem(item) ? ` - Rework placa #${item.trayNumber}` : ''}`,
+          label: `${item.patientName} (${item.requestCode ?? 'OS sem codigo'})${item.caseId ? '' : ' - Avulsa'}${isReworkItem(item) || isReworkProductionItem(item) ? ` - Rework placa #${item.trayNumber}` : ''}`,
         })),
     [readyDeliveryItems, visibleCases],
   )
@@ -758,6 +759,7 @@ export default function LabPage() {
           addToast({ type: 'error', title: 'Exclusao', message: result.error })
           return
         }
+        setSupabaseItems((current) => current.filter((item) => item.id !== id))
         setSupabaseRefreshKey((currentKey) => currentKey + 1)
         setModal({ open: false, mode: 'create', item: null })
         addToast({ type: 'info', title: 'Solicitacao removida' })
@@ -1179,8 +1181,60 @@ export default function LabPage() {
               return
             }
             const selectedReadyItem = readyDeliveryItems.find((item) => item.id === deliveryCaseId)
-            if (!selectedReadyItem?.caseId) {
+            if (!selectedReadyItem) {
               addToast({ type: 'error', title: 'Entrega de lote', message: 'Selecione uma OS pronta valida.' })
+              return
+            }
+            if (!selectedReadyItem.caseId) {
+              if (isSupabaseMode) {
+                if (!supabase) {
+                  addToast({ type: 'error', title: 'Entrega de lote', message: 'Supabase nao configurado.' })
+                  return
+                }
+                const { data: current, error: readError } = await supabase
+                  .from('lab_items')
+                  .select('id, data, notes')
+                  .eq('id', selectedReadyItem.id)
+                  .maybeSingle()
+                if (readError || !current) {
+                  addToast({ type: 'error', title: 'Entrega de lote', message: readError?.message ?? 'OS nao encontrada.' })
+                  return
+                }
+                const currentData = asObject((current as Record<string, unknown>).data)
+                const nextData = {
+                  ...currentData,
+                  deliveredToProfessionalAt: payload.deliveredToDoctorAt,
+                }
+                const { error } = await supabase
+                  .from('lab_items')
+                  .update({
+                    data: nextData,
+                    notes: payload.note ?? (asText((current as Record<string, unknown>).notes) || null),
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', selectedReadyItem.id)
+                if (error) {
+                  addToast({ type: 'error', title: 'Entrega de lote', message: error.message })
+                  return
+                }
+                setSupabaseItems((currentItems) => currentItems.filter((item) => item.id !== selectedReadyItem.id))
+                setSupabaseRefreshKey((current) => current + 1)
+                setDeliveryOpen(false)
+                setDeliveryCaseId('')
+                addToast({ type: 'success', title: 'Entrega registrada pelo laboratorio' })
+                return
+              }
+              const result = updateLabItem(selectedReadyItem.id, {
+                deliveredToProfessionalAt: payload.deliveredToDoctorAt,
+                notes: payload.note ?? selectedReadyItem.notes,
+              })
+              if (result.error) {
+                addToast({ type: 'error', title: 'Entrega de lote', message: result.error })
+                return
+              }
+              setDeliveryOpen(false)
+              setDeliveryCaseId('')
+              addToast({ type: 'success', title: 'Entrega registrada pelo laboratorio' })
               return
             }
             const selectedCaseId = selectedReadyItem.caseId

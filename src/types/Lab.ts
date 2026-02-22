@@ -14,6 +14,7 @@ export type LabItem = {
   requestCode?: string
   requestKind?: 'producao' | 'reconfeccao' | 'reposicao_programada'
   expectedReplacementDate?: string
+  deliveredToProfessionalAt?: string
   caseId?: string
   arch: 'superior' | 'inferior' | 'ambos'
   plannedUpperQty?: number

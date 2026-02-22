@@ -6,9 +6,10 @@ import Button from '../components/Button'
 import Card from '../components/Card'
 import ImageCaptureInput from '../components/files/ImageCaptureInput'
 import Input from '../components/Input'
-import { addAttachment, clearCaseScanFileError, deleteCase, getCase, markCaseScanFileError, registerCaseInstallation, setTrayState, updateCase } from '../data/caseRepo'
+import { addAttachment, clearCaseScanFileError, deleteCase, getCase, handleRework as handleCaseRework, markCaseScanFileError, registerCaseInstallation, setTrayState, updateCase } from '../data/caseRepo'
 import { addLabItem, generateLabOrder } from '../data/labRepo'
 import { DATA_MODE } from '../data/dataMode'
+import { ensureReplacementBankForCase, getReplacementBankSummary } from '../data/replacementBankRepo'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
 import { slotLabel as getPhotoSlotLabel } from '../lib/photoSlots'
@@ -488,6 +489,18 @@ export default function CaseDetailPage() {
     }),
     [deliveredLabItemIds.size, linkedLabItems.length, pipelineLabItems, readyLabItems.length],
   )
+  const replacementSummary = useMemo(() => {
+    if (!currentCase) {
+      return { totalContratado: 0, emProducaoOuEntregue: 0, saldoRestante: 0, rework: 0, defeituosa: 0 }
+    }
+    if (isSupabaseMode) {
+      const totalContratado = Math.max(0, totalUpper + totalLower)
+      const emProducaoOuEntregue = linkedLabItems.filter((item) => item.status === 'em_producao' || item.status === 'prontas').length
+      const saldoRestante = Math.max(0, totalContratado - emProducaoOuEntregue)
+      return { totalContratado, emProducaoOuEntregue, saldoRestante, rework: 0, defeituosa: 0 }
+    }
+    return getReplacementBankSummary(currentCase.id)
+  }, [currentCase, isSupabaseMode, linkedLabItems, totalLower, totalUpper])
   const groupedScanFiles = useMemo(() => {
     const scanFiles = currentCase?.scanFiles ?? []
     const scan3d = {
@@ -817,29 +830,11 @@ export default function CaseDetailPage() {
           addToast({ type: 'success', title: 'OS de rework geradas', message: 'Reconfeccao e confecção adicionadas na esteira.' })
         }
 
-        const latestAfterState = getCase(currentCase.id) ?? currentCase
-        const nextLots = removeTrayFromDeliveryLots(
-          latestAfterState.deliveryLots ?? [],
-          selectedTray.trayNumber,
-          reworkArch,
-        )
-        let nextInstallation = latestAfterState.installation
-        if (latestAfterState.installation) {
-          const currentUpper = latestAfterState.installation.deliveredUpper ?? 0
-          const currentLower = latestAfterState.installation.deliveredLower ?? 0
-          const affectUpper = (reworkArch === 'superior' || reworkArch === 'ambos') && selectedTray.trayNumber <= currentUpper
-          const affectLower = (reworkArch === 'inferior' || reworkArch === 'ambos') && selectedTray.trayNumber <= currentLower
-          nextInstallation = {
-            ...latestAfterState.installation,
-            deliveredUpper: Math.max(0, currentUpper - (affectUpper ? 1 : 0)),
-            deliveredLower: Math.max(0, currentLower - (affectLower ? 1 : 0)),
-          }
-        }
-        const updated = updateCase(currentCase.id, {
-          deliveryLots: nextLots,
-          installation: nextInstallation,
+        const reworkResult = handleCaseRework(currentCase.id, {
+          trayNumber: selectedTray.trayNumber,
+          arch: reworkArch,
         })
-        if (!updated) {
+        if (!reworkResult.ok) {
           addToast({ type: 'error', title: 'Rework', message: 'Nao foi possivel devolver a placa ao banco.' })
           return
         }
@@ -969,6 +964,7 @@ export default function CaseDetailPage() {
       status: 'planejamento',
       contract: { status: 'aprovado', approvedAt, notes: contractNotes.trim() || undefined },
     })
+    ensureReplacementBankForCase(currentCase.id)
     addToast({ type: 'success', title: 'Contrato aprovado', message: `Aprovado em ${new Date(approvedAt).toLocaleString('pt-BR')}` })
   }
 
@@ -1403,6 +1399,17 @@ export default function CaseDetailPage() {
       <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Pedido e reposicao paciente</h2>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">
+              Total contratado: <span className="font-semibold">{replacementSummary.totalContratado}</span>
+            </div>
+            <div className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">
+              Em producao/entregue: <span className="font-semibold">{replacementSummary.emProducaoOuEntregue}</span>
+            </div>
+            <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              Saldo no banco: <span className="font-semibold">{replacementSummary.saldoRestante}</span>
+            </div>
+          </div>
           <div className="mt-3 grid gap-3">
             {currentCase.installation ? (
               <p className="text-sm text-slate-700">

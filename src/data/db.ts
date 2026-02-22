@@ -8,6 +8,7 @@ import type { User } from '../types/User'
 import type { Clinic } from '../types/Clinic'
 import type { AuditLog } from '../types/Audit'
 import type { ProductType } from '../types/Product'
+import type { ReplacementBankEntry } from '../types/ReplacementBank'
 import { normalizeProductType } from '../types/Product'
 import { emitDbChanged } from '../lib/events'
 import { DATA_MODE } from './dataMode'
@@ -38,6 +39,7 @@ const FULL_DEMO_EXTRA_SLOTS = [
 export type AppDb = {
   cases: Case[]
   labItems: LabItem[]
+  replacementBank: ReplacementBankEntry[]
   patients: Patient[]
   patientDocuments: PatientDocument[]
   scans: Scan[]
@@ -472,6 +474,7 @@ function buildSeededDb(mode: 'full' | 'empty'): AppDb {
     return {
       cases: [],
       labItems: [],
+      replacementBank: [],
       patients: [],
       patientDocuments: [],
       scans: [],
@@ -486,6 +489,7 @@ function buildSeededDb(mode: 'full' | 'empty'): AppDb {
   return ensureFullSeedData({
     cases,
     labItems: seedLabItems(),
+    replacementBank: [],
     patients: seedPatients(),
     patientDocuments: [],
     scans: seedScans(cases),
@@ -886,13 +890,14 @@ function migrateUser(raw: LegacyUser): User {
 
 function normalizeDb(raw: unknown): AppDb {
   if (!raw || typeof raw !== 'object') {
-    return { cases: [], labItems: [], patients: [], patientDocuments: [], scans: [], dentists: [], clinics: [], users: [], auditLogs: [] }
+    return { cases: [], labItems: [], replacementBank: [], patients: [], patientDocuments: [], scans: [], dentists: [], clinics: [], users: [], auditLogs: [] }
   }
 
   const input = raw as {
     cases?: unknown
     casos?: unknown
     labItems?: unknown
+    replacementBank?: unknown
     scans?: unknown
     patients?: unknown
     patientDocuments?: unknown
@@ -905,6 +910,24 @@ function normalizeDb(raw: unknown): AppDb {
   const rawCases = Array.isArray(input.cases) ? (input.cases as LegacyCase[]) : Array.isArray(input.casos) ? (input.casos as LegacyCase[]) : []
   const cases = rawCases.map(migrateCase)
   const labItems = Array.isArray(input.labItems) ? (input.labItems as LegacyLabItem[]).map(migrateLabItem) : []
+  const replacementBank = Array.isArray(input.replacementBank)
+    ? (input.replacementBank as Array<Partial<ReplacementBankEntry>>)
+        .map((item) => {
+          if (!item.id || !item.caseId || !item.arcada || !item.placaNumero) return null
+          return {
+            id: item.id,
+            caseId: item.caseId,
+            arcada: item.arcada,
+            placaNumero: Math.max(1, Math.trunc(item.placaNumero)),
+            status: item.status ?? 'disponivel',
+            ...(item.sourceLabItemId ? { sourceLabItemId: item.sourceLabItemId } : {}),
+            ...(item.deliveredAt ? { deliveredAt: item.deliveredAt } : {}),
+            createdAt: item.createdAt ?? nowIso(),
+            updatedAt: item.updatedAt ?? nowIso(),
+          } satisfies ReplacementBankEntry
+        })
+        .filter((item): item is ReplacementBankEntry => Boolean(item))
+    : []
   const patients = Array.isArray(input.patients) ? (input.patients as Partial<Patient>[]).map(migratePatient) : []
   const scans = Array.isArray(input.scans) ? (input.scans as LegacyScan[]).map(migrateScan) : []
   const patientDocuments = Array.isArray(input.patientDocuments)
@@ -1000,6 +1023,7 @@ function normalizeDb(raw: unknown): AppDb {
       productId: normalizeProductType(item.productId ?? item.productType),
     })),
     patients,
+    replacementBank,
     patientDocuments: patientDocuments.length > 0 ? patientDocuments : legacyDocsFromPatients,
     scans: linkedScans,
     dentists,

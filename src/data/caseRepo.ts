@@ -1,5 +1,6 @@
 import { loadDb, saveDb } from './db'
 import { pushAudit } from './audit'
+import { handleRework as handleReplacementRework, markReplacementBankDeliveredByLot } from './replacementBankRepo'
 import type { Case, CaseAttachment, CaseTray, TrayState } from '../types/Case'
 
 type RepoResult<T> = { ok: true; data: T } | { ok: false; error: string }
@@ -14,6 +15,46 @@ const trayTransitionMap: Record<TrayState, TrayState[]> = {
 
 function nowIso() {
   return new Date().toISOString()
+}
+
+function removeTrayFromDeliveryLots(
+  lots: NonNullable<Case['deliveryLots']>,
+  trayNumber: number,
+  reworkArc: 'superior' | 'inferior' | 'ambos',
+) {
+  const shouldAffect = (arch: 'superior' | 'inferior' | 'ambos') => {
+    if (reworkArc === 'ambos') return true
+    if (arch === 'ambos') return false
+    return arch === reworkArc
+  }
+  const next: NonNullable<Case['deliveryLots']> = []
+  lots.forEach((lot) => {
+    if (!shouldAffect(lot.arch) || trayNumber < lot.fromTray || trayNumber > lot.toTray) {
+      next.push(lot)
+      return
+    }
+    const leftQty = Math.max(0, trayNumber - lot.fromTray)
+    const rightQty = Math.max(0, lot.toTray - trayNumber)
+    if (leftQty > 0) {
+      next.push({
+        ...lot,
+        id: `${lot.id}_l_${trayNumber}`,
+        fromTray: lot.fromTray,
+        toTray: trayNumber - 1,
+        quantity: leftQty,
+      })
+    }
+    if (rightQty > 0) {
+      next.push({
+        ...lot,
+        id: `${lot.id}_r_${trayNumber}`,
+        fromTray: trayNumber + 1,
+        toTray: lot.toTray,
+        quantity: rightQty,
+      })
+    }
+  })
+  return next
 }
 
 function deriveCaseLifecycle(caseItem: Case, nextTrays: CaseTray[]): Pick<Case, 'status' | 'phase'> {
@@ -445,5 +486,44 @@ export function registerCaseDeliveryLot(
   if (!updated) {
     return { ok: false, error: 'Nao foi possivel registrar o lote.' }
   }
+  markReplacementBankDeliveredByLot({ id: caseId }, payload)
+  return { ok: true, data: updated }
+}
+
+export function handleRework(
+  caseId: string,
+  payload: {
+    trayNumber: number
+    arch: 'superior' | 'inferior' | 'ambos'
+    sourceLabItemId?: string
+  },
+): RepoResult<Case> {
+  const targetCase = getCase(caseId)
+  if (!targetCase) return { ok: false, error: 'Caso nao encontrado.' }
+
+  const tray = targetCase.trays.find((item) => item.trayNumber === payload.trayNumber)
+  if (!tray) return { ok: false, error: 'Placa nao encontrada no caso.' }
+
+  const nextLots = removeTrayFromDeliveryLots(targetCase.deliveryLots ?? [], payload.trayNumber, payload.arch)
+  let nextInstallation = targetCase.installation
+  if (targetCase.installation) {
+    const currentUpper = targetCase.installation.deliveredUpper ?? 0
+    const currentLower = targetCase.installation.deliveredLower ?? 0
+    const affectUpper = (payload.arch === 'superior' || payload.arch === 'ambos') && payload.trayNumber <= currentUpper
+    const affectLower = (payload.arch === 'inferior' || payload.arch === 'ambos') && payload.trayNumber <= currentLower
+    nextInstallation = {
+      ...targetCase.installation,
+      deliveredUpper: Math.max(0, currentUpper - (affectUpper ? 1 : 0)),
+      deliveredLower: Math.max(0, currentLower - (affectLower ? 1 : 0)),
+    }
+  }
+
+  const updated = updateCase(caseId, {
+    deliveryLots: nextLots,
+    installation: nextInstallation,
+  })
+  if (!updated) return { ok: false, error: 'Nao foi possivel ajustar dados do rework.' }
+
+  handleReplacementRework(caseId, payload.trayNumber, payload.arch, payload.sourceLabItemId)
   return { ok: true, data: updated }
 }

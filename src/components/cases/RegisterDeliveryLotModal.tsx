@@ -41,13 +41,13 @@ export default function RegisterDeliveryLotModal({
         <div className="mt-4 grid gap-3">
           {caseOptions && onCaseChange ? (
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Caso</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">OS pronta</label>
               <select
                 value={selectedCaseId ?? ''}
                 onChange={(event) => onCaseChange(event.target.value)}
                 className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
               >
-                <option value="">Selecione um caso</option>
+                <option value="">Selecione uma OS pronta</option>
                 {caseOptions.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.label}

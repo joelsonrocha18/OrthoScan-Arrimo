@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createCaseFromScan, getScan, markScanAttachmentError } from '../../data/scanRepo'
+import { createCaseFromScan, getScan, markScanAttachmentError, updateScan } from '../../data/scanRepo'
 import { getCase, markCaseScanFileError } from '../../data/caseRepo'
 import { clearQaSeed, seedQaData } from '../seed'
 
@@ -65,5 +65,19 @@ describe('Scan to Case flow', () => {
     const afterScan = getScan('qa_scan_1')
     expect(afterScan?.attachments.find((a) => a.id === 'qa_scan_att_1')).toBeTruthy()
     expect(afterScan?.attachments.find((a) => a.id === 'qa_scan_att_1')?.status).toBe('erro')
+  })
+
+  it('blocks case creation when required STL/photos are missing', () => {
+    const scan = getScan('qa_scan_1')
+    expect(scan).toBeTruthy()
+    if (!scan) return
+    updateScan('qa_scan_1', { attachments: scan.attachments.filter((item) => item.kind !== 'foto_extra') })
+    const result = createCaseFromScan('qa_scan_1', {
+      totalTraysUpper: 10,
+      totalTraysLower: 10,
+      changeEveryDays: 7,
+      attachmentBondingTray: false,
+    })
+    expect(result.ok).toBe(false)
   })
 })

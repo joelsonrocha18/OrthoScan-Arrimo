@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { resetDb, loadDb, saveDb } from '../../data/db'
 import { createCaseFromScan } from '../../data/scanRepo'
-import { getCase, registerCaseDeliveryLot, registerCaseInstallation, setTrayState } from '../../data/caseRepo'
+import { getCase, handleRework, registerCaseDeliveryLot, registerCaseInstallation, setTrayState } from '../../data/caseRepo'
 import { addLabItem, createAdvanceLabOrder, generateLabOrder, listLabItems, moveLabItem } from '../../data/labRepo'
+import { ensureReplacementBankForCase, getReplacementBankSummary } from '../../data/replacementBankRepo'
 import { clearQaSeed, seedQaData } from '../seed'
 
 describe('System scenarios', () => {
@@ -192,5 +193,49 @@ describe('System scenarios', () => {
       deliveredLower: 0,
     })
     expect(allowed.ok).toBe(true)
+  })
+
+  it('tracks replacement bank through contract -> production -> delivery -> rework', () => {
+    const seeded = ensureReplacementBankForCase('qa_case_1')
+    expect(seeded.ok).toBe(true)
+    if (!seeded.ok) return
+    expect(seeded.created).toBeGreaterThan(0)
+
+    const db = loadDb()
+    db.labItems = db.labItems.map((item) =>
+      item.id === 'qa_lab_1'
+        ? { ...item, status: 'aguardando_iniciar', plannedUpperQty: 1, plannedLowerQty: 0, arch: 'superior' }
+        : item,
+    )
+    saveDb(db)
+
+    const started = moveLabItem('qa_lab_1', 'em_producao')
+    expect(started.error).toBeUndefined()
+
+    const afterStart = getReplacementBankSummary('qa_case_1')
+    expect(afterStart.emProducaoOuEntregue).toBeGreaterThanOrEqual(1)
+    expect(afterStart.saldoRestante).toBeGreaterThan(0)
+
+    expect(setTrayState('qa_case_1', 1, 'pronta').ok).toBe(true)
+    const delivered = registerCaseDeliveryLot('qa_case_1', {
+      arch: 'superior',
+      fromTray: 1,
+      toTray: 1,
+      deliveredToDoctorAt: new Date().toISOString().slice(0, 10),
+    })
+    expect(delivered.ok).toBe(true)
+    const installed = registerCaseInstallation('qa_case_1', {
+      installedAt: new Date().toISOString().slice(0, 10),
+      deliveredUpper: 1,
+      deliveredLower: 0,
+    })
+    expect(installed.ok).toBe(true)
+
+    const rework = handleRework('qa_case_1', { trayNumber: 1, arch: 'superior', sourceLabItemId: 'qa_lab_1' })
+    expect(rework.ok).toBe(true)
+
+    const afterRework = getReplacementBankSummary('qa_case_1')
+    expect(afterRework.defeituosa).toBeGreaterThanOrEqual(1)
+    expect(afterRework.saldoRestante).toBeGreaterThanOrEqual(afterStart.saldoRestante)
   })
 })
