@@ -262,6 +262,7 @@ export function createCaseFromScan(
   const newCase: Case = {
     id: caseId,
     productType: 'alinhador_12m',
+    productId: 'alinhador_12m',
     treatmentCode,
     treatmentOrigin: internal ? 'interno' : 'externo',
     patientName: scan.patientName,

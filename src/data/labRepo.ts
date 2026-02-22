@@ -2,6 +2,7 @@ import { loadDb, saveDb } from './db'
 import { pushAudit } from './audit'
 import { syncLabItemToCaseTray } from './sync'
 import type { LabItem, LabStatus } from '../types/Lab'
+import { isAlignerProductType, normalizeProductType } from '../types/Product'
 
 const statusFlow: LabStatus[] = ['aguardando_iniciar', 'em_producao', 'controle_qualidade', 'prontas']
 
@@ -95,7 +96,8 @@ function ensureProgrammedReplenishments(db: ReturnType<typeof loadDb>) {
           {
             id: `lab_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
             caseId: caseItem.id,
-            productType: caseItem.productType ?? 'alinhador_12m',
+            productType: normalizeProductType(caseItem.productType),
+            productId: normalizeProductType(caseItem.productId ?? caseItem.productType),
             requestCode: `${code}/${revision}`,
             requestKind: 'reposicao_programada',
             expectedReplacementDate: expected,
@@ -272,11 +274,16 @@ export function addLabItem(item: Omit<LabItem, 'id' | 'createdAt' | 'updatedAt'>
   })()
   const resolvedUpper = normalizedUpper
   const resolvedLower = normalizedLower
+  const resolvedProductType = normalizeProductType(item.productType ?? linkedCase?.productType)
   const planDefined = hasProductionPlan({ plannedUpperQty: resolvedUpper, plannedLowerQty: resolvedLower })
-  const resolvedStatus = planDefined ? (item.status === 'aguardando_iniciar' ? 'em_producao' : item.status) : 'aguardando_iniciar'
+  const requiresAlignerPlan = isAlignerProductType(resolvedProductType)
+  const resolvedStatus = requiresAlignerPlan
+    ? (planDefined ? (item.status === 'aguardando_iniciar' ? 'em_producao' : item.status) : 'aguardando_iniciar')
+    : item.status
   const newItem: LabItem = {
     ...item,
-    productType: item.productType ?? linkedCase?.productType ?? 'alinhador_12m',
+    productType: resolvedProductType,
+    productId: normalizeProductType(item.productId ?? item.productType ?? linkedCase?.productId ?? linkedCase?.productType),
     arch: item.arch ?? 'ambos',
     requestCode: resolvedRequestCode,
     requestKind: item.requestKind ?? 'producao',
@@ -323,6 +330,7 @@ export function updateLabItem(id: string, patch: Partial<LabItem>) {
       plannedUpperQty: Math.trunc(patch.plannedUpperQty ?? item.plannedUpperQty ?? 0),
       plannedLowerQty: Math.trunc(patch.plannedLowerQty ?? item.plannedLowerQty ?? 0),
     }
+    const nextProductType = normalizeProductType(patch.productType ?? patch.productId ?? item.productId ?? item.productType)
 
     let linkedCase: (typeof db.cases)[number] | null = null
     if (nextCaseId) {
@@ -341,10 +349,10 @@ export function updateLabItem(id: string, patch: Partial<LabItem>) {
 
     const requestedStatus = patch.status ?? item.status
     const planDefined = hasProductionPlan(mergedPlan)
-    const nextStatus =
-      item.status === 'aguardando_iniciar'
-        ? (planDefined ? 'em_producao' : 'aguardando_iniciar')
-        : (!planDefined && requestedStatus === 'em_producao' ? 'aguardando_iniciar' : requestedStatus)
+    const requiresAlignerPlan = isAlignerProductType(nextProductType)
+    const nextStatus = item.status === 'aguardando_iniciar'
+      ? (requiresAlignerPlan ? (planDefined ? 'em_producao' : 'aguardando_iniciar') : requestedStatus)
+      : (requiresAlignerPlan && !planDefined && requestedStatus === 'em_producao' ? 'aguardando_iniciar' : requestedStatus)
     if (linkedCase && isDeliveredToDentist(linkedCase, patch.trayNumber ?? item.trayNumber) && nextStatus !== item.status) {
       error = 'Nao e permitido regredir/editar status de placa ja entregue ao dentista.'
       return item
@@ -353,10 +361,21 @@ export function updateLabItem(id: string, patch: Partial<LabItem>) {
       error = 'Transicao de status invalida para este item.'
       return item
     }
+    const nextArch = patch.arch ?? item.arch
+    if (nextStatus === 'em_producao' && !nextArch) {
+      error = 'Defina a arcada do produto antes de iniciar producao.'
+      return item
+    }
+    if (nextStatus === 'em_producao' && requiresAlignerPlan && !planDefined) {
+      error = 'Defina quantidades por arcada antes de iniciar producao.'
+      return item
+    }
     const now = nowIso()
     changed = {
       ...item,
       ...patch,
+      productType: nextProductType,
+      productId: normalizeProductType(patch.productId ?? patch.productType ?? item.productId ?? item.productType),
       plannedUpperQty: mergedPlan.plannedUpperQty,
       plannedLowerQty: mergedPlan.plannedLowerQty,
       planningDefinedAt: hasProductionPlan(mergedPlan) ? item.planningDefinedAt ?? now : undefined,
@@ -403,7 +422,7 @@ export function moveLabItem(id: string, status: LabStatus) {
         error = 'Defina a arcada do produto antes de iniciar producao.'
         return item
       }
-      if (!hasProductionPlan(item)) {
+      if (isAlignerProductType(normalizeProductType(item.productId ?? item.productType)) && !hasProductionPlan(item)) {
         error = 'Defina quantidades por arcada antes de iniciar producao.'
         return item
       }
@@ -571,7 +590,8 @@ export function createAdvanceLabOrder(
   }
   const newItem: LabItem = {
     ...source,
-    productType: source.productType ?? linkedCase.productType ?? 'alinhador_12m',
+    productType: normalizeProductType(source.productType ?? linkedCase.productType),
+    productId: normalizeProductType(source.productId ?? source.productType ?? linkedCase.productId ?? linkedCase.productType),
     id: `lab_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`,
     requestCode,
     requestKind: 'producao',

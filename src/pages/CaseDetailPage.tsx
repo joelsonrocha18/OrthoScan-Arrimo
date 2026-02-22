@@ -20,7 +20,7 @@ import { listCasesForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
 import { generateCaseLabOrderSupabase, listCaseLabItemsSupabase, patchCaseDataSupabase } from '../repo/profileRepo'
 import type { LabItem } from '../types/Lab'
-import { PRODUCT_TYPE_LABEL } from '../types/Product'
+import { normalizeProductType, PRODUCT_TYPE_LABEL } from '../types/Product'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
@@ -206,14 +206,15 @@ function parseBrlCurrencyInput(raw: string) {
   return Number(digits) / 100
 }
 
-function mapSupabaseCaseRowToCase(row: { id: string; product_type?: string; data?: Record<string, unknown> }): Case {
+function mapSupabaseCaseRowToCase(row: { id: string; product_type?: string; product_id?: string; data?: Record<string, unknown> }): Case {
   const data = row.data ?? {}
   const now = new Date().toISOString()
   const status = (data.status as Case['status'] | undefined) ?? 'planejamento'
   const phase = (data.phase as CasePhase | undefined) ?? 'planejamento'
   return {
     id: row.id,
-    productType: (row.product_type ?? (data.productType as string | undefined) ?? 'alinhador_12m') as Case['productType'],
+    productType: normalizeProductType(row.product_id ?? row.product_type ?? data.productId ?? data.productType),
+    productId: normalizeProductType(row.product_id ?? row.product_type ?? data.productId ?? data.productType),
     treatmentCode: data.treatmentCode as string | undefined,
     treatmentOrigin: data.treatmentOrigin as Case['treatmentOrigin'] | undefined,
     patientName: (data.patientName as string | undefined) ?? '-',
@@ -285,7 +286,7 @@ export default function CaseDetailPage() {
     void (async () => {
       const { data } = await supabase
         .from('cases')
-        .select('id, product_type, data, deleted_at')
+        .select('id, product_type, product_id, data, deleted_at')
         .eq('id', params.id)
         .is('deleted_at', null)
         .maybeSingle()
@@ -294,7 +295,7 @@ export default function CaseDetailPage() {
         setSupabaseCase(null)
         return
       }
-      setSupabaseCase(mapSupabaseCaseRowToCase(data as { id: string; product_type?: string; data?: Record<string, unknown> }))
+      setSupabaseCase(mapSupabaseCaseRowToCase(data as { id: string; product_type?: string; product_id?: string; data?: Record<string, unknown> }))
     })()
     return () => {
       active = false

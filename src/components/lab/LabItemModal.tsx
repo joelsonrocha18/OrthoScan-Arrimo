@@ -3,7 +3,7 @@ import { canMoveToStatus } from '../../data/labRepo'
 import type { Case } from '../../types/Case'
 import type { LabItem, LabPriority, LabStatus } from '../../types/Lab'
 import type { ProductType } from '../../types/Product'
-import { PRODUCT_TYPE_LABEL } from '../../types/Product'
+import { isAlignerProductType, PRODUCT_TYPE_LABEL } from '../../types/Product'
 import { useToast } from '../../app/ToastProvider'
 import Button from '../Button'
 import Card from '../Card'
@@ -127,7 +127,8 @@ export default function LabItemModal({
     [item, mode],
   )
   const planQtyTotal = Math.trunc(Number(form.plannedUpperQty || 0)) + Math.trunc(Number(form.plannedLowerQty || 0))
-  const automaticStatus = planQtyTotal > 0 ? 'em_producao' : 'aguardando_iniciar'
+  const isAlignerProduct = isAlignerProductType(form.productType)
+  const automaticStatus = isAlignerProduct && planQtyTotal > 0 ? 'em_producao' : 'aguardando_iniciar'
 
   const statusBlocked = useMemo(() => {
     if (mode === 'create') {
@@ -169,7 +170,7 @@ export default function LabItemModal({
       addToast({ type: 'error', title: 'Validacao', message })
       return
     }
-    if (selectedCase) {
+    if (isAlignerProduct && selectedCase) {
       const maxUpper = selectedCase.totalTraysUpper ?? selectedCase.totalTrays
       const maxLower = selectedCase.totalTraysLower ?? selectedCase.totalTrays
       if (plannedUpperQty > maxUpper || plannedLowerQty > maxLower) {
@@ -340,27 +341,31 @@ export default function LabItemModal({
             </select>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Superior</label>
-            <Input
-              type="number"
-              min={0}
-              value={form.plannedUpperQty}
-              onChange={(event) => setForm((current) => ({ ...current, plannedUpperQty: event.target.value }))}
-              disabled={readOnly}
-            />
-          </div>
+          {isAlignerProduct ? (
+            <>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Superior</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.plannedUpperQty}
+                  onChange={(event) => setForm((current) => ({ ...current, plannedUpperQty: event.target.value }))}
+                  disabled={readOnly}
+                />
+              </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Inferior</label>
-            <Input
-              type="number"
-              min={0}
-              value={form.plannedLowerQty}
-              onChange={(event) => setForm((current) => ({ ...current, plannedLowerQty: event.target.value }))}
-              disabled={readOnly}
-            />
-          </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Qtd a produzir - Inferior</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.plannedLowerQty}
+                  onChange={(event) => setForm((current) => ({ ...current, plannedLowerQty: event.target.value }))}
+                  disabled={readOnly}
+                />
+              </div>
+            </>
+          ) : null}
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>

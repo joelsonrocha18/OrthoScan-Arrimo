@@ -1,28 +1,44 @@
-export type ProductType =
-  | 'alinhador_3m'
-  | 'alinhador_6m'
-  | 'alinhador_12m'
-  | 'contencao'
-  | 'placa_clareamento'
-  | 'placa_bruxismo'
-  | 'protetor_esportivo'
-  | 'guia_implante'
-  | 'guia_gengivoplastia'
-  | 'protese_provisoria'
-  | 'biomodelo'
+export const PRODUCT_TYPES = [
+  'escaneamento',
+  'alinhador_3m',
+  'alinhador_6m',
+  'alinhador_12m',
+  'contencao',
+  'guia_cirurgico',
+  'placa_bruxismo',
+  'placa_clareamento',
+  'protetor_bucal',
+  'biomodelo',
+] as const
+
+export type ProductType = (typeof PRODUCT_TYPES)[number]
 
 export const PRODUCT_TYPE_LABEL: Record<ProductType, string> = {
+  escaneamento: 'Escaneamento',
   alinhador_3m: 'Alinhador 3 meses',
   alinhador_6m: 'Alinhador 6 meses',
   alinhador_12m: 'Alinhador 12 meses',
-  contencao: 'Contenção',
-  placa_clareamento: 'Placa de Clareamento',
+  contencao: 'Contencao',
+  guia_cirurgico: 'Guia Cirurgico',
   placa_bruxismo: 'Placa de Bruxismo',
-  protetor_esportivo: 'Protetor Esportivo',
-  guia_implante: 'Guia Cirúrgico - Implante',
-  guia_gengivoplastia: 'Guia Cirúrgico - Gengivoplastia',
-  protese_provisoria: 'Prótese Provisória',
+  placa_clareamento: 'Placa de Clareamento',
+  protetor_bucal: 'Protetor Bucal',
   biomodelo: 'Biomodelo',
+}
+
+const LEGACY_PRODUCT_TYPE_ALIAS: Record<string, ProductType> = {
+  protetor_esportivo: 'protetor_bucal',
+  guia_implante: 'guia_cirurgico',
+  guia_gengivoplastia: 'guia_cirurgico',
+  protese_provisoria: 'biomodelo',
+}
+
+export function normalizeProductType(value: unknown, fallback: ProductType = 'alinhador_12m'): ProductType {
+  if (typeof value !== 'string' || value.length === 0) return fallback
+  if ((PRODUCT_TYPES as readonly string[]).includes(value)) {
+    return value as ProductType
+  }
+  return LEGACY_PRODUCT_TYPE_ALIAS[value] ?? fallback
 }
 
 export function isAlignerProductType(productType?: ProductType | null) {

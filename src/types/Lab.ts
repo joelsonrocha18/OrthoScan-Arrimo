@@ -7,6 +7,7 @@ export type LabPriority = 'Baixo' | 'Medio' | 'Urgente'
 export type LabItem = {
   id: string
   productType?: ProductType
+  productId?: ProductType
   requestCode?: string
   requestKind?: 'producao' | 'reconfeccao' | 'reposicao_programada'
   expectedReplacementDate?: string

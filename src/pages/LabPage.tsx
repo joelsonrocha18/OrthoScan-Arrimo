@@ -10,12 +10,12 @@ import Card from '../components/Card'
 import Input from '../components/Input'
 import { DATA_MODE } from '../data/dataMode'
 import { registerCaseDeliveryLot } from '../data/caseRepo'
-import { addLabItem, createAdvanceLabOrder, deleteLabItem, listLabItems, updateLabItem } from '../data/labRepo'
+import { addLabItem, createAdvanceLabOrder, deleteLabItem, listLabItems, moveLabItem, updateLabItem } from '../data/labRepo'
 import { getNextDeliveryDueDate, getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
 import type { LabItem, LabStatus } from '../types/Lab'
 import type { ProductType } from '../types/Product'
-import { PRODUCT_TYPE_LABEL } from '../types/Product'
+import { isAlignerProductType, normalizeProductType, PRODUCT_TYPE_LABEL } from '../types/Product'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
@@ -26,6 +26,13 @@ type ModalState =
   | { open: false; mode: 'create' | 'edit'; item: null }
   | { open: true; mode: 'create'; item: null }
   | { open: true; mode: 'edit'; item: LabItem }
+
+type ProductionConfirmState = {
+  open: boolean
+  productLabel: string
+  archLabel: string
+  resolver: ((confirmed: boolean) => void) | null
+}
 
 function isOverdue(item: LabItem) {
   if (item.status === 'prontas') {
@@ -124,6 +131,13 @@ function asNumber(value: unknown, fallback = 0) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+function archLabel(arch: 'superior' | 'inferior' | 'ambos' | '') {
+  if (arch === 'superior') return 'Superior'
+  if (arch === 'inferior') return 'Inferior'
+  if (arch === 'ambos') return 'Ambas'
+  return ''
+}
+
 export default function LabPage() {
   const { db } = useDb()
   const { addToast } = useToast()
@@ -146,7 +160,36 @@ export default function LabPage() {
   const [supabaseItems, setSupabaseItems] = useState<LabItem[]>([])
   const [supabaseCases, setSupabaseCases] = useState<typeof db.cases>([])
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
+  const [productionConfirm, setProductionConfirm] = useState<ProductionConfirmState>({
+    open: false,
+    productLabel: '',
+    archLabel: '',
+    resolver: null,
+  })
   const labSyncSignature = `${db.cases.map((item) => item.updatedAt).join('|')}::${db.labItems.map((item) => item.updatedAt).join('|')}`
+
+  const askProductionConfirmation = useCallback((productLabelText: string, archLabelText: string) => {
+    return new Promise<boolean>((resolve) => {
+      setProductionConfirm({
+        open: true,
+        productLabel: productLabelText,
+        archLabel: archLabelText,
+        resolver: resolve,
+      })
+    })
+  }, [])
+
+  const resolveProductionConfirmation = useCallback((confirmed: boolean) => {
+    setProductionConfirm((current) => {
+      current.resolver?.(confirmed)
+      return {
+        open: false,
+        productLabel: '',
+        archLabel: '',
+        resolver: null,
+      }
+    })
+  }, [])
 
   useEffect(() => {
     if (isSupabaseMode) return
@@ -164,11 +207,11 @@ export default function LabPage() {
       const [casesRes, labRes] = await Promise.all([
         supabase
           .from('cases')
-          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, product_type, data, deleted_at')
+          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, product_type, product_id, data, deleted_at')
           .is('deleted_at', null),
         supabase
           .from('lab_items')
-          .select('id, case_id, tray_number, status, priority, notes, product_type, created_at, updated_at, deleted_at, data')
+          .select('id, case_id, tray_number, status, priority, notes, product_type, product_id, created_at, updated_at, deleted_at, data')
           .is('deleted_at', null),
       ])
       if (!active) return
@@ -178,7 +221,8 @@ export default function LabPage() {
         const createdAt = new Date().toISOString()
         return {
           id: asText(row.id),
-          productType: asText(row.product_type, asText(data.productType, 'alinhador_12m')) as typeof db.cases[number]['productType'],
+          productType: normalizeProductType(row.product_type ?? row.product_id ?? data.productType ?? data.productId),
+          productId: normalizeProductType(row.product_id ?? row.product_type ?? data.productId ?? data.productType),
           treatmentCode: asText(data.treatmentCode) || undefined,
           treatmentOrigin: (asText(data.treatmentOrigin, 'externo') as 'interno' | 'externo'),
           patientName: asText(data.patientName, '-'),
@@ -216,7 +260,8 @@ export default function LabPage() {
         const updatedAt = asText(row.updated_at, createdAt)
         return {
           id: asText(row.id),
-          productType: asText(row.product_type, asText(data.productType, 'alinhador_12m')) as LabItem['productType'],
+          productType: normalizeProductType(row.product_type ?? row.product_id ?? data.productType ?? data.productId),
+          productId: normalizeProductType(row.product_id ?? row.product_type ?? data.productId ?? data.productType),
           requestCode: asText(data.requestCode) || undefined,
           requestKind: (asText(data.requestKind, 'producao') as 'producao' | 'reconfeccao' | 'reposicao_programada'),
           expectedReplacementDate: asText(data.expectedReplacementDate) || undefined,
@@ -467,7 +512,7 @@ export default function LabPage() {
       if (!supabase) return { ok: false, message: 'Supabase não configurado.' }
       const { data: current, error: readError } = await supabase
         .from('lab_items')
-        .select('id, tray_number, status, priority, notes, product_type, data')
+        .select('id, tray_number, status, priority, notes, product_type, product_id, data')
         .eq('id', id)
         .maybeSingle()
       if (readError || !current) {
@@ -477,16 +522,25 @@ export default function LabPage() {
       const currentData = asObject(current.data)
       const plannedUpperQty = patch.plannedUpperQty ?? asNumber(currentData.plannedUpperQty, 0)
       const plannedLowerQty = patch.plannedLowerQty ?? asNumber(currentData.plannedLowerQty, 0)
-      const autoStatus: LabStatus = plannedUpperQty + plannedLowerQty > 0 ? 'em_producao' : 'aguardando_iniciar'
+      const currentProductType = normalizeProductType(
+        patch.productType ?? patch.productId ?? current.product_type ?? (current as Record<string, unknown>).product_id ?? currentData.productType ?? currentData.productId,
+      )
+      const autoStatus: LabStatus = isAlignerProductType(currentProductType)
+        ? (plannedUpperQty + plannedLowerQty > 0 ? 'em_producao' : 'aguardando_iniciar')
+        : (patch.status ?? (asText(current.status, 'aguardando_iniciar') as LabStatus))
       const currentStatus = asText(current.status, 'aguardando_iniciar') as LabStatus
       const nextStatus = currentStatus === 'aguardando_iniciar' ? autoStatus : ((patch.status ?? currentStatus) as LabStatus)
       const nextPriority = (patch.priority ?? asText(current.priority, asText(currentData.priority, 'Medio'))) as 'Baixo' | 'Medio' | 'Urgente'
       const nextNotes = patch.notes ?? asText(current.notes, asText(currentData.notes, ''))
       const nextTray = patch.trayNumber ?? asNumber(current.tray_number, asNumber(currentData.trayNumber, 1))
       const nowIso = new Date().toISOString()
+      const nextProductType = normalizeProductType(
+        patch.productType ?? patch.productId ?? current.product_type ?? (current as Record<string, unknown>).product_id ?? currentData.productType ?? currentData.productId,
+      )
       const nextData = {
         ...currentData,
-        productType: patch.productType ?? asText(current.product_type, asText(currentData.productType, 'alinhador_12m')),
+        productType: nextProductType,
+        productId: normalizeProductType(patch.productId ?? patch.productType ?? (current as Record<string, unknown>).product_id ?? current.product_type ?? currentData.productId ?? currentData.productType),
         arch: patch.arch ?? asText(currentData.arch, 'ambos'),
         plannedUpperQty,
         plannedLowerQty,
@@ -507,7 +561,7 @@ export default function LabPage() {
         if (!nextArch) {
           return { ok: false, message: 'Defina a arcada do produto antes de iniciar producao.' }
         }
-        if (plannedUpperQty + plannedLowerQty <= 0) {
+        if (isAlignerProductType(nextProductType) && plannedUpperQty + plannedLowerQty <= 0) {
           return { ok: false, message: 'Defina quantidades por arcada antes de iniciar producao.' }
         }
       }
@@ -519,7 +573,8 @@ export default function LabPage() {
           status: nextStatus,
           priority: nextPriority,
           notes: nextNotes || null,
-          product_type: asText(nextData.productType, 'alinhador_12m'),
+          product_type: nextProductType,
+          product_id: nextProductType,
           data: nextData,
           updated_at: nowIso,
         })
@@ -572,13 +627,16 @@ export default function LabPage() {
       if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
       const { data: current, error: readError } = await supabase
         .from('lab_items')
-        .select('id, status, data')
+        .select('id, status, product_type, product_id, data')
         .eq('id', id)
         .maybeSingle()
       if (readError || !current) return { ok: false as const, error: readError?.message ?? 'Item LAB nao encontrado.' }
 
       const currentData = asObject(current.data)
       const nextArch = asText(currentData.arch, '')
+      const nextProductType = normalizeProductType(
+        current.product_id ?? current.product_type ?? currentData.productId ?? currentData.productType,
+      )
       const plannedUpperQty = asNumber(currentData.plannedUpperQty, 0)
       const plannedLowerQty = asNumber(currentData.plannedLowerQty, 0)
       const flow: LabStatus[] = ['aguardando_iniciar', 'em_producao', 'controle_qualidade', 'prontas']
@@ -591,8 +649,15 @@ export default function LabPage() {
         if (!nextArch) {
           return { ok: false as const, error: 'Defina a arcada do produto antes de iniciar producao.' }
         }
-        if (plannedUpperQty + plannedLowerQty <= 0) {
+        if (isAlignerProductType(nextProductType) && plannedUpperQty + plannedLowerQty <= 0) {
           return { ok: false as const, error: 'Defina quantidades por arcada antes de iniciar producao.' }
+        }
+        const confirmed = await askProductionConfirmation(
+          PRODUCT_TYPE_LABEL[nextProductType],
+          archLabel(nextArch as 'superior' | 'inferior' | 'ambos'),
+        )
+        if (!confirmed) {
+          return { ok: false as const, error: 'Producao cancelada pelo usuario.' }
         }
       }
 
@@ -604,7 +669,34 @@ export default function LabPage() {
       setSupabaseRefreshKey((currentKey) => currentKey + 1)
       return { ok: true as const }
     },
-    [],
+    [askProductionConfirmation],
+  )
+
+  const handleMoveStatusLocal = useCallback(
+    async (id: string, next: LabStatus) => {
+      const current = items.find((item) => item.id === id)
+      if (!current) return { ok: false as const, error: 'Item LAB nao encontrado.' }
+      if (next === 'em_producao') {
+        if (!current.arch) {
+          return { ok: false as const, error: 'Defina a arcada do produto antes de iniciar producao.' }
+        }
+        const currentProductType = normalizeProductType(current.productId ?? current.productType)
+        if (isAlignerProductType(currentProductType) && (current.plannedUpperQty ?? 0) + (current.plannedLowerQty ?? 0) <= 0) {
+          return { ok: false as const, error: 'Defina quantidades por arcada antes de iniciar producao.' }
+        }
+        const confirmed = await askProductionConfirmation(
+          PRODUCT_TYPE_LABEL[currentProductType],
+          archLabel(current.arch),
+        )
+        if (!confirmed) {
+          return { ok: false as const, error: 'Producao cancelada pelo usuario.' }
+        }
+      }
+      const result = moveLabItem(id, next)
+      if (result.error) return { ok: false as const, error: result.error }
+      return { ok: true as const }
+    },
+    [askProductionConfirmation, items],
   )
 
   return (
@@ -674,7 +766,7 @@ export default function LabPage() {
               if (isSupabaseMode) setSupabaseRefreshKey((current) => current + 1)
             }}
             onDetails={(item) => setModal({ open: true, mode: 'edit', item })}
-            onMoveStatus={isSupabaseMode ? handleMoveStatusSupabase : undefined}
+            onMoveStatus={canWrite ? (isSupabaseMode ? handleMoveStatusSupabase : handleMoveStatusLocal) : undefined}
             canEdit={canWrite}
           />
         ) : boardTab === 'reconfeccao' ? (
@@ -885,6 +977,25 @@ export default function LabPage() {
           addToast({ type: 'success', title: 'Entrega registrada pelo laboratório' })
         }}
       />
+
+      {productionConfirm.open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+          <Card className="w-full max-w-lg">
+            <h3 className="text-lg font-semibold text-slate-900">Confirmar inicio da producao</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Confirmar producao de {productionConfirm.productLabel} para arcada {productionConfirm.archLabel}?
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => resolveProductionConfirmation(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={() => resolveProductionConfirmation(true)}>
+                Confirmar
+              </Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       {advanceModalOpen && advanceTarget ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">

@@ -3,7 +3,7 @@ import Badge from '../Badge'
 import Button from '../Button'
 import Card from '../Card'
 import type { LabItem } from '../../types/Lab'
-import { PRODUCT_TYPE_LABEL } from '../../types/Product'
+import { isAlignerProductType, PRODUCT_TYPE_LABEL } from '../../types/Product'
 
 type LabCardProps = {
   item: LabItem
@@ -45,6 +45,7 @@ export default function LabCard({
   hasNext,
 }: LabCardProps) {
   const isRework = item.requestKind === 'reconfeccao' || (item.notes ?? '').toLowerCase().includes('rework')
+  const isAligner = isAlignerProductType(item.productId ?? item.productType ?? 'alinhador_12m')
   const cardTone = isRework ? 'border border-red-300 bg-red-50/40' : ''
 
   return (
@@ -54,14 +55,14 @@ export default function LabCard({
           {item.requestCode ? <p className="text-xs font-medium text-slate-600">Guia: {item.requestCode}</p> : null}
           <p className="text-sm font-semibold text-slate-900">Paciente: {item.patientName}</p>
           <p className="mt-1 text-xs text-slate-600">Produto: {PRODUCT_TYPE_LABEL[item.productType ?? 'alinhador_12m']}</p>
-          {!item.requestCode && !isRework ? (
+          <p className="mt-1 text-xs text-slate-700">Arcada: {archLabelMap[item.arch]}</p>
+          {isAligner && !item.requestCode && !isRework ? (
             <p className="mt-1 text-xs text-slate-500">Placa #{item.trayNumber}</p>
           ) : null}
           {isRework ? (
             <div className="mt-1 space-y-0.5">
               <p className="text-xs font-semibold text-red-700">Rework solicitado</p>
-              <p className="text-xs text-slate-700">Placa(s): #{item.trayNumber}</p>
-              <p className="text-xs text-slate-700">Arcada: {archLabelMap[item.arch]}</p>
+              {isAligner ? <p className="text-xs text-slate-700">Placa(s): #{item.trayNumber}</p> : null}
             </div>
           ) : null}
         </div>
@@ -76,10 +77,12 @@ export default function LabCard({
           <CalendarClock className="h-3.5 w-3.5" />
           Prazo: {formatDate(item.dueDate)}
         </p>
-        <p className="text-slate-600">
-          Produção por arcada: Sup {item.plannedUpperQty ?? 0} | Inf {item.plannedLowerQty ?? 0}
-        </p>
-        {item.status === 'aguardando_iniciar' && (item.plannedUpperQty ?? 0) + (item.plannedLowerQty ?? 0) <= 0 ? (
+        {isAligner ? (
+          <p className="text-slate-600">
+            Producao por arcada: Sup {item.plannedUpperQty ?? 0} | Inf {item.plannedLowerQty ?? 0}
+          </p>
+        ) : null}
+        {isAligner && item.status === 'aguardando_iniciar' && (item.plannedUpperQty ?? 0) + (item.plannedLowerQty ?? 0) <= 0 ? (
           <Badge tone="danger" className="px-2 py-0.5 text-[10px]">Definir arcadas</Badge>
         ) : null}
         {isOverdue ? <Badge tone="danger" className="px-2 py-0.5 text-[10px]">Atrasado</Badge> : null}

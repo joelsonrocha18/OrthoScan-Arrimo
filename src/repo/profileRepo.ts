@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabaseClient'
 import type { CaseTray } from '../types/Case'
 import type { LabItem } from '../types/Lab'
 import type { ProductType } from '../types/Product'
+import { normalizeProductType } from '../types/Product'
 import type { Scan, ScanAttachment } from '../types/Scan'
 
 export type ProfileRecord = {
@@ -104,7 +105,7 @@ function asNumber(value: unknown, fallback = 0) {
 }
 
 function asProductType(value: unknown, fallback: ProductType = 'alinhador_12m'): ProductType {
-  return typeof value === 'string' && value.length > 0 ? (value as ProductType) : fallback
+  return normalizeProductType(value, fallback)
 }
 
 function normalizeScanAttachments(attachments: ScanAttachment[]) {
@@ -192,6 +193,7 @@ export async function createCaseFromScanSupabase(
   const phase = 'planejamento'
   const nextData = {
     productType: 'alinhador_12m' as ProductType,
+    productId: 'alinhador_12m' as ProductType,
     treatmentCode,
     patientName: scan.patientName,
     scanDate: scan.scanDate,
@@ -232,6 +234,7 @@ export async function createCaseFromScanSupabase(
       total_trays_lower: lower || null,
       attachments_tray: payload.attachmentBondingTray,
       product_type: 'alinhador_12m',
+      product_id: 'alinhador_12m',
       data: nextData,
       updated_at: now,
     })
@@ -306,7 +309,7 @@ export async function listCaseLabItemsSupabase(caseId: string): Promise<LabItem[
   if (!supabase) return []
   const { data, error } = await supabase
     .from('lab_items')
-    .select('id, case_id, tray_number, status, priority, notes, product_type, created_at, updated_at, deleted_at, data')
+    .select('id, case_id, tray_number, status, priority, notes, product_type, product_id, created_at, updated_at, deleted_at, data')
     .eq('case_id', caseId)
     .is('deleted_at', null)
   if (error) return []
@@ -318,7 +321,8 @@ export async function listCaseLabItemsSupabase(caseId: string): Promise<LabItem[
     return {
       id: asText(row.id),
       requestCode: asText(meta.requestCode) || undefined,
-      productType: asProductType(row.product_type ?? meta.productType),
+      productType: asProductType(row.product_type ?? row.product_id ?? meta.productType ?? meta.productId),
+      productId: asProductType(row.product_id ?? row.product_type ?? meta.productId ?? meta.productType),
       requestKind: asText(meta.requestKind, 'producao') as LabItem['requestKind'],
       expectedReplacementDate: asText(meta.expectedReplacementDate) || undefined,
       caseId: asText(row.case_id) || undefined,
@@ -365,7 +369,7 @@ export async function generateCaseLabOrderSupabase(caseId: string) {
   const dueDate = due.toISOString().slice(0, 10)
 
   const requestCode = asText(currentData.treatmentCode, asText(current.id))
-  const productType = asProductType(currentData.productType)
+  const productType = asProductType(currentData.productType ?? currentData.productId)
   const { error: createError } = await supabase
     .from('lab_items')
     .insert({
@@ -376,9 +380,11 @@ export async function generateCaseLabOrderSupabase(caseId: string) {
       priority: 'Medio',
       notes: 'OS gerada a partir do fluxo comercial do caso. Defina quantidade por arcada antes de produzir.',
       product_type: productType,
+      product_id: productType,
       data: {
         requestCode,
         productType,
+        productId: productType,
         requestKind: 'producao',
         expectedReplacementDate: dueDate,
         arch: asText(currentData.arch, 'ambos'),

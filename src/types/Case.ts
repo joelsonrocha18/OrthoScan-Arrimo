@@ -69,6 +69,7 @@ export type CaseInstallation = {
 export type Case = {
   id: string
   productType?: ProductType
+  productId?: ProductType
   treatmentCode?: string
   treatmentOrigin?: 'interno' | 'externo'
   patientName: string

@@ -2,20 +2,13 @@ import type { AppDb } from './db'
 import { loadDb, saveDb } from './db'
 import type { LabItem } from '../types/Lab'
 import type { CaseTray } from '../types/Case'
+import { isAlignerProductType, normalizeProductType } from '../types/Product'
 
 function trayStateFromLabStatus(status: LabItem['status']) {
-  if (status === 'aguardando_iniciar') {
-    return 'pendente' as const
-  }
-  if (status === 'em_producao') {
-    return 'em_producao' as const
-  }
-  if (status === 'controle_qualidade') {
-    return 'rework' as const
-  }
-  if (status === 'prontas') {
-    return 'pronta' as const
-  }
+  if (status === 'aguardando_iniciar') return 'pendente' as const
+  if (status === 'em_producao') return 'em_producao' as const
+  if (status === 'controle_qualidade') return 'rework' as const
+  if (status === 'prontas') return 'pronta' as const
   return null
 }
 
@@ -30,9 +23,10 @@ function deriveCaseLifecycle(trays: CaseTray[], hasInstallation: boolean) {
 }
 
 function plannedBatchByArch(item: Pick<LabItem, 'plannedUpperQty' | 'plannedLowerQty'>) {
-  const upper = Math.max(0, Math.trunc(item.plannedUpperQty ?? 0))
-  const lower = Math.max(0, Math.trunc(item.plannedLowerQty ?? 0))
-  return { upper, lower }
+  return {
+    upper: Math.max(0, Math.trunc(item.plannedUpperQty ?? 0)),
+    lower: Math.max(0, Math.trunc(item.plannedLowerQty ?? 0)),
+  }
 }
 
 function deliveredByArch(
@@ -64,38 +58,49 @@ function nextBatchRange(
 ) {
   const batchByArch = plannedBatchByArch(labItem)
   const delivered = deliveredByArch(caseItem)
-  if (labItem.arch === 'superior') {
-    const batch = Math.max(batchByArch.upper, 1)
-    const fromTray = Math.max(1, delivered.upper + 1, labItem.trayNumber)
-    const toTray = Math.min(caseItem.totalTrays, fromTray + batch - 1)
-    return { fromTray, toTray }
-  }
-  if (labItem.arch === 'inferior') {
-    const batch = Math.max(batchByArch.lower, 1)
-    const fromTray = Math.max(1, delivered.lower + 1, labItem.trayNumber)
-    const toTray = Math.min(caseItem.totalTrays, fromTray + batch - 1)
-    return { fromTray, toTray }
-  }
 
-  const pairedBatch = Math.min(batchByArch.upper, batchByArch.lower)
-  if (pairedBatch <= 0) return null
-  const fromTray = Math.max(1, Math.min(delivered.upper, delivered.lower) + 1, labItem.trayNumber)
-  const toTray = Math.min(caseItem.totalTrays, fromTray + pairedBatch - 1)
-  return { fromTray, toTray }
+  const upperRange = batchByArch.upper > 0
+    ? {
+        fromTray: Math.max(1, delivered.upper + 1, labItem.trayNumber),
+        toTray: Math.min(caseItem.totalTrays, Math.max(1, delivered.upper + 1, labItem.trayNumber) + batchByArch.upper - 1),
+      }
+    : null
+  const lowerRange = batchByArch.lower > 0
+    ? {
+        fromTray: Math.max(1, delivered.lower + 1, labItem.trayNumber),
+        toTray: Math.min(caseItem.totalTrays, Math.max(1, delivered.lower + 1, labItem.trayNumber) + batchByArch.lower - 1),
+      }
+    : null
+
+  if (labItem.arch === 'superior') return upperRange
+  if (labItem.arch === 'inferior') return lowerRange
+
+  if (upperRange && lowerRange) {
+    const fromTray = Math.max(upperRange.fromTray, lowerRange.fromTray)
+    const toTray = Math.min(upperRange.toTray, lowerRange.toTray)
+    if (toTray < fromTray) return null
+    return { fromTray, toTray }
+  }
+  return upperRange ?? lowerRange
+}
+
+function shouldSyncAlignerBatch(labItem: LabItem, caseProductType: unknown) {
+  const resolvedProduct = normalizeProductType(labItem.productId ?? labItem.productType ?? caseProductType)
+  return isAlignerProductType(resolvedProduct)
 }
 
 export function syncLabItemToCaseTray(
   labItem: LabItem,
   dbInput?: AppDb,
 ): { ok: true } | { ok: false; message: string } {
-  if (!labItem.caseId) {
-    return { ok: true }
-  }
+  if (!labItem.caseId) return { ok: true }
 
   const db = dbInput ?? loadDb()
   const caseItem = db.cases.find((item) => item.id === labItem.caseId)
-  if (!caseItem) {
-    return { ok: false, message: 'Caso vinculado nao encontrado.' }
+  if (!caseItem) return { ok: false, message: 'Caso vinculado nao encontrado.' }
+
+  if (!shouldSyncAlignerBatch(labItem, caseItem.productId ?? caseItem.productType)) {
+    return { ok: true }
   }
 
   if (labItem.trayNumber < 1 || labItem.trayNumber > caseItem.totalTrays) {
@@ -103,41 +108,30 @@ export function syncLabItemToCaseTray(
   }
 
   const mappedState = trayStateFromLabStatus(labItem.status)
-  if (!mappedState) {
-    return { ok: true }
-  }
+  if (!mappedState) return { ok: true }
+
   const shouldSyncBatch = (labItem.requestKind ?? 'producao') !== 'reconfeccao'
   if (shouldSyncBatch) {
     const range = nextBatchRange(caseItem, labItem)
-    if (!range) {
-      return { ok: true }
-    }
+    if (!range) return { ok: true }
+
     caseItem.trays = caseItem.trays.map((tray) => {
-      if (tray.trayNumber < range.fromTray || tray.trayNumber > range.toTray) {
-        return tray
-      }
-      if (tray.state === 'entregue') {
-        return tray
-      }
-      if (mappedState === 'pendente' && tray.state !== 'pendente') {
-        return tray
-      }
-      if (mappedState === 'em_producao' && tray.state === 'pronta') {
-        return tray
-      }
+      if (tray.trayNumber < range.fromTray || tray.trayNumber > range.toTray) return tray
+      if (tray.state === 'entregue') return tray
+      if (mappedState === 'pendente' && tray.state !== 'pendente') return tray
+      if (mappedState === 'em_producao' && tray.state === 'pronta') return tray
       return { ...tray, state: mappedState }
     })
   } else {
     const targetTray = caseItem.trays.find((item) => item.trayNumber === labItem.trayNumber)
-    if (!targetTray) {
-      return { ok: false, message: 'Placa nao encontrada no caso.' }
-    }
+    if (!targetTray) return { ok: false, message: 'Placa nao encontrada no caso.' }
     if (targetTray.state !== 'entregue') {
       if (!(mappedState === 'pendente' && targetTray.state !== 'pendente') && !(mappedState === 'em_producao' && targetTray.state === 'pronta')) {
         targetTray.state = mappedState
       }
     }
   }
+
   const lifecycle = deriveCaseLifecycle(caseItem.trays, !!caseItem.installation?.installedAt)
   if (lifecycle) {
     caseItem.status = lifecycle.status
@@ -145,9 +139,6 @@ export function syncLabItemToCaseTray(
   }
   caseItem.updatedAt = new Date().toISOString()
 
-  if (!dbInput) {
-    saveDb(db)
-  }
-
+  if (!dbInput) saveDb(db)
   return { ok: true }
 }
