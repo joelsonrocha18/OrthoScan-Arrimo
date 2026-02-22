@@ -110,16 +110,16 @@ export default function ScanModal({
   const purposeOptions = useMemo(() => {
     const settings = loadSystemSettings()
     const active = (settings.priceCatalog ?? []).filter((item) => item.isActive !== false)
-    const options = [
+    const firstNonAligner = active.find(
+      (item) =>
+        item.productType !== 'alinhador_3m' &&
+        item.productType !== 'alinhador_6m' &&
+        item.productType !== 'alinhador_12m',
+    )
+    return [
       { id: 'alinhador_padrao', label: 'Alinhador', productType: 'alinhador_12m' },
-      ...active.map((item) => ({ id: item.id, label: item.name, productType: item.productType })),
+      { id: 'impressoes_padrao', label: 'Impressões', productType: firstNonAligner?.productType ?? 'biomodelo' },
     ]
-    const seen = new Set<string>()
-    return options.filter((item) => {
-      if (seen.has(item.id)) return false
-      seen.add(item.id)
-      return true
-    })
   }, [])
 
   useEffect(() => {
