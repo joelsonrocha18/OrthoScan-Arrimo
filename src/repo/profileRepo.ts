@@ -143,17 +143,6 @@ function normalizeScanAttachments(attachments: ScanAttachment[]) {
   }))
 }
 
-function hasRequiredExamFiles(scan: Pick<Scan, 'arch' | 'attachments'>) {
-  const hasUpper = scan.attachments.some((item) => item.kind === 'scan3d' && item.arch === 'superior')
-  const hasLower = scan.attachments.some((item) => item.kind === 'scan3d' && item.arch === 'inferior')
-  const hasIntra = scan.attachments.some((item) => item.kind === 'foto_intra')
-  const hasExtra = scan.attachments.some((item) => item.kind === 'foto_extra')
-  const requiresUpper = scan.arch === 'superior' || scan.arch === 'ambos'
-  const requiresLower = scan.arch === 'inferior' || scan.arch === 'ambos'
-  const stlOk = (!requiresUpper || hasUpper) && (!requiresLower || hasLower)
-  return stlOk && hasIntra && hasExtra
-}
-
 function buildPendingTrays(totalTrays: number, scanDate: string, changeEveryDays: number): CaseTray[] {
   const trays: CaseTray[] = []
   const base = new Date(`${scanDate}T00:00:00`)
@@ -220,10 +209,6 @@ export async function createCaseFromScanSupabase(
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
   if (scan.status !== 'aprovado') return { ok: false as const, error: 'Apenas scans aprovados podem gerar caso.' }
   if (scan.linkedCaseId) return { ok: false as const, error: 'Este scan ja foi convertido em caso.' }
-  if (!hasRequiredExamFiles(scan)) {
-    return { ok: false as const, error: 'Exame incompleto. Envie STL(s) obrigatorios e fotos intra/extra antes de criar o pedido.' }
-  }
-
   const selectedProductType = asProductType(scan.purposeProductType ?? scan.purposeProductId)
   const isAlignerFlow = isAlignerProductType(selectedProductType)
   const upper = payload.totalTraysUpper ?? 0

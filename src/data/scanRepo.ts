@@ -244,17 +244,6 @@ export function deleteScan(id: string) {
   saveDb(db)
 }
 
-function hasRequiredExamFiles(scan: Pick<Scan, 'arch' | 'attachments'>) {
-  const hasUpper = scan.attachments.some((item) => item.kind === 'scan3d' && item.arch === 'superior')
-  const hasLower = scan.attachments.some((item) => item.kind === 'scan3d' && item.arch === 'inferior')
-  const hasIntra = scan.attachments.some((item) => item.kind === 'foto_intra')
-  const hasExtra = scan.attachments.some((item) => item.kind === 'foto_extra')
-  const requiresUpper = scan.arch === 'superior' || scan.arch === 'ambos'
-  const requiresLower = scan.arch === 'inferior' || scan.arch === 'ambos'
-  const stlOk = (!requiresUpper || hasUpper) && (!requiresLower || hasLower)
-  return stlOk && hasIntra && hasExtra
-}
-
 export function createCaseFromScan(
   scanId: string,
   payload: {
@@ -270,10 +259,6 @@ export function createCaseFromScan(
   if (!scan) return { ok: false, error: 'Scan nao encontrado.' }
   if (scan.status !== 'aprovado') return { ok: false, error: 'Apenas scans aprovados podem gerar caso.' }
   if (scan.linkedCaseId) return { ok: false, error: 'Este scan ja foi convertido em caso.' }
-  if (!hasRequiredExamFiles(scan)) {
-    return { ok: false, error: 'Exame incompleto. Envie STL(s) obrigatorios e fotos intra/extra antes de criar o pedido.' }
-  }
-
   const selectedProductType = normalizeProductType(scan.purposeProductType, 'alinhador_12m')
   const isAlignerFlow = isAlignerProductType(selectedProductType)
   const upper = payload.totalTraysUpper ?? 0
