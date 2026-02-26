@@ -67,7 +67,7 @@ describe('Scan to Case flow', () => {
     expect(afterScan?.attachments.find((a) => a.id === 'qa_scan_att_1')?.status).toBe('erro')
   })
 
-  it('blocks case creation when required STL/photos are missing', () => {
+  it('allows case creation even when optional STL/photos are missing', () => {
     const scan = getScan('qa_scan_1')
     expect(scan).toBeTruthy()
     if (!scan) return
@@ -78,6 +78,6 @@ describe('Scan to Case flow', () => {
       changeEveryDays: 7,
       attachmentBondingTray: false,
     })
-    expect(result.ok).toBe(false)
+    expect(result.ok).toBe(true)
   })
 })

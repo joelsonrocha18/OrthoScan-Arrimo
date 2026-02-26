@@ -29,7 +29,7 @@ import { updateScan } from '../data/scanRepo'
 import { updateCase } from '../data/caseRepo'
 import { getCurrentUser } from '../lib/auth'
 import DocumentsList from '../components/documents/DocumentsList'
-import { validatePatientDocFile } from '../repo/storageRepo'
+import { createSignedUrl, validatePatientDocFile } from '../repo/storageRepo'
 import { DATA_MODE } from '../data/dataMode'
 import { supabase } from '../lib/supabaseClient'
 import { patientCode } from '../lib/entityCode'
@@ -128,6 +128,26 @@ function normalizeWhatsapp(value: string) {
   return value.replace(/\D/g, '')
 }
 
+function isImageFile(name?: string, mime?: string) {
+  const fileName = (name ?? '').toLowerCase()
+  const contentType = (mime ?? '').toLowerCase()
+  if (contentType.startsWith('image/')) return true
+  return ['.jpg', '.jpeg', '.png', '.heic', '.webp'].some((ext) => fileName.endsWith(ext))
+}
+
+type OrthocamMediaItem = {
+  id: string
+  previewKey: string
+  source: 'scan' | 'document'
+  date: string
+  dateKey: string
+  title: string
+  subtitle: string
+  url?: string
+  filePath?: string
+  canPreview: boolean
+}
+
 export default function PatientDetailPage() {
   const params = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -156,6 +176,7 @@ export default function PatientDetailPage() {
   const [docEditOpen, setDocEditOpen] = useState(false)
   const [docEditId, setDocEditId] = useState<string>('')
   const [docPreviewUrls, setDocPreviewUrls] = useState<Record<string, string>>({})
+  const [orthocamPreviewUrls, setOrthocamPreviewUrls] = useState<Record<string, string>>({})
   const [lightbox, setLightbox] = useState<{ open: boolean; title: string; url: string }>({ open: false, title: '', url: '' })
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
@@ -308,6 +329,56 @@ export default function PatientDetailPage() {
       })
       .slice(0, 20)
   }, [cases, db.auditLogs, db.labItems, existing, scans])
+
+  const orthocamMedia = useMemo<OrthocamMediaItem[]>(() => {
+    const scanItems: OrthocamMediaItem[] = scans.flatMap((scan) =>
+      (scan.attachments ?? [])
+        .filter((att) => att.kind !== 'scan3d')
+        .map((att) => {
+          const dateValue = att.attachedAt ?? att.createdAt ?? `${scan.scanDate}T00:00:00`
+          const dateKey = String(dateValue).slice(0, 10)
+          return {
+            id: att.id,
+            previewKey: `scan_${att.id}`,
+            source: 'scan',
+            date: dateValue,
+            dateKey,
+            title: att.name,
+            subtitle: `${scan.serviceOrderCode ?? scan.id} • ${att.kind}`,
+            url: att.url,
+            filePath: att.filePath,
+            canPreview: isImageFile(att.name, att.mime),
+          }
+        }),
+    )
+
+    const docItems: OrthocamMediaItem[] = docs
+      .filter((doc) => doc.category === 'foto' || doc.category === 'exame')
+      .map((doc) => ({
+        id: doc.id,
+        previewKey: `doc_${doc.id}`,
+        source: 'document',
+        date: doc.createdAt,
+        dateKey: doc.createdAt.slice(0, 10),
+        title: doc.title,
+        subtitle: `${doc.category} • ${doc.fileName}`,
+        url: docPreviewUrls[doc.id] ?? doc.url,
+        filePath: doc.filePath,
+        canPreview: isImageFile(doc.fileName, doc.mimeType),
+      }))
+
+    return [...scanItems, ...docItems].sort((a, b) => b.date.localeCompare(a.date))
+  }, [docs, docPreviewUrls, scans])
+
+  const orthocamMediaByDate = useMemo(() => {
+    const groups = new Map<string, OrthocamMediaItem[]>()
+    orthocamMedia.forEach((item) => {
+      const bucket = groups.get(item.dateKey) ?? []
+      bucket.push(item)
+      groups.set(item.dateKey, bucket)
+    })
+    return Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]))
+  }, [orthocamMedia])
 
   useEffect(() => {
     if (!existing) {
@@ -503,6 +574,36 @@ export default function PatientDetailPage() {
       active = false
     }
   }, [docs])
+
+  useEffect(() => {
+    let active = true
+    if (orthocamMedia.length === 0) {
+      setOrthocamPreviewUrls({})
+      return
+    }
+
+    void (async () => {
+      const entries = await Promise.all(
+        orthocamMedia.map(async (item) => {
+          if (item.url) return [item.previewKey, item.url] as const
+          if (!item.filePath) return null
+          const signed = await createSignedUrl(item.filePath, 300)
+          return signed.ok ? ([item.previewKey, signed.url] as const) : null
+        }),
+      )
+      if (!active) return
+      const next: Record<string, string> = {}
+      entries.forEach((entry) => {
+        if (!entry) return
+        next[entry[0]] = entry[1]
+      })
+      setOrthocamPreviewUrls(next)
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [orthocamMedia])
 
   useEffect(() => {
     const cep = normalizeCep(form.address.cep)
@@ -834,6 +935,16 @@ export default function PatientDetailPage() {
     window.open(resolved.url, '_blank', 'noreferrer')
   }
 
+  const openOrthocamItem = (item: OrthocamMediaItem) => {
+    const resolvedUrl = orthocamPreviewUrls[item.previewKey]
+    if (!resolvedUrl) return
+    if (item.canPreview) {
+      setLightbox({ open: true, title: item.title, url: resolvedUrl })
+      return
+    }
+    window.open(resolvedUrl, '_blank', 'noreferrer')
+  }
+
   const downloadDoc = async (doc: PatientDocument) => {
     const resolved = await resolvePatientDocUrl(doc)
     if (!resolved.ok) return
@@ -1051,6 +1162,58 @@ export default function PatientDetailPage() {
                 </div>
               ) : null}
             </div>
+          </div>
+        </Card>
+      </section>
+
+      <section className="mt-6">
+        <Card>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">Orthocam</h2>
+            <p className="text-xs text-slate-500">Fotos e arquivos registrados em linhas separadas por data.</p>
+          </div>
+
+          <div className="mt-4 space-y-4">
+            {orthocamMediaByDate.map(([dateKey, items]) => (
+              <div key={dateKey} className="rounded-xl border border-slate-200 p-3">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {new Date(`${dateKey}T00:00:00`).toLocaleDateString('pt-BR')}
+                  </p>
+                  <span className="text-xs text-slate-500">{items.length} arquivo(s)</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+                  {items.map((item) => {
+                    const previewUrl = orthocamPreviewUrls[item.previewKey]
+                    return (
+                      <button
+                        key={item.previewKey}
+                        type="button"
+                        className="text-left"
+                        onClick={() => openOrthocamItem(item)}
+                        disabled={!previewUrl}
+                      >
+                        <div className="overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                          {item.canPreview && previewUrl ? (
+                            <img src={previewUrl} alt={item.title} className="h-24 w-full object-cover" />
+                          ) : (
+                            <div className="flex h-24 items-center justify-center px-2 text-center text-[11px] font-semibold text-slate-500">
+                              Arquivo sem miniatura
+                            </div>
+                          )}
+                        </div>
+                        <p className="mt-1 truncate text-xs font-semibold text-slate-900">{item.title}</p>
+                        <p className="truncate text-[11px] text-slate-500">{item.subtitle}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            {orthocamMediaByDate.length === 0 ? (
+              <p className="text-sm text-slate-500">Nenhum registro Orthocam para este paciente.</p>
+            ) : null}
           </div>
         </Card>
       </section>
