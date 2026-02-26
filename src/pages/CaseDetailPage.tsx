@@ -9,7 +9,7 @@ import Input from '../components/Input'
 import { addAttachment, clearCaseScanFileError, deleteCase, getCase, handleRework as handleCaseRework, markCaseScanFileError, registerCaseInstallation, setTrayState, updateCase } from '../data/caseRepo'
 import { addLabItem, generateLabOrder } from '../data/labRepo'
 import { DATA_MODE } from '../data/dataMode'
-import { ensureReplacementBankForCase, getReplacementBankSummary } from '../data/replacementBankRepo'
+import { ensureReplacementBankForCase } from '../data/replacementBankRepo'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
 import { slotLabel as getPhotoSlotLabel } from '../lib/photoSlots'
@@ -258,6 +258,7 @@ export default function CaseDetailPage() {
   const canWrite = can(currentUser, 'cases.write')
   const canWriteLocalOnly = canWrite && !isSupabaseMode
   const canManageTray = canWrite
+  const canReadLab = can(currentUser, 'lab.read')
   const canDeleteCase = can(currentUser, 'cases.delete') && currentUser?.role === 'master_admin'
   const [selectedTray, setSelectedTray] = useState<CaseTray | null>(null)
   const [trayState, setSelectedTrayState] = useState<TrayState>('pendente')
@@ -270,6 +271,7 @@ export default function CaseDetailPage() {
   const [installationNote, setInstallationNote] = useState('')
   const [installationDeliveredUpper, setInstallationDeliveredUpper] = useState('0')
   const [installationDeliveredLower, setInstallationDeliveredLower] = useState('0')
+  const [changeEveryDaysInput, setChangeEveryDaysInput] = useState('7')
   const [attachmentModalOpen, setAttachmentModalOpen] = useState(false)
   const [attachmentType, setAttachmentType] = useState<'imagem' | 'documento' | 'outro'>('imagem')
   const [attachmentNote, setAttachmentNote] = useState('')
@@ -387,6 +389,7 @@ export default function CaseDetailPage() {
   const fallbackPatientDeliveryDate = currentCase?.installation?.installedAt
   const progressUpper = useMemo(() => caseProgress(totalUpper, deliveredUpper), [deliveredUpper, totalUpper])
   const progressLower = useMemo(() => caseProgress(totalLower, deliveredLower), [deliveredLower, totalLower])
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const changeSchedule = useMemo(
     () =>
       currentCase
@@ -404,15 +407,15 @@ export default function CaseDetailPage() {
     [actualChangeDateByTray, currentCase, progressLower.delivered, progressUpper.delivered, totalLower, totalUpper],
   )
   const patientProgressUpper = useMemo(() => {
-    const todayIso = new Date().toISOString().slice(0, 10)
-    const progressed = changeSchedule.filter((row) => row.trayNumber <= totalUpper && row.changeDate <= todayIso).length
+    const eligibleByDate = changeSchedule.filter((row) => row.trayNumber <= totalUpper && row.changeDate <= todayIso).length
+    const progressed = Math.min(eligibleByDate, Math.max(0, Math.trunc(deliveredUpper)))
     return caseProgress(totalUpper, progressed)
-  }, [changeSchedule, totalUpper])
+  }, [changeSchedule, deliveredUpper, todayIso, totalUpper])
   const patientProgressLower = useMemo(() => {
-    const todayIso = new Date().toISOString().slice(0, 10)
-    const progressed = changeSchedule.filter((row) => row.trayNumber <= totalLower && row.changeDate <= todayIso).length
+    const eligibleByDate = changeSchedule.filter((row) => row.trayNumber <= totalLower && row.changeDate <= todayIso).length
+    const progressed = Math.min(eligibleByDate, Math.max(0, Math.trunc(deliveredLower)))
     return caseProgress(totalLower, progressed)
-  }, [changeSchedule, totalLower])
+  }, [changeSchedule, deliveredLower, todayIso, totalLower])
   const deliveredScheduleCount = useMemo(() => {
     if (hasUpperArch && hasLowerArch) return Math.max(0, Math.min(progressUpper.delivered, progressLower.delivered))
     if (hasUpperArch) return Math.max(0, progressUpper.delivered)
@@ -499,14 +502,11 @@ export default function CaseDetailPage() {
     if (!currentCase) {
       return { totalContratado: 0, emProducaoOuEntregue: 0, saldoRestante: 0, rework: 0, defeituosa: 0 }
     }
-    if (isSupabaseMode) {
-      const totalContratado = Math.max(0, totalUpper + totalLower)
-      const emProducaoOuEntregue = linkedLabItems.filter((item) => item.status === 'em_producao' || item.status === 'prontas').length
-      const saldoRestante = Math.max(0, totalContratado - emProducaoOuEntregue)
-      return { totalContratado, emProducaoOuEntregue, saldoRestante, rework: 0, defeituosa: 0 }
-    }
-    return getReplacementBankSummary(currentCase.id)
-  }, [currentCase, isSupabaseMode, linkedLabItems, totalLower, totalUpper])
+    const totalContratado = Math.max(0, totalUpper + totalLower)
+    const entreguePaciente = Math.max(0, Math.trunc(deliveredUpper)) + Math.max(0, Math.trunc(deliveredLower))
+    const saldoRestante = Math.max(0, totalContratado - entreguePaciente)
+    return { totalContratado, emProducaoOuEntregue: entreguePaciente, saldoRestante, rework: 0, defeituosa: 0 }
+  }, [currentCase, deliveredLower, deliveredUpper, totalLower, totalUpper])
   const groupedScanFiles = useMemo(() => {
     const scanFiles = currentCase?.scanFiles ?? []
     const scan3d = {
@@ -601,6 +601,7 @@ export default function CaseDetailPage() {
     setInstallationNote(currentCase.installation?.note ?? '')
     setInstallationDeliveredUpper('0')
     setInstallationDeliveredLower('0')
+    setChangeEveryDaysInput(String(Math.max(1, Math.trunc(currentCase.changeEveryDays || 7))))
   }, [currentCase])
 
   if (!currentCase) {
@@ -1029,6 +1030,122 @@ export default function CaseDetailPage() {
     })
   }
 
+  const printLabOrder = () => {
+    if (!hasProductionOrder) {
+      addToast({ type: 'error', title: 'Imprimir OS', message: 'Gere a OS do LAB antes de imprimir.' })
+      return
+    }
+
+    const escapeHtml = (value: string) =>
+      value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;')
+
+    const caseLabel = currentCase.treatmentCode ?? currentCase.id
+    const planLabel = hasUpperArch && hasLowerArch
+      ? `Superior ${totalUpper} | Inferior ${totalLower}`
+      : hasUpperArch
+        ? `Superior ${totalUpper}`
+        : hasLowerArch
+          ? `Inferior ${totalLower}`
+          : '-'
+
+    const scheduleRows = changeSchedule.length
+      ? changeSchedule
+          .map((row) => {
+            const trocaPrevista = new Date(`${row.changeDate}T00:00:00`).toLocaleDateString('pt-BR')
+            const trocaReal = new Date(`${(row.actualChangeDate ?? row.changeDate)}T00:00:00`).toLocaleDateString('pt-BR')
+            const superior = hasUpperArch ? scheduleStateLabel(row.superiorState) : '-'
+            const inferior = hasLowerArch ? scheduleStateLabel(row.inferiorState) : '-'
+            return `
+              <tr>
+                <td>#${row.trayNumber}</td>
+                <td>${escapeHtml(trocaPrevista)}</td>
+                <td>${escapeHtml(trocaReal)}</td>
+                <td>${escapeHtml(superior)}</td>
+                <td>${escapeHtml(inferior)}</td>
+              </tr>
+            `
+          })
+          .join('')
+      : `
+        <tr>
+          <td colspan="5">Sem agenda de placas registrada.</td>
+        </tr>
+      `
+
+    const html = `
+      <!doctype html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Ordem de Servico LAB - ${escapeHtml(caseLabel)}</title>
+          <style>
+            @page { size: A4; margin: 14mm; }
+            body { font-family: Arial, sans-serif; color: #0f172a; font-size: 12px; margin: 0; }
+            .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 8px; margin-bottom: 12px; }
+            .title { font-size: 20px; font-weight: 700; margin: 0; color: #0b1220; }
+            .subtitle { margin-top: 4px; color: #334155; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+            .card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; }
+            .label { font-size: 11px; color: #475569; margin-bottom: 2px; }
+            .value { font-weight: 600; color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+            th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; }
+            th { background: #e2e8f0; color: #0f172a; }
+            .footer { margin-top: 16px; font-size: 10px; color: #475569; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 class="title">ORDEM DE SERVICO - LAB</h1>
+            <div class="subtitle">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
+          </div>
+          <div class="grid">
+            <div class="card"><div class="label">Paciente</div><div class="value">${escapeHtml(currentCase.patientName)}</div></div>
+            <div class="card"><div class="label">Caso / OS</div><div class="value">${escapeHtml(caseLabel)}</div></div>
+            <div class="card"><div class="label">Produto</div><div class="value">${escapeHtml(PRODUCT_TYPE_LABEL[currentCase.productType ?? 'alinhador_12m'])}</div></div>
+            <div class="card"><div class="label">Planejamento</div><div class="value">${escapeHtml(planLabel)}</div></div>
+            <div class="card"><div class="label">Troca</div><div class="value">${escapeHtml(String(currentCase.changeEveryDays))} dias</div></div>
+            <div class="card"><div class="label">Attachments</div><div class="value">${currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}</div></div>
+          </div>
+          <div class="grid">
+            <div class="card"><div class="label">Resumo LAB</div><div class="value">Em producao/CQ: ${inProductionCount} | Prontas: ${readyCount}</div></div>
+            <div class="card"><div class="label">Entregue ao dentista</div><div class="value">Sup ${progressUpper.delivered} | Inf ${progressLower.delivered}</div></div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Placa</th>
+                <th>Troca prevista</th>
+                <th>Data real</th>
+                <th>Superior</th>
+                <th>Inferior</th>
+              </tr>
+            </thead>
+            <tbody>${scheduleRows}</tbody>
+          </table>
+          <div class="footer">Documento gerado pelo OrthoScan. Uso interno do laboratorio.</div>
+        </body>
+      </html>
+    `
+
+    const popup = window.open('', '_blank', 'noopener,noreferrer')
+    if (!popup) {
+      addToast({ type: 'error', title: 'Imprimir OS', message: 'Nao foi possivel abrir a janela de impressao.' })
+      return
+    }
+
+    popup.document.open()
+    popup.document.write(html)
+    popup.document.close()
+    popup.focus()
+    popup.print()
+  }
+
   const markCaseFileError = (fileId: string) => {
     if (!canWriteLocalOnly) return
     const reason = window.prompt('Motivo do erro no anexo:')
@@ -1191,6 +1308,33 @@ export default function CaseDetailPage() {
     addToast({ type: 'success', title: 'Troca real atualizada' })
   }
 
+  const saveChangeEveryDays = async () => {
+    if (!canWrite) return
+    const parsed = Math.trunc(Number(changeEveryDaysInput))
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      addToast({ type: 'error', title: 'Troca', message: 'Informe um numero de dias valido.' })
+      return
+    }
+    if (parsed === currentCase.changeEveryDays) {
+      addToast({ type: 'info', title: 'Troca', message: 'Sem alteracoes para salvar.' })
+      return
+    }
+
+    if (isSupabaseMode) {
+      const result = await patchCaseDataSupabase(currentCase.id, { changeEveryDays: parsed })
+      if (!result.ok) {
+        addToast({ type: 'error', title: 'Troca', message: result.error })
+        return
+      }
+      setSupabaseRefreshKey((current) => current + 1)
+      addToast({ type: 'success', title: 'Troca', message: 'Dias de troca atualizados.' })
+      return
+    }
+
+    updateCase(currentCase.id, { changeEveryDays: parsed })
+    addToast({ type: 'success', title: 'Troca', message: 'Dias de troca atualizados.' })
+  }
+
   const renderScanFile = (item: NonNullable<Case['scanFiles']>[number], labelOverride?: string) => {
     const availability = fileAvailability(item)
     const status = item.status ?? 'ok'
@@ -1283,6 +1427,14 @@ export default function CaseDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            onClick={printLabOrder}
+            disabled={!isAlignerCase || !hasProductionOrder}
+            title={!hasProductionOrder ? 'Gere a OS do LAB antes de imprimir.' : ''}
+          >
+            Imprimir OS
+          </Button>
           <Link
             to="/app/cases"
             className="inline-flex h-10 items-center rounded-lg bg-slate-200 px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-300"
@@ -1588,9 +1740,25 @@ export default function CaseDetailPage() {
             </div>
             {isAlignerCase ? (
               <>
-                <p>
-                  <span className="font-medium">Troca a cada (dias):</span> {currentCase.changeEveryDays}
-                </p>
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-sm">
+                    <span className="font-medium">Troca a cada (dias):</span> {currentCase.changeEveryDays}
+                  </p>
+                  {canWrite ? (
+                    <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={changeEveryDaysInput}
+                        onChange={(event) => setChangeEveryDaysInput(event.target.value)}
+                        className="sm:w-40"
+                      />
+                      <Button size="sm" variant="secondary" onClick={() => void saveChangeEveryDays()}>
+                        Salvar dias de troca
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
                 <p>
                   <span className="font-medium">Placas:</span>{' '}
                   {hasUpperArch && hasLowerArch
@@ -1651,7 +1819,18 @@ export default function CaseDetailPage() {
       {isAlignerCase ? (
       <section className="mt-6">
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Producao (LAB)</h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">Producao (LAB)</h2>
+            {canReadLab ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => navigate(`/app/lab?tab=banco_restante&caseId=${currentCase.id}`)}
+              >
+                Banco de reposicoes
+              </Button>
+            ) : null}
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
             <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-700">Aguardando: {labSummary.aguardando_iniciar}</div>
             <div className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">Em producao: {labSummary.em_producao}</div>
@@ -1669,7 +1848,7 @@ export default function CaseDetailPage() {
                   <th className="px-3 py-2 font-semibold">Data real de troca</th>
                   {hasUpperArch ? <th className="px-3 py-2 font-semibold">Superior</th> : null}
                   {hasLowerArch ? <th className="px-3 py-2 font-semibold">Inferior</th> : null}
-                  <th className="px-3 py-2 font-semibold">Concluido LAB</th>
+                  <th className="px-3 py-2 font-semibold">Troca concluida</th>
                   <th className="px-3 py-2 font-semibold">Data de entrega</th>
                 </tr>
               </thead>
@@ -1681,33 +1860,38 @@ export default function CaseDetailPage() {
                     </td>
                   </tr>
                 ) : (
-                  changeSchedule.map((row) => (
-                    <tr key={row.trayNumber} className="border-t border-slate-100">
-                      <td className="px-3 py-2 font-semibold text-slate-800">#{row.trayNumber}</td>
-                      <td className="px-3 py-2 text-slate-700">{new Date(`${row.changeDate}T00:00:00`).toLocaleDateString('pt-BR')}</td>
-                      <td className="px-3 py-2 text-slate-700">
-                        <Input
-                          type="date"
-                          value={row.actualChangeDate ?? row.changeDate}
-                          onChange={(event) => saveActualChangeDate(row.trayNumber, event.target.value)}
-                          disabled={!canWrite}
-                        />
-                      </td>
-                      {hasUpperArch ? <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.superiorState)}`}>{scheduleStateLabel(row.superiorState)}</td> : null}
-                      {hasLowerArch ? <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.inferiorState)}`}>{scheduleStateLabel(row.inferiorState)}</td> : null}
-                      <td className="px-3 py-2 text-slate-700">
-                        {(!hasUpperArch || row.superiorState === 'entregue') && (!hasLowerArch || row.inferiorState === 'entregue') ? 'Sim' : 'Nao'}
-                      </td>
-                      <td className="px-3 py-2 text-slate-700">
-                        {row.trayNumber <= deliveredScheduleCount
-                          ? (() => {
-                              const deliveredAt = patientDeliveryDateByTray.get(row.trayNumber) ?? fallbackPatientDeliveryDate
-                              return deliveredAt ? new Date(`${deliveredAt}T00:00:00`).toLocaleDateString('pt-BR') : '-'
-                            })()
-                          : '-'}
-                      </td>
-                    </tr>
-                  ))
+                  changeSchedule.map((row) => {
+                    const dueReached = row.changeDate <= todayIso
+                    const upperCompleted = !hasUpperArch || row.trayNumber > totalUpper || (dueReached && row.trayNumber <= Math.max(0, Math.trunc(deliveredUpper)))
+                    const lowerCompleted = !hasLowerArch || row.trayNumber > totalLower || (dueReached && row.trayNumber <= Math.max(0, Math.trunc(deliveredLower)))
+                    const trocaConcluida = upperCompleted && lowerCompleted
+
+                    return (
+                      <tr key={row.trayNumber} className="border-t border-slate-100">
+                        <td className="px-3 py-2 font-semibold text-slate-800">#{row.trayNumber}</td>
+                        <td className="px-3 py-2 text-slate-700">{new Date(`${row.changeDate}T00:00:00`).toLocaleDateString('pt-BR')}</td>
+                        <td className="px-3 py-2 text-slate-700">
+                          <Input
+                            type="date"
+                            value={row.actualChangeDate ?? row.changeDate}
+                            onChange={(event) => saveActualChangeDate(row.trayNumber, event.target.value)}
+                            disabled={!canWrite}
+                          />
+                        </td>
+                        {hasUpperArch ? <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.superiorState)}`}>{scheduleStateLabel(row.superiorState)}</td> : null}
+                        {hasLowerArch ? <td className={`px-3 py-2 font-medium ${scheduleStateClass(row.inferiorState)}`}>{scheduleStateLabel(row.inferiorState)}</td> : null}
+                        <td className="px-3 py-2 text-slate-700">{trocaConcluida ? 'Sim' : 'Nao'}</td>
+                        <td className="px-3 py-2 text-slate-700">
+                          {row.trayNumber <= deliveredScheduleCount
+                            ? (() => {
+                                const deliveredAt = patientDeliveryDateByTray.get(row.trayNumber) ?? fallbackPatientDeliveryDate
+                                return deliveredAt ? new Date(`${deliveredAt}T00:00:00`).toLocaleDateString('pt-BR') : '-'
+                              })()
+                            : '-'}
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>

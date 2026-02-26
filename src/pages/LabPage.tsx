@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useToast } from '../app/ToastProvider'
 import RegisterDeliveryLotModal from '../components/cases/RegisterDeliveryLotModal'
 import LabBoard from '../components/lab/LabBoard'
@@ -185,6 +186,7 @@ function archLabel(arch: 'superior' | 'inferior' | 'ambos' | '') {
 }
 
 export default function LabPage() {
+  const [searchParams] = useSearchParams()
   const { db } = useDb()
   const { addToast } = useToast()
   const isSupabaseMode = DATA_MODE === 'supabase'
@@ -219,6 +221,13 @@ export default function LabPage() {
   const automationSettings = loadSystemSettings().guideAutomation
   const guideAutomationEnabled = automationSettings?.enabled !== false
   const guideAutomationLeadDays = Math.max(0, Math.trunc(automationSettings?.leadDays ?? 10))
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'esteira' || tab === 'reconfeccao' || tab === 'banco_restante') {
+      setBoardTab(tab)
+    }
+  }, [searchParams])
 
   const askProductionConfirmation = useCallback((productLabelText: string, archLabelText: string) => {
     return new Promise<boolean>((resolve) => {
@@ -545,6 +554,8 @@ export default function LabPage() {
       const matchSearch =
         query.length === 0 ||
         item.patientName.toLowerCase().includes(query) ||
+        (item.requestCode ?? '').toLowerCase().includes(query) ||
+        (item.caseId ?? '').toLowerCase().includes(query) ||
         `#${item.trayNumber}`.includes(query) ||
         String(item.trayNumber).includes(query)
       const matchPriority = priority === 'todos' || item.priority.toLowerCase() === priority
