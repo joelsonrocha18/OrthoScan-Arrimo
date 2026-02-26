@@ -125,7 +125,8 @@ export default function ScanDetailsModal({
   const submitNewAttachment = () => {
     if (!selectedFile) return
     const trimmedNote = note.trim()
-    if (!trimmedNote) return
+    const requiresNote = category !== 'projeto'
+    if (requiresNote && !trimmedNote) return
 
     const payload: {
       file: File
@@ -139,7 +140,7 @@ export default function ScanDetailsModal({
       file: selectedFile,
       kind: category,
       attachedAt,
-      note: trimmedNote,
+      note: trimmedNote || 'Planejamento importado',
     }
 
     if (category === 'scan3d') payload.arch = arch
@@ -150,6 +151,7 @@ export default function ScanDetailsModal({
     onAddAttachment(scan.id, payload)
     setSelectedFile(null)
     setNote('')
+    onClose()
   }
 
   const openAttachment = async (item: ScanAttachment) => {
@@ -339,7 +341,9 @@ export default function ScanDetailsModal({
               <input type="date" value={attachedAt} onChange={(event) => setAttachedAt(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Observacao (obrigatoria)</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                {category === 'projeto' ? 'Observacao (opcional)' : 'Observacao (obrigatoria)'}
+              </label>
               <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </div>
             <div>
@@ -355,7 +359,7 @@ export default function ScanDetailsModal({
               {selectedFile ? <p className="mt-1 text-xs text-slate-500">Arquivo: {selectedFile.name}</p> : null}
             </div>
             <div>
-              <Button onClick={submitNewAttachment} disabled={!selectedFile || !note.trim()}>
+              <Button onClick={submitNewAttachment} disabled={!selectedFile || (category !== 'projeto' && !note.trim())}>
                 Salvar novo anexo
               </Button>
             </div>

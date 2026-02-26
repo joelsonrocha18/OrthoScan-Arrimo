@@ -81,12 +81,14 @@ export async function addPatientDoc(payload: {
   if (DATA_MODE === 'supabase') {
     if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
     const profile = getSessionProfile()
-    if (!profile?.clinicId) return { ok: false as const, error: 'Sessao sem clinicId.' }
+    if (!profile?.id) return { ok: false as const, error: 'Sessao invalida. Faca login novamente.' }
+    const clinicId = profile?.clinicId ?? payload.clinicId
+    if (!clinicId) return { ok: false as const, error: 'Sessao sem clinicId e paciente sem clinica vinculada.' }
 
     let filePath: string | undefined
     if (payload.file) {
       filePath = buildPatientDocPath({
-        clinicId: profile.clinicId,
+        clinicId,
         patientId: payload.patientId,
         fileName: payload.file.name,
       })
@@ -97,7 +99,7 @@ export async function addPatientDoc(payload: {
     const { data, error } = await supabase
       .from('documents')
       .insert({
-        clinic_id: profile.clinicId,
+        clinic_id: clinicId,
         patient_id: payload.patientId,
         category: payload.category,
         title: payload.title.trim() || 'Documento',

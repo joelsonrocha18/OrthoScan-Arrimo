@@ -2,6 +2,7 @@ import { loadDb, saveDb } from './db'
 import { pushAudit } from './audit'
 import { debitReplacementBankForLabStart } from './replacementBankRepo'
 import { syncLabItemToCaseTray } from './sync'
+import { loadSystemSettings } from '../lib/systemSettings'
 import type { LabItem, LabStatus } from '../types/Lab'
 import { isAlignerProductType, normalizeProductType } from '../types/Product'
 
@@ -68,7 +69,24 @@ function nextPendingTrayNumber(caseItem: { trays: Array<{ trayNumber: number; st
   return pending[0]
 }
 
+function getGuideAutomationConfig() {
+  try {
+    const settings = loadSystemSettings()
+    return {
+      enabled: settings.guideAutomation?.enabled !== false,
+      leadDays: Math.max(0, Math.trunc(settings.guideAutomation?.leadDays ?? 10)),
+    }
+  } catch {
+    return {
+      enabled: true,
+      leadDays: 10,
+    }
+  }
+}
+
 function ensureProgrammedReplenishments(db: ReturnType<typeof loadDb>) {
+  const automation = getGuideAutomationConfig()
+  if (!automation.enabled) return false
   const today = new Date().toISOString().slice(0, 10)
   let created = false
   db.cases.forEach((caseItem) => {
@@ -81,7 +99,7 @@ function ensureProgrammedReplenishments(db: ReturnType<typeof loadDb>) {
       .filter((tray) => tray.state === 'pendente' && Boolean(tray.dueDate))
       .forEach((tray) => {
         const expected = tray.dueDate as string
-        const startDate = addDays(expected, -10)
+        const startDate = addDays(expected, -automation.leadDays)
         if (startDate > today) return
         const key = `${caseItem.id}_${tray.trayNumber}_${expected}`
         const exists = db.labItems.some(

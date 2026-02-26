@@ -46,6 +46,10 @@ export type Scan = {
   complaint?: string
   dentistGuidance?: string
   notes?: string
+  planningDetectedUpperTrays?: number
+  planningDetectedLowerTrays?: number
+  planningDetectedAt?: string
+  planningDetectedSource?: 'keyframes' | 'goalset'
   attachments: ScanAttachment[]
   status: ScanStatus
   linkedCaseId?: string

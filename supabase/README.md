@@ -63,12 +63,37 @@ Deploy:
 - `supabase functions deploy request-password-reset`
 - `supabase functions deploy complete-password-reset`
 
+## 4.4) Edge Function (Microsoft Drive / OneDrive)
+Configure variaveis:
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SITE_URL`
+- `ALLOWED_ORIGIN`
+- `MS_AUTH_MODE` (`app` ou `delegated`)
+- `MS_TENANT_ID`
+- `MS_CLIENT_ID`
+- `MS_CLIENT_SECRET`
+- `MS_DRIVE_ID` (obrigatorio em `app`; opcional em `delegated`)
+- `MS_DRIVE_BASE_PATH` (opcional, ex.: `orthoscan`)
+- `MS_DRIVE_LINK_SCOPE` (opcional: `anonymous` ou `organization`)
+- `MS_AUTHORITY` (somente `delegated`, ex.: `consumers`)
+- `MS_REFRESH_TOKEN` (somente `delegated`)
+
+Deploy:
+- `supabase functions deploy ms-drive-storage`
+
 ## 5) Frontend
 Crie um `.env` baseado em `.env.example`:
 ```
 VITE_DATA_MODE=supabase
 VITE_SUPABASE_URL=...
 VITE_SUPABASE_ANON_KEY=...
+VITE_STORAGE_PROVIDER=supabase
+```
+
+Para usar Microsoft Drive no frontend:
+```
+VITE_STORAGE_PROVIDER=microsoft_drive
 ```
 
 ## 6) Perfil inicial (master)

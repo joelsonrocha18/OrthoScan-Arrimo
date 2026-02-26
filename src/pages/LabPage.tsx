@@ -21,6 +21,8 @@ import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 import { listCasesForUser, listLabItemsForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
+import { loadSystemSettings } from '../lib/systemSettings'
+import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import { deleteLabItemSupabase } from '../repo/profileRepo'
 
 type ModalState =
@@ -101,6 +103,21 @@ function minusDays(dateIso: string, days: number) {
   const date = new Date(`${dateIso}T00:00:00`)
   date.setDate(date.getDate() - days)
   return date.toISOString().slice(0, 10)
+}
+
+function caseCode(caseItem: { treatmentCode?: string; id: string }) {
+  return caseItem.treatmentCode ?? caseItem.id
+}
+
+function nextRequestRevisionFromCodes(baseCode: string, codes: string[]) {
+  const escapedBase = baseCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`^${escapedBase}/(\\d+)$`)
+  const max = codes.reduce((acc, code) => {
+    const match = code.match(regex)
+    if (!match) return acc
+    return Math.max(acc, Number(match[1]))
+  }, 0)
+  return max + 1
 }
 
 function isReworkItem(item: LabItem) {
@@ -191,6 +208,7 @@ export default function LabPage() {
   const [supabaseCases, setSupabaseCases] = useState<typeof db.cases>([])
   const [supabasePatientOptions, setSupabasePatientOptions] = useState<PatientOption[]>([])
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
+  const supabaseSyncTick = useSupabaseSyncTick()
   const [productionConfirm, setProductionConfirm] = useState<ProductionConfirmState>({
     open: false,
     productLabel: '',
@@ -198,6 +216,9 @@ export default function LabPage() {
     resolver: null,
   })
   const labSyncSignature = `${db.cases.map((item) => item.updatedAt).join('|')}::${db.labItems.map((item) => item.updatedAt).join('|')}`
+  const automationSettings = loadSystemSettings().guideAutomation
+  const guideAutomationEnabled = automationSettings?.enabled !== false
+  const guideAutomationLeadDays = Math.max(0, Math.trunc(automationSettings?.leadDays ?? 10))
 
   const askProductionConfirmation = useCallback((productLabelText: string, archLabelText: string) => {
     return new Promise<boolean>((resolve) => {
@@ -343,7 +364,96 @@ export default function LabPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode, supabaseRefreshKey])
+  }, [isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
+
+  useEffect(() => {
+    if (!isSupabaseMode || !supabase || !guideAutomationEnabled) return
+    if (!supabaseCases.length) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    const requestCodes = supabaseItems
+      .map((item) => item.requestCode)
+      .filter((code): code is string => Boolean(code))
+    const inserts: Array<Record<string, unknown>> = []
+
+    supabaseCases.forEach((caseItem) => {
+      if (caseItem.contract?.status !== 'aprovado') return
+      const trays = caseItem.trays ?? []
+      const hasDelivered = trays.some((tray) => tray.state === 'entregue')
+      const hasPending = trays.some((tray) => tray.state === 'pendente')
+      if (!hasDelivered || !hasPending) return
+
+      trays
+        .filter((tray) => tray.state === 'pendente' && Boolean(tray.dueDate))
+        .forEach((tray) => {
+          const expected = tray.dueDate as string
+          const plannedDate = minusDays(expected, guideAutomationLeadDays)
+          if (plannedDate > today) return
+
+          const exists = supabaseItems.some(
+            (item) =>
+              item.caseId === caseItem.id &&
+              item.requestKind === 'reposicao_programada' &&
+              item.trayNumber === tray.trayNumber &&
+              (item.expectedReplacementDate === expected || item.dueDate === expected),
+          )
+          if (exists) return
+
+          const baseCode = caseCode(caseItem)
+          const revision = nextRequestRevisionFromCodes(baseCode, requestCodes)
+          const requestCode = `${baseCode}/${revision}`
+          requestCodes.push(requestCode)
+
+          const nowIso = new Date().toISOString()
+          const resolvedProductType = normalizeProductType(caseItem.productId ?? caseItem.productType)
+          const notes = `Solicitacao automatica de reposicao programada (${caseItem.id}_${tray.trayNumber}_${expected}).`
+          const data = {
+            requestCode,
+            requestKind: 'reposicao_programada',
+            expectedReplacementDate: expected,
+            productType: resolvedProductType,
+            productId: resolvedProductType,
+            arch: caseItem.arch ?? 'ambos',
+            plannedUpperQty: 0,
+            plannedLowerQty: 0,
+            planningDefinedAt: undefined,
+            trayNumber: tray.trayNumber,
+            patientName: caseItem.patientName,
+            patientId: caseItem.patientId,
+            dentistId: caseItem.dentistId,
+            clinicId: caseItem.clinicId,
+            plannedDate,
+            dueDate: expected,
+            priority: 'Medio',
+            notes,
+            status: 'aguardando_iniciar',
+          }
+
+          inserts.push({
+            clinic_id: caseItem.clinicId ?? null,
+            case_id: caseItem.id,
+            tray_number: tray.trayNumber,
+            status: 'aguardando_iniciar',
+            priority: 'Medio',
+            notes,
+            product_type: resolvedProductType,
+            product_id: resolvedProductType,
+            data,
+            updated_at: nowIso,
+          })
+        })
+    })
+
+    if (!inserts.length) return
+    void (async () => {
+      const { error } = await supabase.from('lab_items').insert(inserts)
+      if (error) {
+        addToast({ type: 'error', title: 'Automacao de guias', message: error.message })
+        return
+      }
+      setSupabaseRefreshKey((current) => current + 1)
+    })()
+  }, [addToast, guideAutomationEnabled, guideAutomationLeadDays, isSupabaseMode, supabase, supabaseCases, supabaseItems])
 
   const items = useMemo(() => {
     const source = isSupabaseMode ? supabaseItems : listLabItemsForUser(db, currentUser)
@@ -1120,7 +1230,7 @@ export default function LabPage() {
                       }
                       const installationDate = caseItem?.installation?.installedAt
                       const nextAlignerStartDate = caseItem ? getNextDeliveryDueDate(caseItem) : null
-                      const replenishmentLabDate = nextAlignerStartDate ? minusDays(nextAlignerStartDate, 10) : null
+                      const replenishmentLabDate = nextAlignerStartDate ? minusDays(nextAlignerStartDate, guideAutomationLeadDays) : null
                       const readyForDelivery = !!(caseItem && casesReadyForDelivery.has(caseItem.id))
                       const treatmentStatus =
                         caseItem?.status === 'finalizado'

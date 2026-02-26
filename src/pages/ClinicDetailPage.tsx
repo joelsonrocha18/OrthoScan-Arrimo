@@ -15,6 +15,8 @@ import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 import { DATA_MODE } from '../data/dataMode'
 import { supabase } from '../lib/supabaseClient'
+import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
+import { clinicCode } from '../lib/entityCode'
 
 type ClinicForm = {
   tradeName: string
@@ -80,6 +82,7 @@ export default function ClinicDetailPage() {
   const navigate = useNavigate()
   const { db } = useDb()
   const isSupabaseMode = DATA_MODE === 'supabase'
+  const supabaseSyncTick = useSupabaseSyncTick()
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'clinics.write')
   const canDelete = can(currentUser, 'clinics.delete')
@@ -137,7 +140,7 @@ export default function ClinicDetailPage() {
     return () => {
       active = false
     }
-  }, [isNew, isSupabaseMode, params.id])
+  }, [isNew, isSupabaseMode, params.id, supabaseSyncTick])
 
   useEffect(() => {
     if (!existing) {
@@ -389,6 +392,7 @@ export default function ClinicDetailPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
             {isNew ? 'Nova clinica' : existing?.tradeName}
           </h1>
+          {!isNew && existing ? <p className="mt-1 text-xs font-semibold text-slate-500">{clinicCode(existing.id)}</p> : null}
           <p className="mt-2 text-sm text-slate-500">
             Clinica {existing?.deletedAt ? '(Excluida)' : ''}
           </p>

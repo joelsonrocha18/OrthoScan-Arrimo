@@ -14,6 +14,8 @@ import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 import { supabase } from '../lib/supabaseClient'
 import { parseDentistsSpreadsheet, readSpreadsheetFileText } from '../lib/spreadsheetImport'
+import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
+import { dentistCode } from '../lib/entityCode'
 
 function nowIso() {
   return new Date().toISOString()
@@ -38,6 +40,7 @@ export default function DentistsPage() {
   const [importMessage, setImportMessage] = useState('')
   const [importing, setImporting] = useState(false)
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
+  const supabaseSyncTick = useSupabaseSyncTick()
   const [supabaseDentists, setSupabaseDentists] = useState<Array<{
     id: string
     name: string
@@ -76,7 +79,7 @@ export default function DentistsPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode, supabaseRefreshKey])
+  }, [isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
 
   const dentistsSource = isSupabaseMode ? supabaseDentists : db.dentists.filter((item) => item.type === 'dentista')
 
@@ -272,7 +275,10 @@ export default function DentistsPage() {
                   const status = statusLabel(item)
                   return (
                     <tr key={item.id} className="bg-white">
-                      <td className="px-5 py-4 text-sm font-medium text-slate-900">{item.name}</td>
+                      <td className="px-5 py-4 text-sm font-medium text-slate-900">
+                        <div>{item.name}</div>
+                        <div className="text-xs font-semibold text-slate-500">{dentistCode(item.id)}</div>
+                      </td>
                       <td className="px-5 py-4 text-sm text-slate-700">{item.cro || '-'}</td>
                       <td className="px-5 py-4 text-sm text-slate-700">{item.phone || '-'}</td>
                       <td className="px-5 py-4 text-sm text-slate-700">{item.whatsapp ? <WhatsappLink value={item.whatsapp} /> : '-'}</td>

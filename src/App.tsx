@@ -4,7 +4,9 @@ import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router
 import ProtectedRoute from './app/ProtectedRoute'
 import { ToastProvider } from './app/ToastProvider'
 import { getAuthProvider } from './auth/authProvider'
-import { applyStoredTheme } from './lib/systemSettings'
+import { DATA_MODE } from './data/dataMode'
+import { applyStoredTheme, saveSystemSettings } from './lib/systemSettings'
+import { loadSystemSettingsSupabase } from './repo/systemSettingsRepo'
 
 const CaseDetailPage = lazy(() => import('./pages/CaseDetailPage'))
 const CasesPage = lazy(() => import('./pages/CasesPage'))
@@ -72,6 +74,13 @@ function RootRedirect() {
 export default function App() {
   useEffect(() => {
     applyStoredTheme()
+    if (DATA_MODE !== 'supabase') return
+    void (async () => {
+      const remote = await loadSystemSettingsSupabase()
+      if (!remote) return
+      saveSystemSettings(remote)
+      applyStoredTheme()
+    })()
   }, [])
 
   const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter

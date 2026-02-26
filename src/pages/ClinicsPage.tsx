@@ -11,7 +11,9 @@ import { can } from '../auth/permissions'
 import { getCurrentUser } from '../lib/auth'
 import { DATA_MODE } from '../data/dataMode'
 import { supabase } from '../lib/supabaseClient'
+import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import type { Clinic } from '../types/Clinic'
+import { clinicCode } from '../lib/entityCode'
 
 function mapSupabaseClinic(row: Record<string, unknown>): Clinic {
   return {
@@ -38,6 +40,7 @@ export default function ClinicsPage() {
   const canWrite = can(currentUser, 'clinics.write')
   const [query, setQuery] = useState('')
   const [showDeleted, setShowDeleted] = useState(false)
+  const supabaseSyncTick = useSupabaseSyncTick()
   const [supabaseClinics, setSupabaseClinics] = useState<Clinic[]>([])
 
   useEffect(() => {
@@ -58,7 +61,7 @@ export default function ClinicsPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode])
+  }, [isSupabaseMode, supabaseSyncTick])
 
   const clinics = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -121,7 +124,10 @@ export default function ClinicsPage() {
               <tbody className="divide-y divide-slate-200">
                 {clinics.map((clinic) => (
                   <tr key={clinic.id} className="bg-white">
-                    <td className="px-5 py-4 text-sm font-medium text-slate-900">{clinic.tradeName}</td>
+                    <td className="px-5 py-4 text-sm font-medium text-slate-900">
+                      <div>{clinic.tradeName}</div>
+                      <div className="text-xs font-semibold text-slate-500">{clinicCode(clinic.id)}</div>
+                    </td>
                     <td className="px-5 py-4 text-sm text-slate-700">{clinic.cnpj || '-'}</td>
                     <td className="px-5 py-4 text-sm text-slate-700">
                       {clinic.address?.city ? `${clinic.address.city}/${clinic.address.state ?? '-'}` : '-'}

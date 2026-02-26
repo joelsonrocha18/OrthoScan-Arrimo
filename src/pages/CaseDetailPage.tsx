@@ -19,6 +19,7 @@ import { getCurrentUser } from '../lib/auth'
 import { can } from '../auth/permissions'
 import { listCasesForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
+import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import { deleteCaseSupabase, generateCaseLabOrderSupabase, listCaseLabItemsSupabase, patchCaseDataSupabase } from '../repo/profileRepo'
 import type { LabItem } from '../types/Lab'
 import { isAlignerProductType, normalizeProductType, PRODUCT_TYPE_LABEL } from '../types/Product'
@@ -278,6 +279,7 @@ export default function CaseDetailPage() {
   const [supabaseCase, setSupabaseCase] = useState<Case | null>(null)
   const [supabaseLabItems, setSupabaseLabItems] = useState<LabItem[]>([])
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
+  const supabaseSyncTick = useSupabaseSyncTick()
 
   useEffect(() => {
     if (!isSupabaseMode || !supabase || !params.id) {
@@ -302,7 +304,7 @@ export default function CaseDetailPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode, params.id, supabaseRefreshKey])
+  }, [isSupabaseMode, params.id, supabaseRefreshKey, supabaseSyncTick])
 
   useEffect(() => {
     if (!isSupabaseMode || !params.id) {
@@ -317,7 +319,7 @@ export default function CaseDetailPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode, params.id, supabaseRefreshKey])
+  }, [isSupabaseMode, params.id, supabaseRefreshKey, supabaseSyncTick])
 
   const currentCase = useMemo(
     () => (isSupabaseMode ? supabaseCase : params.id ? db.cases.find((item) => item.id === params.id) ?? null : null),

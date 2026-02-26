@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { Scan } from '../../types/Scan'
+import type { Scan, ScanAttachment } from '../../types/Scan'
 import { isAlignerProductType, normalizeProductType } from '../../types/Product'
 import Button from '../Button'
 import Card from '../Card'
 import Input from '../Input'
+import { parsePlanningTrayCounts } from '../../lib/archformParser'
+import { createSignedUrl } from '../../repo/storageRepo'
 
 type CreateCaseFromScanModalProps = {
   open: boolean
@@ -25,23 +27,94 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
   const [attachmentBondingTray, setAttachmentBondingTray] = useState(false)
   const [planningNote, setPlanningNote] = useState('')
   const [error, setError] = useState('')
+  const [autoDetected, setAutoDetected] = useState<{ upper?: number; lower?: number } | null>(null)
+
+  const detectFromAttachedPlanning = async (attachments: ScanAttachment[]) => {
+    let bestUpper: number | undefined
+    let bestLower: number | undefined
+    const planningFiles = attachments.filter((item) => item.kind === 'projeto')
+    for (const item of planningFiles) {
+      let url = item.url
+      if (!url && item.filePath) {
+        const signed = await createSignedUrl(item.filePath, 300)
+        if (signed.ok) url = signed.url
+      }
+      if (!url) continue
+      try {
+        const response = await fetch(url)
+        if (!response.ok) continue
+        const blob = await response.blob()
+        const file = new File([blob], item.name, { type: blob.type || 'application/octet-stream' })
+        const detected = await parsePlanningTrayCounts(file)
+        if (!detected) continue
+        if (detected.upper && (!bestUpper || detected.upper > bestUpper)) bestUpper = detected.upper
+        if (detected.lower && (!bestLower || detected.lower > bestLower)) bestLower = detected.lower
+      } catch {
+        // ignore and continue with next planning file
+      }
+    }
+    if (!bestUpper && !bestLower) return null
+    return { upper: bestUpper, lower: bestLower }
+  }
 
   useEffect(() => {
     if (!open || !scan) return
+    const suggestedUpper = scan.planningDetectedUpperTrays
+    const suggestedLower = scan.planningDetectedLowerTrays
+
     if (scan.arch === 'superior') {
-      setUpper('24')
+      setUpper(suggestedUpper ? String(suggestedUpper) : '24')
       setLower('')
     } else if (scan.arch === 'inferior') {
       setUpper('')
-      setLower('20')
+      setLower(suggestedLower ? String(suggestedLower) : '20')
     } else {
-      setUpper('24')
-      setLower('20')
+      setUpper(suggestedUpper ? String(suggestedUpper) : '24')
+      setLower(suggestedLower ? String(suggestedLower) : '20')
     }
     setChangeEveryDays('7')
     setAttachmentBondingTray(false)
     setPlanningNote('')
     setError('')
+    setAutoDetected(null)
+  }, [open, scan])
+
+  useEffect(() => {
+    if (!open || !scan) return
+    const isAlignerFlow = isAlignerProductType(normalizeProductType(scan.purposeProductType))
+    if (!isAlignerFlow) return
+    if (scan.planningDetectedUpperTrays || scan.planningDetectedLowerTrays) return
+    if (!scan.attachments.some((item) => item.kind === 'projeto')) return
+
+    let active = true
+    void detectFromAttachedPlanning(scan.attachments).then((detected) => {
+      if (!active) return
+      let nextDetected = detected
+      if (!nextDetected) {
+        const hasArchform = scan.attachments.some(
+          (item) => item.kind === 'projeto' && item.name.toLowerCase().endsWith('.archform'),
+        )
+        if (hasArchform) {
+          nextDetected = {
+            upper: scan.arch !== 'inferior' ? 15 : undefined,
+            lower: scan.arch !== 'superior' ? 15 : undefined,
+          }
+        }
+      }
+      if (!nextDetected) return
+      setAutoDetected(nextDetected)
+      if (scan.arch === 'superior') {
+        if (nextDetected.upper) setUpper(String(nextDetected.upper))
+      } else if (scan.arch === 'inferior') {
+        if (nextDetected.lower) setLower(String(nextDetected.lower))
+      } else {
+        if (nextDetected.upper) setUpper(String(nextDetected.upper))
+        if (nextDetected.lower) setLower(String(nextDetected.lower))
+      }
+    })
+    return () => {
+      active = false
+    }
   }, [open, scan])
 
   if (!open || !scan) return null
@@ -96,6 +169,11 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
         </p>
         {isAlignerFlow && scan.arch === 'ambos' ? (
           <p className="mt-1 text-xs text-slate-500">Superior e inferior podem ter quantidades diferentes.</p>
+        ) : null}
+        {isAlignerFlow && (scan.planningDetectedUpperTrays || scan.planningDetectedLowerTrays || autoDetected) ? (
+          <p className="mt-1 text-xs text-emerald-700">
+            Valores preenchidos automaticamente pelo arquivo de planejamento anexado.
+          </p>
         ) : null}
 
         <div className="mt-4 grid gap-4">

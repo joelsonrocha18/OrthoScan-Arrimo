@@ -14,7 +14,9 @@ import { can } from '../auth/permissions'
 import { listPatientsForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
 import { parsePatientsSpreadsheet, readSpreadsheetFileText } from '../lib/spreadsheetImport'
+import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import type { Scan } from '../types/Scan'
+import { patientCode } from '../lib/entityCode'
 
 function nowIso() {
   return new Date().toISOString()
@@ -37,6 +39,7 @@ export default function PatientsPage() {
   const [importMessage, setImportMessage] = useState('')
   const [importing, setImporting] = useState(false)
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
+  const supabaseSyncTick = useSupabaseSyncTick()
   const [supabasePatients, setSupabasePatients] = useState<Array<{
     id: string
     name: string
@@ -108,7 +111,7 @@ export default function PatientsPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode, supabaseRefreshKey])
+  }, [isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
 
   const localPatients = useMemo(() => listPatientsForUser(db, currentUser), [db, currentUser])
   const sourcePatients = isSupabaseMode ? supabasePatients : localPatients
@@ -337,7 +340,10 @@ export default function PatientsPage() {
               <tbody className="divide-y divide-slate-200">
                 {patients.map((item) => (
                   <tr key={item.id} className="bg-white">
-                    <td className="px-5 py-4 text-sm font-medium text-slate-900">{item.name}</td>
+                    <td className="px-5 py-4 text-sm font-medium text-slate-900">
+                      <div>{item.name}</div>
+                      <div className="text-xs font-semibold text-slate-500">{patientCode(item.id)}</div>
+                    </td>
                     <td className="px-5 py-4 text-sm text-slate-700">
                       {item.primaryDentistId
                         ? dentistsById.get(item.primaryDentistId) ?? '-'

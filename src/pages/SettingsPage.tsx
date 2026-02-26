@@ -23,11 +23,13 @@ import {
   applyTheme,
   loadSystemSettings,
   saveSystemSettings,
+  type SystemSettings,
   type PricingArchScope,
   type AppThemeMode,
   type LabCompanyProfile,
   type PricingMode,
 } from '../lib/systemSettings'
+import { loadSystemSettingsSupabase, saveSystemSettingsSupabase } from '../repo/systemSettingsRepo'
 import { createUser, resetUserPassword, setUserActive, softDeleteUser, updateUser } from '../repo/userRepo'
 import { requestPasswordReset, sendAccessEmail } from '../repo/accessRepo'
 import { listClinicsSupabase, listDentistsSupabase, type ClinicOption, type DentistOption } from '../repo/directoryRepo'
@@ -291,6 +293,12 @@ export default function SettingsPage() {
   const canManageUsers = can(currentUser, 'users.write')
   const canDeleteUsers = can(currentUser, 'users.delete')
 
+  const persistSettings = async (next: SystemSettings) => {
+    saveSystemSettings(next)
+    if (!isSupabaseMode) return
+    await saveSystemSettingsSupabase(next)
+  }
+
   useEffect(() => {
     let active = true
     if (!isSupabaseMode) {
@@ -303,6 +311,21 @@ export default function SettingsPage() {
       setClinicsSupabase(clinics)
       setDentistsSupabase(dentists)
     })
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode])
+
+  useEffect(() => {
+    if (!isSupabaseMode) return
+    let active = true
+    void (async () => {
+      const remote = await loadSystemSettingsSupabase()
+      if (!remote || !active) return
+      saveSystemSettings(remote)
+      setSettingsState(remote)
+      setLabForm(remote.labCompany)
+    })()
     return () => {
       active = false
     }
@@ -510,7 +533,7 @@ export default function SettingsPage() {
   const saveTheme = (theme: AppThemeMode) => {
     applyTheme(theme)
     const next = addAuditEntry({ ...settingsState, theme }, { action: 'theme_changed', actor: currentUser?.email, details: theme })
-    saveSystemSettings(next)
+    void persistSettings(next)
     setSettingsState(next)
   }
 
@@ -528,9 +551,30 @@ export default function SettingsPage() {
       return
     }
     const next = addAuditEntry({ ...settingsState, labCompany: { ...labForm, cnpj: formatCnpj(labForm.cnpj), updatedAt: new Date().toISOString() } }, { action: 'lab_profile_updated', actor: currentUser?.email, details: labForm.tradeName })
-    saveSystemSettings(next)
+    void persistSettings(next)
     setSettingsState(next)
     addToast({ type: 'success', title: 'Cadastro salvo' })
+  }
+
+  const saveGuideAutomation = () => {
+    const leadDays = Math.max(0, Math.trunc(settingsState.guideAutomation?.leadDays ?? 10))
+    const next = addAuditEntry(
+      {
+        ...settingsState,
+        guideAutomation: {
+          enabled: settingsState.guideAutomation?.enabled !== false,
+          leadDays,
+        },
+      },
+      {
+        action: 'settings.guide_automation.updated',
+        actor: currentUser?.email,
+        details: `enabled=${settingsState.guideAutomation?.enabled !== false}; leadDays=${leadDays}`,
+      },
+    )
+    void persistSettings(next)
+    setSettingsState(next)
+    addToast({ type: 'success', title: 'Automacao de guias salva' })
   }
 
   const addPriceProduct = () => {
@@ -596,7 +640,7 @@ export default function SettingsPage() {
       },
       { action: 'settings.pricing.add', actor: currentUser?.email, details: `Produto: ${name}` },
     )
-    saveSystemSettings(next)
+    void persistSettings(next)
     setSettingsState(next)
     setPriceForm({
       productFlow: 'impressoes',
@@ -624,7 +668,7 @@ export default function SettingsPage() {
       },
       { action: 'settings.pricing.delete', actor: currentUser?.email, details: `Produto: ${target.name}` },
     )
-    saveSystemSettings(next)
+    void persistSettings(next)
     setSettingsState(next)
     addToast({ type: 'info', title: 'Produto removido da politica de preco.' })
   }
@@ -643,7 +687,7 @@ export default function SettingsPage() {
       },
       { action: 'settings.pricing.toggle', actor: currentUser?.email, details: `${target.name}: ${isActive ? 'ativo' : 'inativo'}` },
     )
-    saveSystemSettings(next)
+    void persistSettings(next)
     setSettingsState(next)
   }
 
@@ -897,6 +941,53 @@ export default function SettingsPage() {
             <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Endereco completo *</label><Input value={labForm.addressLine} onChange={(event) => setLabForm((c) => ({ ...c, addressLine: event.target.value }))} /></div>
           </div>
           <div className="mt-4"><Button onClick={saveLab}>Salvar cadastro do laboratorio</Button></div>
+        </Card>
+        <Card>
+          <h2 className="text-lg font-semibold text-slate-900">Automacao de guias</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Define quando o sistema gera automaticamente as guias/OS de reposicao com base na data prevista de troca.
+          </p>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={settingsState.guideAutomation?.enabled !== false}
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    guideAutomation: {
+                      enabled: event.target.checked,
+                      leadDays: current.guideAutomation?.leadDays ?? 10,
+                    },
+                  }))
+                }
+              />
+              Ativar geracao automatica de guias
+            </label>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">
+                Gerar com antecedencia de (dias)
+              </label>
+              <Input
+                type="number"
+                min={0}
+                value={String(settingsState.guideAutomation?.leadDays ?? 10)}
+                onChange={(event) => {
+                  const value = Number(event.target.value)
+                  setSettingsState((current) => ({
+                    ...current,
+                    guideAutomation: {
+                      enabled: current.guideAutomation?.enabled !== false,
+                      leadDays: Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0,
+                    },
+                  }))
+                }}
+              />
+            </div>
+          </div>
+          <div className="mt-4">
+            <Button onClick={saveGuideAutomation}>Salvar automacao de guias</Button>
+          </div>
         </Card>
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Ajuda e LGPD</h2>

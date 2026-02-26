@@ -8,6 +8,8 @@ import WhatsappLink from '../components/WhatsappLink'
 import AppShell from '../layouts/AppShell'
 import type { Patient } from '../types/Patient'
 import type { PatientDocument } from '../types/PatientDocument'
+import type { Scan } from '../types/Scan'
+import type { Case } from '../types/Case'
 import { useDb } from '../lib/useDb'
 import { can } from '../auth/permissions'
 import { listPatientsForUser } from '../auth/scope'
@@ -30,6 +32,8 @@ import DocumentsList from '../components/documents/DocumentsList'
 import { validatePatientDocFile } from '../repo/storageRepo'
 import { DATA_MODE } from '../data/dataMode'
 import { supabase } from '../lib/supabaseClient'
+import { patientCode } from '../lib/entityCode'
+import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 
 type PatientForm = {
   name: string
@@ -89,6 +93,24 @@ const emptyDocForm: DocumentForm = {
   file: null,
 }
 
+function fileExt(name: string | undefined) {
+  const value = (name ?? '').toLowerCase()
+  const idx = value.lastIndexOf('.')
+  return idx >= 0 ? value.slice(idx) : ''
+}
+
+function isImageDoc(doc: PatientDocument) {
+  const mt = (doc.mimeType ?? '').toLowerCase()
+  const ext = fileExt(doc.fileName)
+  return mt.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.heic', '.webp'].includes(ext)
+}
+
+function isPdfDoc(doc: PatientDocument) {
+  const mt = (doc.mimeType ?? '').toLowerCase()
+  const ext = fileExt(doc.fileName)
+  return mt.includes('pdf') || ext === '.pdf'
+}
+
 function formatCpf(value: string) {
   const digits = value.replace(/\D/g, '').slice(0, 11)
   const p1 = digits.slice(0, 3)
@@ -119,6 +141,7 @@ export default function PatientDetailPage() {
   const canDocsWrite = can(currentUser, 'docs.write')
   const canDocsAdmin = currentUser?.role === 'master_admin' || currentUser?.role === 'dentist_admin' || currentUser?.role === 'receptionist'
   const isSupabaseMode = DATA_MODE === 'supabase'
+  const supabaseSyncTick = useSupabaseSyncTick()
   const isNew = params.id === 'new'
   const localExisting = useMemo(() => (!isNew && params.id ? getPatient(params.id) : null), [isNew, params.id])
   const [supabaseExisting, setSupabaseExisting] = useState<Patient | null>(null)
@@ -132,6 +155,8 @@ export default function PatientDetailPage() {
   const [docForm, setDocForm] = useState<DocumentForm>(emptyDocForm)
   const [docEditOpen, setDocEditOpen] = useState(false)
   const [docEditId, setDocEditId] = useState<string>('')
+  const [docPreviewUrls, setDocPreviewUrls] = useState<Record<string, string>>({})
+  const [lightbox, setLightbox] = useState<{ open: boolean; title: string; url: string }>({ open: false, title: '', url: '' })
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
 
@@ -143,6 +168,8 @@ export default function PatientDetailPage() {
     clinicId?: string
   }>>([])
   const [supabaseClinics, setSupabaseClinics] = useState<Array<{ id: string; tradeName: string }>>([])
+  const [supabasePatientScans, setSupabasePatientScans] = useState<Scan[]>([])
+  const [supabasePatientCases, setSupabasePatientCases] = useState<Case[]>([])
   const dentists = useMemo(
     () =>
       isSupabaseMode
@@ -239,27 +266,29 @@ export default function PatientDetailPage() {
     return () => {
       active = false
     }
-  }, [isNew, isSupabaseMode, params.id])
+  }, [isNew, isSupabaseMode, params.id, supabaseSyncTick])
 
   const scans = useMemo(() => {
     if (!existing) return []
+    if (isSupabaseMode) return supabasePatientScans
     const name = existing.name.toLowerCase()
     return db.scans.filter(
       (scan) =>
         (scan.patientId && scan.patientId === existing.id) ||
         (!scan.patientId && scan.patientName.toLowerCase() === name),
     )
-  }, [db.scans, existing])
+  }, [db.scans, existing, isSupabaseMode, supabasePatientScans])
 
   const cases = useMemo(() => {
     if (!existing) return []
+    if (isSupabaseMode) return supabasePatientCases
     const name = existing.name.toLowerCase()
     return db.cases.filter(
       (caseItem) =>
         (caseItem.patientId && caseItem.patientId === existing.id) ||
         (!caseItem.patientId && caseItem.patientName.toLowerCase() === name),
     )
-  }, [db.cases, existing])
+  }, [db.cases, existing, isSupabaseMode, supabasePatientCases])
   const relatedAuditEvents = useMemo(() => {
     if (!existing) return []
     const scanIds = new Set(scans.map((item) => item.id))
@@ -321,6 +350,159 @@ export default function PatientDetailPage() {
       active = false
     }
   }, [existing, db.patientDocuments, db.clinics, db.scans])
+
+  useEffect(() => {
+    if (!isSupabaseMode || !supabase || !existing) {
+      setSupabasePatientScans([])
+      setSupabasePatientCases([])
+      return
+    }
+    let active = true
+    void (async () => {
+      const [scansByPatientRes, scansByNameRes, casesByPatientRes, casesByNameRes] = await Promise.all([
+        supabase
+          .from('scans')
+          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, created_at, updated_at, data')
+          .eq('patient_id', existing.id)
+          .is('deleted_at', null),
+        supabase
+          .from('scans')
+          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, created_at, updated_at, data')
+          .is('patient_id', null)
+          .eq('data->>patientName', existing.name)
+          .is('deleted_at', null),
+        supabase
+          .from('cases')
+          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, created_at, updated_at, data')
+          .eq('patient_id', existing.id)
+          .is('deleted_at', null),
+        supabase
+          .from('cases')
+          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, created_at, updated_at, data')
+          .is('patient_id', null)
+          .eq('data->>patientName', existing.name)
+          .is('deleted_at', null),
+      ])
+      if (!active) return
+
+      const scansRaw = [
+        ...((scansByPatientRes.data ?? []) as Array<Record<string, unknown>>),
+        ...((scansByNameRes.data ?? []) as Array<Record<string, unknown>>),
+      ]
+      const scansMap = new Map<string, Scan>()
+      scansRaw.forEach((row) => {
+        const data = row.data && typeof row.data === 'object' ? (row.data as Record<string, unknown>) : {}
+        scansMap.set(String(row.id), {
+          id: String(row.id),
+          clinicId: (row.clinic_id as string | undefined) ?? undefined,
+          patientId: (row.patient_id as string | undefined) ?? undefined,
+          dentistId: (row.dentist_id as string | undefined) ?? undefined,
+          requestedByDentistId: (row.requested_by_dentist_id as string | undefined) ?? undefined,
+          patientName: String(data.patientName ?? existing.name),
+          purposeProductId: data.purposeProductId as string | undefined,
+          purposeProductType: data.purposeProductType as string | undefined,
+          purposeLabel: data.purposeLabel as string | undefined,
+          serviceOrderCode: data.serviceOrderCode as string | undefined,
+          scanDate: String(data.scanDate ?? String(row.created_at ?? '').slice(0, 10)),
+          arch: (data.arch as Scan['arch'] | undefined) ?? 'ambos',
+          complaint: data.complaint as string | undefined,
+          dentistGuidance: data.dentistGuidance as string | undefined,
+          notes: data.notes as string | undefined,
+          planningDetectedUpperTrays: data.planningDetectedUpperTrays as number | undefined,
+          planningDetectedLowerTrays: data.planningDetectedLowerTrays as number | undefined,
+          planningDetectedAt: data.planningDetectedAt as string | undefined,
+          planningDetectedSource: data.planningDetectedSource as Scan['planningDetectedSource'] | undefined,
+          attachments: (Array.isArray(data.attachments) ? data.attachments : []) as Scan['attachments'],
+          status: (data.status as Scan['status'] | undefined) ?? 'pendente',
+          linkedCaseId: data.linkedCaseId as string | undefined,
+          createdAt: String(data.createdAt ?? row.created_at ?? new Date().toISOString()),
+          updatedAt: String(data.updatedAt ?? row.updated_at ?? new Date().toISOString()),
+        })
+      })
+      setSupabasePatientScans(Array.from(scansMap.values()).sort((a, b) => b.scanDate.localeCompare(a.scanDate)))
+
+      const casesRaw = [
+        ...((casesByPatientRes.data ?? []) as Array<Record<string, unknown>>),
+        ...((casesByNameRes.data ?? []) as Array<Record<string, unknown>>),
+      ]
+      const casesMap = new Map<string, Case>()
+      casesRaw.forEach((row) => {
+        const data = row.data && typeof row.data === 'object' ? (row.data as Record<string, unknown>) : {}
+        casesMap.set(String(row.id), {
+          id: String(row.id),
+          productType: data.productType as Case['productType'],
+          productId: data.productId as Case['productId'],
+          treatmentCode: data.treatmentCode as string | undefined,
+          treatmentOrigin: (data.treatmentOrigin as Case['treatmentOrigin']) ?? 'externo',
+          patientName: String(data.patientName ?? existing.name),
+          patientId: (row.patient_id as string | undefined) ?? undefined,
+          dentistId: (row.dentist_id as string | undefined) ?? undefined,
+          requestedByDentistId: (row.requested_by_dentist_id as string | undefined) ?? undefined,
+          clinicId: (row.clinic_id as string | undefined) ?? undefined,
+          scanDate: String(data.scanDate ?? String(row.created_at ?? '').slice(0, 10)),
+          totalTrays: Number(data.totalTrays ?? 0),
+          changeEveryDays: Number(data.changeEveryDays ?? 0),
+          totalTraysUpper: data.totalTraysUpper as number | undefined,
+          totalTraysLower: data.totalTraysLower as number | undefined,
+          attachmentBondingTray: Boolean(data.attachmentBondingTray),
+          status: (data.status as Case['status']) ?? (row.status as Case['status']) ?? 'planejamento',
+          phase: (data.phase as Case['phase']) ?? 'planejamento',
+          budget: data.budget as Case['budget'],
+          contract: data.contract as Case['contract'],
+          deliveryLots: (data.deliveryLots as Case['deliveryLots']) ?? [],
+          installation: data.installation as Case['installation'],
+          trays: (data.trays as Case['trays']) ?? [],
+          attachments: (data.attachments as Case['attachments']) ?? [],
+          sourceScanId: data.sourceScanId as string | undefined,
+          arch: (data.arch as Case['arch']) ?? 'ambos',
+          complaint: data.complaint as string | undefined,
+          dentistGuidance: data.dentistGuidance as string | undefined,
+          scanFiles: data.scanFiles as Case['scanFiles'],
+          createdAt: String(data.createdAt ?? row.created_at ?? new Date().toISOString()),
+          updatedAt: String(data.updatedAt ?? row.updated_at ?? new Date().toISOString()),
+        })
+      })
+      setSupabasePatientCases(Array.from(casesMap.values()))
+    })()
+    return () => {
+      active = false
+    }
+  }, [existing, isSupabaseMode, supabaseSyncTick])
+
+  useEffect(() => {
+    let active = true
+    if (docs.length === 0) {
+      setDocPreviewUrls({})
+      return
+    }
+
+    const previewableDocs = docs.filter((doc) => isImageDoc(doc) || isPdfDoc(doc))
+    if (previewableDocs.length === 0) {
+      setDocPreviewUrls({})
+      return
+    }
+
+    void (async () => {
+      const entries = await Promise.all(
+        previewableDocs.map(async (doc) => {
+          if (doc.url) return [doc.id, doc.url] as const
+          const resolved = await resolvePatientDocUrl(doc)
+          return resolved.ok ? ([doc.id, resolved.url] as const) : null
+        }),
+      )
+      if (!active) return
+      const next: Record<string, string> = {}
+      entries.forEach((item) => {
+        if (!item) return
+        next[item[0]] = item[1]
+      })
+      setDocPreviewUrls(next)
+    })()
+
+    return () => {
+      active = false
+    }
+  }, [docs])
 
   useEffect(() => {
     const cep = normalizeCep(form.address.cep)
@@ -564,9 +746,34 @@ export default function PatientDetailPage() {
     restorePatient(existing.id)
   }
 
-  const handleLinkByName = () => {
+  const handleLinkByName = async () => {
     if (!existing) return
     if (!canWrite) return
+    if (isSupabaseMode && supabase) {
+      const now = new Date().toISOString()
+      const [scanRes, caseRes] = await Promise.all([
+        supabase
+          .from('scans')
+          .update({ patient_id: existing.id, updated_at: now })
+          .is('patient_id', null)
+          .eq('data->>patientName', existing.name)
+          .is('deleted_at', null),
+        supabase
+          .from('cases')
+          .update({ patient_id: existing.id, updated_at: now })
+          .is('patient_id', null)
+          .eq('data->>patientName', existing.name)
+          .is('deleted_at', null),
+      ])
+      if (scanRes.error || caseRes.error) {
+        setError(scanRes.error?.message ?? caseRes.error?.message ?? 'Falha ao vincular registros.')
+        return
+      }
+      setError('')
+      setSupabasePatientScans((current) => current.map((scan) => ({ ...scan, patientId: existing.id })))
+      setSupabasePatientCases((current) => current.map((caseItem) => ({ ...caseItem, patientId: existing.id })))
+      return
+    }
     const name = existing.name.toLowerCase()
     const scansToUpdate = db.scans.filter((scan) => !scan.patientId && scan.patientName.toLowerCase() === name)
     const casesToUpdate = db.cases.filter((caseItem) => !caseItem.patientId && caseItem.patientName.toLowerCase() === name)
@@ -596,7 +803,7 @@ export default function PatientDetailPage() {
     }
     const result = await addPatientDoc({
       patientId: existing.id,
-      clinicId: existing.clinicId,
+      clinicId: existing.clinicId ?? (form.clinicId || undefined),
       title: docForm.title,
       category: docForm.category,
       note: docForm.note,
@@ -620,6 +827,10 @@ export default function PatientDetailPage() {
   const openDoc = async (doc: PatientDocument) => {
     const resolved = await resolvePatientDocUrl(doc)
     if (!resolved.ok) return
+    if (isImageDoc(doc)) {
+      setLightbox({ open: true, title: doc.title, url: resolved.url })
+      return
+    }
     window.open(resolved.url, '_blank', 'noreferrer')
   }
 
@@ -696,6 +907,7 @@ export default function PatientDetailPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
             {isNew ? 'Novo paciente' : existing?.name}
           </h1>
+          {!isNew && existing ? <p className="mt-1 text-xs font-semibold text-slate-500">{patientCode(existing.id)}</p> : null}
           {existing?.deletedAt ? <p className="mt-2 text-sm text-red-600">Paciente excluido (soft delete).</p> : null}
         </div>
         <Link
@@ -922,6 +1134,7 @@ export default function PatientDetailPage() {
           <div className="mt-4">
             <DocumentsList
               items={docs}
+              imagePreviewUrls={docPreviewUrls}
               canEdit={canDocsAdmin}
               canDelete={canDocsAdmin}
               canFlagError={canDocsWrite}
@@ -1030,6 +1243,25 @@ export default function PatientDetailPage() {
                 Cancelar
               </Button>
               <Button onClick={submitDoc}>Salvar documento</Button>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {lightbox.open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 px-4" onClick={() => setLightbox({ open: false, title: '', url: '' })}>
+          <Card className="w-full max-w-5xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">{lightbox.title || 'Visualizacao de imagem'}</h2>
+                <p className="mt-1 text-xs text-slate-500">Imagem vinculada ao prontuario do paciente.</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setLightbox({ open: false, title: '', url: '' })}>
+                Fechar
+              </Button>
+            </div>
+            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+              <img src={lightbox.url} alt={lightbox.title || 'Documento'} className="max-h-[75vh] w-full object-contain" />
             </div>
           </Card>
         </div>

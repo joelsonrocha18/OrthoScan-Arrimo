@@ -299,8 +299,8 @@ max_frequency = "5s"
 # enroll_enabled = true
 # verify_enabled = true
 
-# Use an external OAuth provider. The full list of providers are: `apple`, `azure`, `bitbucket`,
-# `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
+# Use an external OAuth provider. The full list of providers includes several options such as:
+# `apple`, `azure`, `bitbucket`, `discord`, `facebook`, `github`, `gitlab`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `x`, `slack`, `spotify`, `workos`, `zoom`.
 [auth.external.apple]
 enabled = false
@@ -375,6 +375,9 @@ port = 54327
 backend = "postgres"
 
 [functions.invite-user]
+verify_jwt = false
+
+[functions.ms-drive-storage]
 verify_jwt = false
 
 # Experimental features may be deprecated any time

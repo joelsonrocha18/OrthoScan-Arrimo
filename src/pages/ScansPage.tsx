@@ -19,6 +19,7 @@ import {
   deleteScan,
   markScanAttachmentError,
   rejectScan,
+  updateScan,
 } from '../data/scanRepo'
 import { updatePatient } from '../repo/patientRepo'
 import { createCaseFromScanSupabase, createScanSupabase, deleteScanSupabase, updateScanStatusSupabase } from '../repo/profileRepo'
@@ -29,6 +30,8 @@ import { getCurrentUser } from '../lib/auth'
 import { listScansForUser } from '../auth/scope'
 import { buildScanAttachmentPath, createSignedUrl, uploadToStorage, validateScanAttachmentFile } from '../repo/storageRepo'
 import { supabase } from '../lib/supabaseClient'
+import { parsePlanningTrayCounts } from '../lib/archformParser'
+import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 
 function archTone(arch: Scan['arch']) {
   if (arch === 'ambos') return 'info' as const
@@ -56,6 +59,36 @@ function scanCompleteness(scan: Scan) {
   }
 }
 
+function normalizeScanAttachments(attachments: ScanAttachment[]) {
+  const now = new Date().toISOString()
+  return attachments.map((attachment) => ({
+    ...attachment,
+    status: attachment.status ?? 'ok',
+    attachedAt: attachment.attachedAt ?? attachment.createdAt ?? now,
+    createdAt: attachment.createdAt ?? now,
+  }))
+}
+
+function toCaseScanFiles(attachments: ScanAttachment[]) {
+  return normalizeScanAttachments(attachments).map((att) => ({
+    id: att.id,
+    name: att.name,
+    kind: att.kind,
+    slotId: att.slotId,
+    rxType: att.rxType,
+    arch: att.arch,
+    isLocal: att.isLocal,
+    url: att.url,
+    filePath: att.filePath,
+    status: att.status,
+    attachedAt: att.attachedAt,
+    note: att.note,
+    flaggedAt: att.flaggedAt,
+    flaggedReason: att.flaggedReason,
+    createdAt: att.createdAt,
+  }))
+}
+
 export default function ScansPage() {
   const navigate = useNavigate()
   const { addToast } = useToast()
@@ -80,6 +113,7 @@ export default function ScansPage() {
   const [supabaseDentists, setSupabaseDentists] = useState<Array<{ id: string; name: string; gender?: 'masculino' | 'feminino'; clinicId?: string }>>([])
   const [supabaseClinics, setSupabaseClinics] = useState<Array<{ id: string; tradeName: string }>>([])
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
+  const supabaseSyncTick = useSupabaseSyncTick()
 
   useEffect(() => {
     let active = true
@@ -152,6 +186,10 @@ export default function ScansPage() {
           complaint: data.complaint as string | undefined,
           dentistGuidance: data.dentistGuidance as string | undefined,
           notes: data.notes as string | undefined,
+          planningDetectedUpperTrays: data.planningDetectedUpperTrays as number | undefined,
+          planningDetectedLowerTrays: data.planningDetectedLowerTrays as number | undefined,
+          planningDetectedAt: data.planningDetectedAt as string | undefined,
+          planningDetectedSource: data.planningDetectedSource as Scan['planningDetectedSource'] | undefined,
           attachments: (Array.isArray(data.attachments) ? data.attachments : []) as ScanAttachment[],
           status: (data.status as Scan['status'] | undefined) ?? 'pendente',
           linkedCaseId: data.linkedCaseId as string | undefined,
@@ -164,7 +202,7 @@ export default function ScansPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode, supabaseRefreshKey])
+  }, [isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
 
   const scans = useMemo(() => (canRead ? (isSupabaseMode ? supabaseScans : listScansForUser(db, currentUser)) : []), [canRead, isSupabaseMode, supabaseScans, db, currentUser])
   const purposeOptions = useMemo(
@@ -299,7 +337,10 @@ export default function ScansPage() {
     let isLocal = true
 
     if (DATA_MODE === 'supabase') {
-      const clinicId = targetScan?.clinicId || currentUser?.linkedClinicId
+      const patientClinicId = targetScan?.patientId
+        ? patientLookupSource.find((item) => item.id === targetScan.patientId)?.clinicId
+        : undefined
+      const clinicId = targetScan?.clinicId || patientClinicId || currentUser?.linkedClinicId
       if (!clinicId) {
         addToast({ type: 'error', title: 'Nao foi possivel determinar a clinica para upload.' })
         return
@@ -307,6 +348,7 @@ export default function ScansPage() {
       filePath = buildScanAttachmentPath({
         clinicId,
         scanId,
+        patientId: targetScan?.patientId,
         kind: payload.kind,
         fileName: payload.file.name,
       })
@@ -322,8 +364,9 @@ export default function ScansPage() {
       url = URL.createObjectURL(payload.file)
     }
 
-    const result = await addScanAttachment(scanId, {
-      file: payload.file,
+    const now = new Date().toISOString()
+    const nextAttachment: ScanAttachment = {
+      id: `scan_file_${Date.now()}_${Math.random().toString(16).slice(2)}`,
       name: payload.file.name,
       kind: payload.kind,
       slotId: payload.slotId,
@@ -335,10 +378,133 @@ export default function ScansPage() {
       filePath,
       isLocal,
       note: payload.note,
+      status: 'ok',
       attachedAt: payload.attachedAt,
-    })
-    if (!result) return
-    setDetails((current) => (current && current.id === scanId ? result : current))
+      createdAt: now,
+    }
+
+    let nextScan: Scan
+    if (isSupabaseMode && supabase) {
+      if (!targetScan) return
+      nextScan = {
+        ...targetScan,
+        attachments: normalizeScanAttachments([...targetScan.attachments, nextAttachment]),
+        updatedAt: now,
+      }
+    } else {
+      const result: Scan | null = await addScanAttachment(scanId, {
+        file: payload.file,
+        name: payload.file.name,
+        kind: payload.kind,
+        slotId: payload.slotId,
+        rxType: payload.rxType,
+        arch: payload.arch,
+        mime: payload.file.type,
+        size: payload.file.size,
+        url,
+        filePath,
+        isLocal,
+        note: payload.note,
+        attachedAt: payload.attachedAt,
+      })
+      if (!result) return
+      nextScan = result
+    }
+
+    let detectedSource: Scan['planningDetectedSource'] | undefined
+    if (payload.kind === 'projeto') {
+      const detected = await parsePlanningTrayCounts(payload.file)
+      if (detected) {
+        detectedSource = detected.source
+        nextScan = {
+          ...nextScan,
+          planningDetectedUpperTrays: detected.upper ?? nextScan.planningDetectedUpperTrays,
+          planningDetectedLowerTrays: detected.lower ?? nextScan.planningDetectedLowerTrays,
+          planningDetectedAt: new Date().toISOString(),
+          planningDetectedSource: detected.source,
+        }
+      } else if (payload.file.name.toLowerCase().endsWith('.archform')) {
+        const fallbackUpper = nextScan.arch !== 'inferior' ? 15 : undefined
+        const fallbackLower = nextScan.arch !== 'superior' ? 15 : undefined
+        nextScan = {
+          ...nextScan,
+          planningDetectedUpperTrays: nextScan.planningDetectedUpperTrays ?? fallbackUpper,
+          planningDetectedLowerTrays: nextScan.planningDetectedLowerTrays ?? fallbackLower,
+          planningDetectedAt: new Date().toISOString(),
+        }
+      }
+    }
+
+    if (isSupabaseMode && supabase) {
+      const nextData = {
+        patientName: nextScan.patientName,
+        serviceOrderCode: nextScan.serviceOrderCode,
+        purposeProductId: nextScan.purposeProductId,
+        purposeProductType: nextScan.purposeProductType,
+        purposeLabel: nextScan.purposeLabel,
+        scanDate: nextScan.scanDate,
+        arch: nextScan.arch,
+        complaint: nextScan.complaint,
+        dentistGuidance: nextScan.dentistGuidance,
+        notes: nextScan.notes,
+        planningDetectedUpperTrays: nextScan.planningDetectedUpperTrays,
+        planningDetectedLowerTrays: nextScan.planningDetectedLowerTrays,
+        planningDetectedAt: nextScan.planningDetectedAt,
+        planningDetectedSource: nextScan.planningDetectedSource,
+        attachments: nextScan.attachments,
+        status: nextScan.status,
+        linkedCaseId: nextScan.linkedCaseId,
+        createdAt: nextScan.createdAt,
+        updatedAt: now,
+      }
+      const { error } = await supabase
+        .from('scans')
+        .update({ data: nextData, updated_at: now })
+        .eq('id', scanId)
+      if (error) {
+        addToast({ type: 'error', title: `Falha ao salvar anexo: ${error.message}` })
+        return
+      }
+      if (nextScan.linkedCaseId) {
+        const { data: caseCurrent, error: caseReadError } = await supabase
+          .from('cases')
+          .select('id, data')
+          .eq('id', nextScan.linkedCaseId)
+          .maybeSingle()
+        if (!caseReadError && caseCurrent) {
+          const caseData = (caseCurrent.data && typeof caseCurrent.data === 'object')
+            ? (caseCurrent.data as Record<string, unknown>)
+            : {}
+          const { error: caseUpdateError } = await supabase
+            .from('cases')
+            .update({
+              data: {
+                ...caseData,
+                scanFiles: toCaseScanFiles(nextScan.attachments),
+                updatedAt: now,
+              },
+              updated_at: now,
+            })
+            .eq('id', nextScan.linkedCaseId)
+          if (caseUpdateError) {
+            addToast({ type: 'error', title: `Falha ao sincronizar arquivos do caso: ${caseUpdateError.message}` })
+            return
+          }
+        }
+      }
+      setSupabaseRefreshKey((current) => current + 1)
+    } else if (payload.kind === 'projeto' && detectedSource) {
+      const saved = updateScan(scanId, {
+        planningDetectedUpperTrays: nextScan.planningDetectedUpperTrays,
+        planningDetectedLowerTrays: nextScan.planningDetectedLowerTrays,
+        planningDetectedAt: nextScan.planningDetectedAt,
+        planningDetectedSource: nextScan.planningDetectedSource,
+        attachments: nextScan.attachments,
+      })
+      if (saved) nextScan = saved
+    }
+
+    setDetails((current) => (current && current.id === scanId ? nextScan : current))
     addToast({ type: 'success', title: 'Novo anexo adicionado ao historico' })
   }
 

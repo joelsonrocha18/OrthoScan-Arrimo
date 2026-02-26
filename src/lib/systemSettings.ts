@@ -45,6 +45,10 @@ export type ProductPricingItem = {
 export type SystemSettings = {
   theme: AppThemeMode
   labCompany: LabCompanyProfile
+  guideAutomation: {
+    enabled: boolean
+    leadDays: number
+  }
   priceCatalog: ProductPricingItem[]
   audit: SystemAuditEntry[]
 }
@@ -65,6 +69,10 @@ const emptyLabCompany: LabCompanyProfile = {
 const defaultSettings: SystemSettings = {
   theme: 'light',
   labCompany: emptyLabCompany,
+  guideAutomation: {
+    enabled: true,
+    leadDays: 10,
+  },
   priceCatalog: [],
   audit: [],
 }
@@ -83,6 +91,7 @@ export function loadSystemSettings(): SystemSettings {
 
     const theme = parsed.theme === 'dark' ? 'dark' : 'light'
     const companyRaw = isObject(parsed.labCompany) ? parsed.labCompany : {}
+    const guideAutomationRaw = isObject(parsed.guideAutomation) ? parsed.guideAutomation : {}
 
     const labCompany: LabCompanyProfile = {
       tradeName: String(companyRaw.tradeName ?? ''),
@@ -95,6 +104,13 @@ export function loadSystemSettings(): SystemSettings {
       addressLine: String(companyRaw.addressLine ?? ''),
       logoDataUrl: typeof companyRaw.logoDataUrl === 'string' ? companyRaw.logoDataUrl : undefined,
       updatedAt: typeof companyRaw.updatedAt === 'string' ? companyRaw.updatedAt : undefined,
+    }
+    const guideAutomation = {
+      enabled: guideAutomationRaw.enabled !== false,
+      leadDays:
+        typeof guideAutomationRaw.leadDays === 'number' && Number.isFinite(guideAutomationRaw.leadDays)
+          ? Math.max(0, Math.trunc(guideAutomationRaw.leadDays))
+          : 10,
     }
 
     const auditRaw = Array.isArray(parsed.audit) ? parsed.audit : []
@@ -129,6 +145,7 @@ export function loadSystemSettings(): SystemSettings {
     return {
       theme,
       labCompany,
+      guideAutomation,
       priceCatalog,
       audit,
     }

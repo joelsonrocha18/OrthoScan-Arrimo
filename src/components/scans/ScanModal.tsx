@@ -10,6 +10,7 @@ import Card from '../Card'
 import ImageCaptureInput from '../files/ImageCaptureInput'
 import Input from '../Input'
 import { buildScanAttachmentPath, createSignedUrl, uploadToStorage, validateScanAttachmentFile } from '../../repo/storageRepo'
+import { parsePlanningTrayCounts } from '../../lib/archformParser'
 
 type ScanModalProps = {
   open: boolean
@@ -39,6 +40,10 @@ type FormState = {
   complaint: string
   dentistGuidance: string
   notes: string
+  planningDetectedUpperTrays?: number
+  planningDetectedLowerTrays?: number
+  planningDetectedAt?: string
+  planningDetectedSource?: 'keyframes' | 'goalset'
   attachments: ScanAttachment[]
 }
 
@@ -56,6 +61,10 @@ const emptyForm: FormState = {
   complaint: '',
   dentistGuidance: '',
   notes: '',
+  planningDetectedUpperTrays: undefined,
+  planningDetectedLowerTrays: undefined,
+  planningDetectedAt: undefined,
+  planningDetectedSource: undefined,
   attachments: [],
 }
 
@@ -183,6 +192,10 @@ export default function ScanModal({
         complaint: initialScan.complaint ?? '',
         dentistGuidance: initialScan.dentistGuidance ?? '',
         notes: initialScan.notes ?? '',
+        planningDetectedUpperTrays: initialScan.planningDetectedUpperTrays,
+        planningDetectedLowerTrays: initialScan.planningDetectedLowerTrays,
+        planningDetectedAt: initialScan.planningDetectedAt,
+        planningDetectedSource: initialScan.planningDetectedSource,
         attachments: initialScan.attachments,
       })
       setError('')
@@ -261,6 +274,7 @@ export default function ScanModal({
     const filePath = buildScanAttachmentPath({
       clinicId: form.clinicId,
       scanId,
+      patientId: form.patientId,
       kind: partial.kind,
       fileName: file.name,
     })
@@ -299,10 +313,37 @@ export default function ScanModal({
   }
 
   const addMany = async (files: FileList, partial: Pick<ScanAttachment, 'kind' | 'slotId' | 'rxType' | 'arch'>) => {
+    let detectedUpper: number | undefined
+    let detectedLower: number | undefined
+    let detectedSource: 'keyframes' | 'goalset' | undefined
+    let hasArchform = false
+    if (partial.kind === 'projeto') {
+      for (const file of Array.from(files)) {
+        if (file.name.toLowerCase().endsWith('.archform')) hasArchform = true
+        const detected = await parsePlanningTrayCounts(file)
+        if (!detected) continue
+        if (detected.upper && (!detectedUpper || detected.upper > detectedUpper)) detectedUpper = detected.upper
+        if (detected.lower && (!detectedLower || detected.lower > detectedLower)) detectedLower = detected.lower
+        detectedSource = detected.source
+      }
+      if (!detectedUpper && !detectedLower && hasArchform) {
+        if (form.arch !== 'inferior') detectedUpper = 15
+        if (form.arch !== 'superior') detectedLower = 15
+      }
+    }
+
     const nextWithNull = await Promise.all(Array.from(files).map((file) => buildAttachment(file, partial)))
     const next = nextWithNull.filter((item): item is ScanAttachment => Boolean(item))
     if (next.length === 0) return
-    setForm((current) => ({ ...current, attachments: [...current.attachments, ...next] }))
+    setForm((current) => ({
+      ...current,
+      attachments: [...current.attachments, ...next],
+      planningDetectedUpperTrays: detectedUpper ?? current.planningDetectedUpperTrays,
+      planningDetectedLowerTrays: detectedLower ?? current.planningDetectedLowerTrays,
+      planningDetectedAt:
+        detectedUpper || detectedLower ? new Date().toISOString() : current.planningDetectedAt,
+      planningDetectedSource: detectedSource ?? current.planningDetectedSource,
+    }))
   }
 
   const remove = (id: string) => {
@@ -333,6 +374,10 @@ export default function ScanModal({
       complaint: form.complaint.trim() || undefined,
       dentistGuidance: form.dentistGuidance.trim() || undefined,
       notes: form.notes.trim() || undefined,
+      planningDetectedUpperTrays: form.planningDetectedUpperTrays,
+      planningDetectedLowerTrays: form.planningDetectedLowerTrays,
+      planningDetectedAt: form.planningDetectedAt,
+      planningDetectedSource: form.planningDetectedSource,
       attachments: form.attachments,
       status: mode === 'edit' && initialScan ? initialScan.status : 'pendente',
       linkedCaseId: mode === 'edit' && initialScan ? initialScan.linkedCaseId : undefined,
@@ -744,6 +789,11 @@ export default function ScanModal({
           <div className="mt-2 space-y-2">
             {projeto.length === 0 ? <p className="text-xs text-slate-500">Nenhum arquivo.</p> : projeto.map((item) => renderAttachmentRow(item))}
           </div>
+          {form.planningDetectedUpperTrays || form.planningDetectedLowerTrays ? (
+            <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
+              Quantidade detectada automaticamente: Sup {form.planningDetectedUpperTrays ?? '-'} | Inf {form.planningDetectedLowerTrays ?? '-'}
+            </p>
+          ) : null}
           <div className="mt-2">
             <label className="inline-flex h-8 cursor-pointer items-center rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white transition hover:bg-brand-700">
               Adicionar
