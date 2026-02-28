@@ -8,7 +8,7 @@ test('smoke routes for master_admin', async ({ page }) => {
   const routes: Array<{ path: string; marker: string }> = [
     { path: '/app/dashboard', marker: 'OrthoScan | Painel Operacional' },
     { path: '/app/scans', marker: 'Exames (Scans)' },
-    { path: '/app/cases', marker: 'Casos' },
+    { path: '/app/cases', marker: 'Alinhadores' },
     { path: '/app/lab', marker: 'Fila de produção e entregas' },
     { path: '/app/dentists', marker: 'Dentistas' },
     { path: '/app/patients', marker: 'Pacientes' },

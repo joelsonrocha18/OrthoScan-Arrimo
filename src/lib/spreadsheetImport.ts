@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx'
+import { loadExcelJS } from './loadExcelJS'
 
 type ParseResult<T> = {
   rows: T[]
@@ -74,18 +74,27 @@ function rowsToDelimitedText(rows: string[][]) {
 
 export async function readSpreadsheetFileText(file: File) {
   const fileName = file.name.toLowerCase()
-  if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+  if (fileName.endsWith('.xls')) {
+    throw new Error('Formato .xls nao suportado. Salve a planilha como .xlsx, .csv ou .txt.')
+  }
+  if (fileName.endsWith('.xlsx')) {
     const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: 'array' })
-    const firstSheetName = workbook.SheetNames[0]
-    if (!firstSheetName) return ''
-    const sheet = workbook.Sheets[firstSheetName]
-    const rows = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
-      raw: false,
-      defval: '',
-      blankrows: false,
-    }) as string[][]
+    const ExcelJS = await loadExcelJS()
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(buffer)
+    const sheet = workbook.worksheets[0]
+    if (!sheet) return ''
+    const rows: string[][] = []
+    sheet.eachRow({ includeEmpty: false }, (row) => {
+      const values = Array.from({ length: row.cellCount }, (_, index) => {
+        const cell = row.getCell(index + 1)
+        const text = typeof cell.text === 'string' ? cell.text : String(cell.value ?? '')
+        return text.trim()
+      })
+      if (values.some((value) => value.length > 0)) {
+        rows.push(values)
+      }
+    })
     return rowsToDelimitedText(rows)
   }
   return file.text()

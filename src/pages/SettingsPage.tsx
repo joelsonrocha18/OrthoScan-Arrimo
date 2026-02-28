@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, EyeOff, LockKeyhole, Mail, Pause, PenLine, Play, Trash2, UserRound, WandSparkles } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import { getAuthProvider } from '../auth/authProvider'
 import { can, groupedPermissionsForRole, permissionLabel, profileDescription, profileLabel, type PermissionModule } from '../auth/permissions'
 import { useToast } from '../app/ToastProvider'
@@ -37,6 +36,7 @@ import { inviteUser, listProfiles, setProfileActive, softDeleteProfile, updatePr
 import { PRODUCT_TYPE_LABEL } from '../types/Product'
 import type { Role, User } from '../types/User'
 import { useDb } from '../lib/useDb'
+import { loadExcelJS } from '../lib/loadExcelJS'
 
 type MainTab = 'registration' | 'users' | 'pricing' | 'system_update' | 'system_diagnostics'
 type ModalTab = 'personal' | 'access' | 'profile' | 'link'
@@ -256,6 +256,7 @@ export default function SettingsPage() {
   const [reportProductType, setReportProductType] = useState('')
   const [reportProductionStatus, setReportProductionStatus] = useState('')
   const [selectedReportFields, setSelectedReportFields] = useState<string[]>([])
+  const [exportingReport, setExportingReport] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [modalTab, setModalTab] = useState<ModalTab>('personal')
@@ -758,7 +759,8 @@ export default function SettingsPage() {
     })
   }, [reportFieldOptions])
 
-  const exportReport = () => {
+  const exportReport = async () => {
+    if (exportingReport) return
     if (!selectedReportFields.length) {
       addToast({ type: 'error', title: 'Selecione ao menos um campo para exportar.' })
       return
@@ -787,21 +789,41 @@ export default function SettingsPage() {
       addToast({ type: 'error', title: 'Nenhum registro encontrado para os filtros selecionados.' })
       return
     }
-    const headers = selectedReportFields
-    const table = [
-      headers.map((field) => prettifyFieldLabel(field)),
-      ...filteredRows.map((row) => {
-        const flattened = flattenForReport(row)
-        return headers.map((field) => String(flattened[field] ?? ''))
-      }),
-    ]
-    const worksheet = XLSX.utils.aoa_to_sheet(table)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Relatorio')
-    const datasetLabel = REPORT_DATASETS.find((item) => item.key === reportDataset)?.label ?? reportDataset
-    const fileName = `relatorio_${datasetLabel.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`
-    XLSX.writeFile(workbook, fileName)
-    addToast({ type: 'success', title: `Relatorio gerado com ${filteredRows.length} registro(s).` })
+    setExportingReport(true)
+    try {
+      const ExcelJS = await loadExcelJS()
+      const headers = selectedReportFields
+      const table = [
+        headers.map((field) => prettifyFieldLabel(field)),
+        ...filteredRows.map((row) => {
+          const flattened = flattenForReport(row)
+          return headers.map((field) => String(flattened[field] ?? ''))
+        }),
+      ]
+      const workbook = new ExcelJS.Workbook()
+      const worksheet = workbook.addWorksheet('Relatorio')
+      table.forEach((line) => {
+        worksheet.addRow(line)
+      })
+      const datasetLabel = REPORT_DATASETS.find((item) => item.key === reportDataset)?.label ?? reportDataset
+      const fileName = `relatorio_${datasetLabel.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      const content = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([content], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = fileName
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      URL.revokeObjectURL(url)
+      addToast({ type: 'success', title: `Relatorio gerado com ${filteredRows.length} registro(s).` })
+    } catch (error) {
+      console.error(error)
+      addToast({ type: 'error', title: 'Falha ao preparar exportacao. Tente novamente.' })
+    } finally {
+      setExportingReport(false)
+    }
   }
 
   return (
@@ -1217,7 +1239,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setReportModalOpen(false)}>Fechar</Button>
-              <Button onClick={exportReport}>Exportar planilha</Button>
+              <Button disabled={exportingReport} onClick={() => void exportReport()}>{exportingReport ? 'Preparando exportacao...' : 'Exportar planilha'}</Button>
             </div>
           </div>
         </Card>

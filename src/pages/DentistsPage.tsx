@@ -102,9 +102,14 @@ export default function DentistsPage() {
 
   const handleImportFile = async (file?: File | null) => {
     if (!file) return
-    const text = await readSpreadsheetFileText(file)
-    setImportText(text)
-    setImportMessage(`Arquivo carregado: ${file.name}`)
+    try {
+      const text = await readSpreadsheetFileText(file)
+      setImportText(text)
+      setImportMessage(`Arquivo carregado: ${file.name}`)
+    } catch (error) {
+      console.error(error)
+      setImportMessage('Falha ao preparar importacao da planilha. Verifique o arquivo e tente novamente.')
+    }
   }
 
   const runImport = async () => {
@@ -215,7 +220,7 @@ export default function DentistsPage() {
                 Carregar CSV/XLSX
                 <input
                   type="file"
-                  accept=".csv,.txt,.xlsx,.xls"
+                  accept=".csv,.txt,.xlsx"
                   className="hidden"
                   onChange={(event) => void handleImportFile(event.target.files?.[0])}
                 />

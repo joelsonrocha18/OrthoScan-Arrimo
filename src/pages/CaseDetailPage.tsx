@@ -500,12 +500,12 @@ export default function CaseDetailPage() {
   )
   const replacementSummary = useMemo(() => {
     if (!currentCase) {
-      return { totalContratado: 0, emProducaoOuEntregue: 0, saldoRestante: 0, rework: 0, defeituosa: 0 }
+      return { totalContratado: 0, entreguePaciente: 0, saldoRestante: 0, rework: 0, defeituosa: 0 }
     }
     const totalContratado = Math.max(0, totalUpper + totalLower)
     const entreguePaciente = Math.max(0, Math.trunc(deliveredUpper)) + Math.max(0, Math.trunc(deliveredLower))
     const saldoRestante = Math.max(0, totalContratado - entreguePaciente)
-    return { totalContratado, emProducaoOuEntregue: entreguePaciente, saldoRestante, rework: 0, defeituosa: 0 }
+    return { totalContratado, entreguePaciente, saldoRestante, rework: 0, defeituosa: 0 }
   }, [currentCase, deliveredLower, deliveredUpper, totalLower, totalUpper])
   const groupedScanFiles = useMemo(() => {
     const scanFiles = currentCase?.scanFiles ?? []
@@ -1565,7 +1565,7 @@ export default function CaseDetailPage() {
               Total contratado: <span className="font-semibold">{replacementSummary.totalContratado}</span>
             </div>
             <div className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-700">
-              Em producao/entregue: <span className="font-semibold">{replacementSummary.emProducaoOuEntregue}</span>
+              Entregue ao paciente: <span className="font-semibold">{replacementSummary.entreguePaciente}</span>
             </div>
             <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
               Saldo no banco: <span className="font-semibold">{replacementSummary.saldoRestante}</span>

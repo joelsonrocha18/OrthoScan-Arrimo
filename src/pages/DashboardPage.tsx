@@ -294,7 +294,12 @@ export default function DashboardPage() {
     const tray = caseItem?.trays.find((current: { trayNumber?: number; state?: string }) => current.trayNumber === item.trayNumber)
     return tray?.state === 'entregue'
   }
-  const pipelineItems = visibleLabItems.filter((item) => !isDeliveredToProfessional(item) && !isExplicitRework(item.requestKind))
+  const pipelineItems = visibleLabItems.filter(
+    (item) =>
+      !isDeliveredToProfessional(item) &&
+      !isExplicitRework(item.requestKind) &&
+      item.requestKind !== 'reposicao_programada',
+  )
   const queuePipelineItems = pipelineItems.filter((item) => item.status === 'aguardando_iniciar')
   const inProductionItems = pipelineItems.filter((item) => item.status === 'em_producao' || item.status === 'controle_qualidade')
   const readyToDeliverItems = pipelineItems.filter((item) => {

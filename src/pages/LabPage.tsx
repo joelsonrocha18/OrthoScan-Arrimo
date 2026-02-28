@@ -373,7 +373,7 @@ export default function LabPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
+  }, [db, isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
 
   useEffect(() => {
     if (!isSupabaseMode || !supabase || !guideAutomationEnabled) return
@@ -462,7 +462,7 @@ export default function LabPage() {
       }
       setSupabaseRefreshKey((current) => current + 1)
     })()
-  }, [addToast, guideAutomationEnabled, guideAutomationLeadDays, isSupabaseMode, supabase, supabaseCases, supabaseItems])
+  }, [addToast, guideAutomationEnabled, guideAutomationLeadDays, isSupabaseMode, supabaseCases, supabaseItems])
 
   const items = useMemo(() => {
     const source = isSupabaseMode ? supabaseItems : listLabItemsForUser(db, currentUser)
