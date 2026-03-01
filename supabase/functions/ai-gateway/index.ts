@@ -73,6 +73,21 @@ function parseBoolean(value: string | undefined, fallback: boolean) {
   return fallback
 }
 
+function toPublicErrorMessage(message: string) {
+  const lower = message.toLowerCase()
+  if (message.includes('Provider HTTP error: 429') || lower.includes('quota exceeded') || lower.includes('resource_exhausted')) {
+    return 'Cota da IA Gemini excedida (429). Revise plano/faturamento da chave API ou aguarde o reset de cota.'
+  }
+  if (message.includes('Provider HTTP error: 401') || lower.includes('invalid api key') || lower.includes('api key not valid')) {
+    return 'Chave da IA invalida ou sem permissao (401). Atualize a AI_API_KEY.'
+  }
+  if (message.includes('Provider HTTP error: 403')) {
+    return 'Acesso negado pelo provider (403). Verifique permissoes da chave/modelo.'
+  }
+  if (message.length > 280) return `${message.slice(0, 280)}...`
+  return message
+}
+
 async function sha256Hex(value: string) {
   const data = new TextEncoder().encode(value)
   const digest = await crypto.subtle.digest('SHA-256', data)
@@ -341,14 +356,22 @@ Deno.serve(async (req) => {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const publicMessage = toPublicErrorMessage(message)
     if (jobId) {
       try {
-        await updateAiJobStatus(supabase, jobId, { status: 'failed', error: message })
+        await updateAiJobStatus(supabase, jobId, { status: 'failed', error: publicMessage })
       } catch {
         // noop
       }
     }
-    const status = message.toLowerCase().includes('limite diario') ? 429 : message.toLowerCase().includes('rate limit') ? 429 : 400
-    return json(req, { ok: false, error: message, jobId }, status)
+    const status =
+      message.includes('Provider HTTP error: 429') ||
+      message.toLowerCase().includes('quota exceeded') ||
+      message.toLowerCase().includes('resource_exhausted') ||
+      message.toLowerCase().includes('limite diario') ||
+      message.toLowerCase().includes('rate limit')
+        ? 429
+        : 400
+    return json(req, { ok: false, error: publicMessage, jobId }, status)
   }
 })
