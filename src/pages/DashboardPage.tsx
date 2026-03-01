@@ -18,12 +18,15 @@ import { listCasesForUser, listLabItemsForUser, listPatientsForUser, listScansFo
 import AiEditableModal from '../components/ai/AiEditableModal'
 import Card from '../components/Card'
 import { DATA_MODE } from '../data/dataMode'
+import { getPipelineItems } from '../domain/labPipeline'
 import type { Case, CasePhase, CaseStatus, CaseTray } from '../types/Case'
+import type { LabItem, LabStatus } from '../types/Lab'
 import AppShell from '../layouts/AppShell'
 import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
 import { getCurrentUser } from '../lib/auth'
 import { supabase } from '../lib/supabaseClient'
 import { useDb } from '../lib/useDb'
+import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import { can } from '../auth/permissions'
 import Button from '../components/Button'
 import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
@@ -115,6 +118,7 @@ export default function DashboardPage() {
   const currentUser = getCurrentUser(db)
   const canAiGestao = can(currentUser, 'ai.gestao')
   const isSupabaseMode = DATA_MODE === 'supabase'
+  const supabaseSyncTick = useSupabaseSyncTick()
   const [supabaseSnapshot, setSupabaseSnapshot] = useState<{
     patients: Array<Record<string, unknown>>
     scans: Array<Record<string, unknown>>
@@ -147,7 +151,7 @@ export default function DashboardPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode])
+  }, [isSupabaseMode, supabaseSyncTick])
 
   const visiblePatients = isSupabaseMode
     ? supabaseSnapshot.patients.map((row) => ({
@@ -258,18 +262,25 @@ export default function DashboardPage() {
       return caseItem
     })
     : listCasesForUser(db, currentUser)
-  const visibleLabItems = isSupabaseMode
+  const visibleLabItems: LabItem[] = isSupabaseMode
     ? supabaseSnapshot.labItems.map((row) => {
       const data = asObject(row.data)
       return {
         id: asText(row.id),
         caseId: asText(row.case_id),
         trayNumber: asNumber(row.tray_number),
-        status: asText(row.status),
+        status: asText(row.status, 'aguardando_iniciar') as LabStatus,
+        deliveredToProfessionalAt: asText(data.deliveredToProfessionalAt) || undefined,
+        arch: 'ambos',
+        plannedDate: asText(row.created_at, new Date().toISOString()).slice(0, 10),
+        dueDate: asText(data.dueDate, asText(row.created_at, new Date().toISOString()).slice(0, 10)),
+        priority: 'Medio',
+        createdAt: asText(row.created_at, new Date().toISOString()),
+        updatedAt: asText(row.updated_at, asText(row.created_at, new Date().toISOString())),
         notes: asText(row.notes, asText(data.notes)),
         patientName: asText(data.patientName, '-'),
         requestCode: asText(data.requestCode),
-        requestKind: asText(data.requestKind, 'producao'),
+        requestKind: asText(data.requestKind, 'producao') as LabItem['requestKind'],
       }
     })
     : listLabItemsForUser(db, currentUser)
@@ -290,10 +301,10 @@ export default function DashboardPage() {
     const note = (notes ?? '').toLowerCase()
     return requestKind === 'reconfeccao' || note.includes('rework') || note.includes('defeito') || note.includes('reconfecc')
   }
-  const isExplicitRework = (requestKind?: string) => requestKind === 'reconfeccao'
   const hasRevisionSuffix = (code?: string) => /\/\d+$/.test(code ?? '')
-  const isDeliveredToProfessional = (item: (typeof visibleLabItems)[number]) => {
+  const isDeliveredToProfessional = (item: LabItem) => {
     if (!item.caseId) return false
+    if (item.deliveredToProfessionalAt) return true
     if (item.status !== 'prontas') return false
     const caseItem = caseById.get(item.caseId)
     const hasAnyDeliveryLot = (caseItem?.deliveryLots?.length ?? 0) > 0
@@ -303,12 +314,7 @@ export default function DashboardPage() {
     const tray = caseItem?.trays.find((current: { trayNumber?: number; state?: string }) => current.trayNumber === item.trayNumber)
     return tray?.state === 'entregue'
   }
-  const pipelineItems = visibleLabItems.filter(
-    (item) =>
-      !isDeliveredToProfessional(item) &&
-      !isExplicitRework(item.requestKind) &&
-      item.requestKind !== 'reposicao_programada',
-  )
+  const pipelineItems = getPipelineItems(visibleLabItems, { isDeliveredToProfessional })
   const queuePipelineItems = pipelineItems.filter((item) => item.status === 'aguardando_iniciar')
   const inProductionItems = pipelineItems.filter((item) => item.status === 'em_producao' || item.status === 'controle_qualidade')
   const readyToDeliverItems = pipelineItems.filter((item) => {

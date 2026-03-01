@@ -13,6 +13,7 @@ import Input from '../components/Input'
 import { DATA_MODE } from '../data/dataMode'
 import { registerCaseDeliveryLot } from '../data/caseRepo'
 import { addLabItem, createAdvanceLabOrder, deleteLabItem, listLabItems, moveLabItem, updateLabItem } from '../data/labRepo'
+import { getPipelineItems } from '../domain/labPipeline'
 import { getNextDeliveryDueDate, getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
 import type { LabItem, LabStatus } from '../types/Lab'
@@ -576,14 +577,12 @@ export default function LabPage() {
   const isDeliveredToProfessional = useCallback((item: LabItem) => {
     return isDeliveredToProfessionalItem(item, caseById)
   }, [caseById])
+  const pipelineBaseItems = useMemo(
+    () => getPipelineItems(items, { isDeliveredToProfessional }),
+    [isDeliveredToProfessional, items],
+  )
   const pipelineItems = useMemo(
-    () =>
-      filteredItems.filter(
-        (item) =>
-          !isDeliveredToProfessional(item) &&
-          !isReworkItem(item) &&
-          item.requestKind !== 'reposicao_programada',
-      ),
+    () => getPipelineItems(filteredItems, { isDeliveredToProfessional }),
     [filteredItems, isDeliveredToProfessional],
   )
   const reworkItems = useMemo(
@@ -1126,10 +1125,10 @@ export default function LabPage() {
     }))
     const result = await runAiRequest(endpoint, {
       clinicId: currentUser?.linkedClinicId,
-      inputText: `Itens de laboratorio ativos: ${pipelineItems.length}. Reconfeccoes: ${reworkItems.length}. Prontos: ${readyDeliveryItems.length}.`,
+      inputText: `Itens de laboratorio ativos: ${pipelineBaseItems.length}. Reconfeccoes: ${reworkItems.length}. Prontos: ${readyDeliveryItems.length}.`,
       metadata: {
         highlighted,
-        overdue: pipelineItems.filter((item) => isOverdue(item)).length,
+        overdue: pipelineBaseItems.filter((item) => isOverdue(item)).length,
       },
     })
     if (!result.ok) {
