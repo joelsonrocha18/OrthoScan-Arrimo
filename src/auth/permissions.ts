@@ -27,6 +27,10 @@ export type Permission =
   | 'docs.write'
   | 'settings.read'
   | 'settings.write'
+  | 'ai.clinica'
+  | 'ai.lab'
+  | 'ai.gestao'
+  | 'ai.comercial'
 
 export type PermissionModule =
   | 'Dashboard'
@@ -39,6 +43,7 @@ export type PermissionModule =
   | 'Documentos'
   | 'Dentistas'
   | 'Clinicas'
+  | 'IA'
 
 const allPermissions: Permission[] = [
   'dashboard.read',
@@ -67,6 +72,10 @@ const allPermissions: Permission[] = [
   'docs.write',
   'settings.read',
   'settings.write',
+  'ai.clinica',
+  'ai.lab',
+  'ai.gestao',
+  'ai.comercial',
 ]
 
 const rolePermissions: Record<Role, Permission[]> = {
@@ -77,10 +86,10 @@ const rolePermissions: Record<Role, Permission[]> = {
       perm !== 'dentists.delete' &&
       perm !== 'clinics.delete',
   ),
-  dentist_client: ['dashboard.read', 'patients.read', 'patients.write', 'scans.read', 'cases.read', 'docs.read'],
-  clinic_client: ['dashboard.read', 'patients.read', 'patients.write', 'scans.read', 'cases.read', 'docs.read'],
-  lab_tech: ['lab.read', 'cases.read', 'scans.read'],
-  receptionist: ['dashboard.read', 'patients.read', 'patients.write', 'scans.read', 'scans.write', 'cases.read', 'lab.read'],
+  dentist_client: ['dashboard.read', 'patients.read', 'patients.write', 'scans.read', 'cases.read', 'docs.read', 'ai.clinica'],
+  clinic_client: ['dashboard.read', 'patients.read', 'patients.write', 'scans.read', 'cases.read', 'docs.read', 'ai.clinica', 'ai.comercial'],
+  lab_tech: ['lab.read', 'cases.read', 'scans.read', 'ai.lab'],
+  receptionist: ['dashboard.read', 'patients.read', 'patients.write', 'scans.read', 'scans.write', 'cases.read', 'lab.read', 'ai.clinica', 'ai.comercial'],
 }
 
 const profileLabels: Record<Role, string> = {
@@ -128,6 +137,10 @@ const permissionLabels: Record<Permission, string> = {
   'docs.write': 'Gerenciar documentos',
   'settings.read': 'Visualizar configuracoes',
   'settings.write': 'Gerenciar configuracoes',
+  'ai.clinica': 'IA clinica',
+  'ai.lab': 'IA laboratorio',
+  'ai.gestao': 'IA gestao',
+  'ai.comercial': 'IA comercial',
 }
 
 const permissionModules: Record<Permission, PermissionModule> = {
@@ -157,6 +170,10 @@ const permissionModules: Record<Permission, PermissionModule> = {
   'docs.write': 'Documentos',
   'settings.read': 'Configuracoes',
   'settings.write': 'Configuracoes',
+  'ai.clinica': 'IA',
+  'ai.lab': 'IA',
+  'ai.gestao': 'IA',
+  'ai.comercial': 'IA',
 }
 
 export function can(user: User | null | undefined, permission: Permission) {

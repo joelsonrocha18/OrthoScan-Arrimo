@@ -15,6 +15,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { listCasesForUser, listLabItemsForUser, listPatientsForUser, listScansForUser } from '../auth/scope'
+import AiEditableModal from '../components/ai/AiEditableModal'
 import Card from '../components/Card'
 import { DATA_MODE } from '../data/dataMode'
 import type { Case, CasePhase, CaseStatus, CaseTray } from '../types/Case'
@@ -23,6 +24,9 @@ import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenis
 import { getCurrentUser } from '../lib/auth'
 import { supabase } from '../lib/supabaseClient'
 import { useDb } from '../lib/useDb'
+import { can } from '../auth/permissions'
+import Button from '../components/Button'
+import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 
 type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success'
 
@@ -109,6 +113,7 @@ function asNumber(value: unknown, fallback = 0) {
 export default function DashboardPage() {
   const { db } = useDb()
   const currentUser = getCurrentUser(db)
+  const canAiGestao = can(currentUser, 'ai.gestao')
   const isSupabaseMode = DATA_MODE === 'supabase'
   const [supabaseSnapshot, setSupabaseSnapshot] = useState<{
     patients: Array<Record<string, unknown>>
@@ -116,6 +121,10 @@ export default function DashboardPage() {
     cases: Array<Record<string, unknown>>
     labItems: Array<Record<string, unknown>>
   }>({ patients: [], scans: [], cases: [], labItems: [] })
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [aiModalTitle, setAiModalTitle] = useState('')
+  const [aiDraft, setAiDraft] = useState('')
+  const [aiAlerts, setAiAlerts] = useState<string[]>([])
 
   useEffect(() => {
     let active = true
@@ -392,6 +401,23 @@ export default function DashboardPage() {
       ? `${pendingActions.length} ações pendentes`
       : 'Nenhuma ação pendente'
 
+  const runGestaoAi = async (endpoint: '/gestao/insights-dre' | '/gestao/anomalias', title: string) => {
+    if (!canAiGestao) return
+    const payload = {
+      clinicId: currentUser?.linkedClinicId,
+      inputText: `Indicadores: scans=${scansRecent}, orcamentos_abertos=${budgetsOpenItems.length}, contratos_pendentes=${contractsToCloseItems.length}, fila_lab=${queuePipelineItems.length}, reconfeccoes=${reworkItems.length}`,
+      metadata: {
+        replenishmentRisk: riskLabel,
+        pendingActions: pendingActions.slice(0, 8).map((item) => ({ title: item.title, osCode: item.osCode, meta: item.meta })),
+      },
+    }
+    const result = await runAiRequest(endpoint, payload)
+    if (!result.ok) return
+    setAiModalTitle(title)
+    setAiDraft(result.output)
+    setAiModalOpen(true)
+  }
+
   return (
     <AppShell breadcrumb={['Inicio', 'Dashboard']}>
       <div className="rounded-3xl border border-slate-200 bg-slate-950 px-5 py-6 shadow-sm sm:px-6">
@@ -437,6 +463,27 @@ export default function DashboardPage() {
         </section>
 
         <section className="mt-8">
+          {canAiGestao ? (
+            <Card className="mb-4 border border-sky-800/50 bg-slate-950/40 p-4 shadow-none">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">Financeiro / DRE com IA</p>
+                  <p className="text-xs text-slate-400">Respostas editáveis antes de salvar em alertas.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" onClick={() => void runGestaoAi('/gestao/insights-dre', 'Gerar insights IA')}>
+                    Gerar insights IA
+                  </Button>
+                  <Button variant="secondary" onClick={() => void runGestaoAi('/gestao/anomalias', 'Alertas / anomalias')}>
+                    Alertas/anomalias
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3 space-y-1 text-xs text-slate-300">
+                {aiAlerts.length === 0 ? <p>Nenhum alerta IA salvo.</p> : aiAlerts.slice(0, 4).map((item, idx) => <p key={`${idx}_${item.slice(0, 20)}`}>{item}</p>)}
+              </div>
+            </Card>
+          ) : null}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
               title="Fila de confecção"
@@ -571,6 +618,19 @@ export default function DashboardPage() {
           </Card>
         </section>
       </div>
+
+      <AiEditableModal
+        open={aiModalOpen}
+        title={aiModalTitle}
+        value={aiDraft}
+        onChange={setAiDraft}
+        onClose={() => setAiModalOpen(false)}
+        onSave={() => {
+          setAiAlerts((current) => [aiDraft.trim(), ...current].filter((item) => item))
+          setAiModalOpen(false)
+        }}
+        saveLabel="Salvar em Alertas"
+      />
     </AppShell>
   )
 }

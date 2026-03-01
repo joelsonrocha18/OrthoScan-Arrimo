@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
+import AiEditableModal from '../components/ai/AiEditableModal'
 import FilePickerWithCamera from '../components/files/FilePickerWithCamera'
 import Input from '../components/Input'
 import WhatsappLink from '../components/WhatsappLink'
@@ -34,6 +35,7 @@ import { DATA_MODE } from '../data/dataMode'
 import { supabase } from '../lib/supabaseClient'
 import { patientCode } from '../lib/entityCode'
 import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
+import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 
 type PatientForm = {
   name: string
@@ -155,6 +157,7 @@ export default function PatientDetailPage() {
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'patients.write')
   const canDelete = can(currentUser, 'patients.delete')
+  const canAiClinica = can(currentUser, 'ai.clinica')
   const canDeleteByRole = currentUser?.role === 'master_admin' || currentUser?.role === 'dentist_admin'
   const canDeletePatient = canDelete && canDeleteByRole
   const isExternalUser = currentUser?.role === 'dentist_client' || currentUser?.role === 'clinic_client'
@@ -178,6 +181,10 @@ export default function PatientDetailPage() {
   const [docPreviewUrls, setDocPreviewUrls] = useState<Record<string, string>>({})
   const [orthocamPreviewUrls, setOrthocamPreviewUrls] = useState<Record<string, string>>({})
   const [lightbox, setLightbox] = useState<{ open: boolean; title: string; url: string }>({ open: false, title: '', url: '' })
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [aiModalTitle, setAiModalTitle] = useState('')
+  const [aiDraft, setAiDraft] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
 
@@ -1011,6 +1018,37 @@ export default function PatientDetailPage() {
     }
   }
 
+  const runClinicaAi = async (endpoint: '/clinica/resumo' | '/clinica/plano' | '/clinica/evolucao', title: string) => {
+    if (!canAiClinica || !existing) return
+    const inputText = [
+      `Paciente: ${existing.name}`,
+      `Nascimento: ${existing.birthDate ?? '-'}`,
+      `Observacoes: ${form.notes || '-'}`,
+      `Scans vinculados: ${scans.length}`,
+      `Casos vinculados: ${cases.length}`,
+    ].join('\n')
+    setAiLoading(true)
+    setAiModalTitle(title)
+    const result = await runAiRequest(endpoint, {
+      clinicId: form.clinicId || existing.clinicId,
+      inputText,
+      metadata: {
+        patientId: existing.id,
+        primaryDentistId: existing.primaryDentistId,
+        scans: scans.map((item) => ({ id: item.id, scanDate: item.scanDate, status: item.status, arch: item.arch })).slice(0, 8),
+        cases: cases.map((item) => ({ id: item.id, treatmentCode: item.treatmentCode, status: item.status, phase: item.phase })).slice(0, 8),
+      },
+    })
+    setAiLoading(false)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setAiDraft(result.output)
+    setAiModalOpen(true)
+    setError('')
+  }
+
   return (
     <AppShell breadcrumb={['Inicio', 'Pacientes', isNew ? 'Novo' : existing?.name ?? 'Detalhe']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1165,6 +1203,30 @@ export default function PatientDetailPage() {
           </div>
         </Card>
       </section>
+
+      {canAiClinica && !isNew && existing ? (
+        <section className="mt-6">
+          <Card>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Assistente IA - Prontuário</h2>
+                <p className="mt-1 text-sm text-slate-500">Gera texto editável. Revise antes de salvar no prontuário.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => void runClinicaAi('/clinica/resumo', 'Resumo com IA')} disabled={aiLoading}>
+                  Resumo com IA
+                </Button>
+                <Button variant="secondary" onClick={() => void runClinicaAi('/clinica/plano', 'Plano com IA')} disabled={aiLoading}>
+                  Plano com IA
+                </Button>
+                <Button variant="secondary" onClick={() => void runClinicaAi('/clinica/evolucao', 'Evolução com IA')} disabled={aiLoading}>
+                  Evolução com IA
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </section>
+      ) : null}
 
       <section className="mt-6">
         <Card>
@@ -1503,6 +1565,20 @@ export default function PatientDetailPage() {
           </Card>
         </div>
       ) : null}
+
+      <AiEditableModal
+        open={aiModalOpen}
+        title={aiModalTitle}
+        value={aiDraft}
+        loading={aiLoading}
+        onChange={setAiDraft}
+        onClose={() => setAiModalOpen(false)}
+        onSave={() => {
+          setForm((current) => ({ ...current, notes: `${current.notes.trim()}\n\n${aiDraft.trim()}`.trim() }))
+          setAiModalOpen(false)
+        }}
+        saveLabel="Salvar no prontuário"
+      />
     </AppShell>
   )
 }

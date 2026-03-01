@@ -6,6 +6,7 @@ import LabBoard from '../components/lab/LabBoard'
 import LabFilters from '../components/lab/LabFilters'
 import LabItemModal from '../components/lab/LabItemModal'
 import LabKpiRow from '../components/lab/LabKpiRow'
+import AiEditableModal from '../components/ai/AiEditableModal'
 import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
@@ -25,6 +26,7 @@ import { supabase } from '../lib/supabaseClient'
 import { loadSystemSettings } from '../lib/systemSettings'
 import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import { deleteLabItemSupabase } from '../repo/profileRepo'
+import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 
 type ModalState =
   | { open: false; mode: 'create' | 'edit'; item: null }
@@ -192,6 +194,7 @@ export default function LabPage() {
   const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'lab.write')
+  const canAiLab = can(currentUser, 'ai.lab')
   const canDeleteLab = currentUser?.role === 'master_admin'
   const [search, setSearch] = useState('')
   const [priority, setPriority] = useState<'todos' | 'urgente' | 'medio' | 'baixo'>('todos')
@@ -221,6 +224,11 @@ export default function LabPage() {
   const automationSettings = loadSystemSettings().guideAutomation
   const guideAutomationEnabled = automationSettings?.enabled !== false
   const guideAutomationLeadDays = Math.max(0, Math.trunc(automationSettings?.leadDays ?? 10))
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [aiModalTitle, setAiModalTitle] = useState('')
+  const [aiDraft, setAiDraft] = useState('')
+  const aiLoading = false
+  const [aiAlerts, setAiAlerts] = useState<string[]>([])
 
   useEffect(() => {
     const tab = searchParams.get('tab')
@@ -1106,6 +1114,33 @@ export default function LabPage() {
     [askProductionConfirmation, items],
   )
 
+  const runLabAi = async (endpoint: '/lab/auditoria-solicitacao' | '/lab/previsao-entrega', title: string) => {
+    if (!canAiLab) return
+    const highlighted = pipelineItems.slice(0, 8).map((item) => ({
+      id: item.id,
+      patientName: item.patientName,
+      requestCode: item.requestCode,
+      dueDate: item.dueDate,
+      status: item.status,
+      notes: item.notes,
+    }))
+    const result = await runAiRequest(endpoint, {
+      clinicId: currentUser?.linkedClinicId,
+      inputText: `Itens de laboratorio ativos: ${pipelineItems.length}. Reconfeccoes: ${reworkItems.length}. Prontos: ${readyDeliveryItems.length}.`,
+      metadata: {
+        highlighted,
+        overdue: pipelineItems.filter((item) => isOverdue(item)).length,
+      },
+    })
+    if (!result.ok) {
+      addToast({ type: 'error', title: 'IA Laboratorio', message: result.error })
+      return
+    }
+    setAiModalTitle(title)
+    setAiDraft(result.output)
+    setAiModalOpen(true)
+  }
+
   return (
     <AppShell breadcrumb={['Início', 'Laboratório']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1114,6 +1149,16 @@ export default function LabPage() {
           <p className="mt-2 text-sm text-slate-500">Fila de produção e entregas</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+          {canAiLab ? (
+            <Button className="w-full sm:w-auto" variant="secondary" onClick={() => void runLabAi('/lab/auditoria-solicitacao', 'Auditar solicitação')}>
+              Auditar solicitação
+            </Button>
+          ) : null}
+          {canAiLab ? (
+            <Button className="w-full sm:w-auto" variant="secondary" onClick={() => void runLabAi('/lab/previsao-entrega', 'Prever próxima entrega')}>
+              Prever próxima entrega
+            </Button>
+          ) : null}
           {canWrite ? (
             <Button className="w-full sm:w-auto" variant="secondary" onClick={() => setDeliveryOpen(true)}>
               Registrar entrega ao profissional
@@ -1124,6 +1169,15 @@ export default function LabPage() {
           ) : null}
         </div>
       </section>
+
+      {canAiLab ? (
+        <section className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <p className="font-semibold">Alertas IA</p>
+          <div className="mt-2 space-y-1">
+            {aiAlerts.length === 0 ? <p>Nenhum alerta salvo.</p> : aiAlerts.slice(0, 5).map((item, idx) => <p key={`${idx}_${item.slice(0, 20)}`}>{item}</p>)}
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-6">
         <LabFilters
@@ -1561,6 +1615,20 @@ export default function LabPage() {
           </Card>
         </div>
       ) : null}
+
+      <AiEditableModal
+        open={aiModalOpen}
+        title={aiModalTitle}
+        value={aiDraft}
+        loading={aiLoading}
+        onChange={setAiDraft}
+        onClose={() => setAiModalOpen(false)}
+        onSave={() => {
+          setAiAlerts((current) => [aiDraft.trim(), ...current].filter((item) => item))
+          setAiModalOpen(false)
+        }}
+        saveLabel="Salvar em Alertas IA"
+      />
     </AppShell>
   )
 }

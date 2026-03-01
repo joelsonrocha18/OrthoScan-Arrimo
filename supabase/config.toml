@@ -380,6 +380,9 @@ verify_jwt = false
 [functions.ms-drive-storage]
 verify_jwt = false
 
+[functions.ai-gateway]
+verify_jwt = false
+
 # Experimental features may be deprecated any time
 [experimental]
 # Configures Postgres storage engine to use OrioleDB (S3)

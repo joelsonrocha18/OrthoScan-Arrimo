@@ -49,6 +49,19 @@ export type SystemSettings = {
     enabled: boolean
     leadDays: number
   }
+  aiGateway: {
+    enabled: boolean
+    modules: {
+      clinica: boolean
+      lab: boolean
+      gestao: boolean
+      comercial: boolean
+    }
+    provider: 'mock' | 'http' | 'openai'
+    model: string
+    apiBaseUrl: string
+    apiKey: string
+  }
   priceCatalog: ProductPricingItem[]
   audit: SystemAuditEntry[]
 }
@@ -73,6 +86,19 @@ const defaultSettings: SystemSettings = {
     enabled: true,
     leadDays: 10,
   },
+  aiGateway: {
+    enabled: true,
+    modules: {
+      clinica: true,
+      lab: true,
+      gestao: true,
+      comercial: true,
+    },
+    provider: 'mock',
+    model: 'gpt-4.1-mini',
+    apiBaseUrl: '',
+    apiKey: '',
+  },
   priceCatalog: [],
   audit: [],
 }
@@ -92,6 +118,8 @@ export function loadSystemSettings(): SystemSettings {
     const theme = parsed.theme === 'dark' ? 'dark' : 'light'
     const companyRaw = isObject(parsed.labCompany) ? parsed.labCompany : {}
     const guideAutomationRaw = isObject(parsed.guideAutomation) ? parsed.guideAutomation : {}
+    const aiGatewayRaw = isObject(parsed.aiGateway) ? parsed.aiGateway : {}
+    const aiModulesRaw = isObject(aiGatewayRaw.modules) ? aiGatewayRaw.modules : {}
 
     const labCompany: LabCompanyProfile = {
       tradeName: String(companyRaw.tradeName ?? ''),
@@ -112,6 +140,19 @@ export function loadSystemSettings(): SystemSettings {
           ? Math.max(0, Math.trunc(guideAutomationRaw.leadDays))
           : 10,
     }
+    const aiGateway = {
+      enabled: aiGatewayRaw.enabled !== false,
+      modules: {
+        clinica: aiModulesRaw.clinica !== false,
+        lab: aiModulesRaw.lab !== false,
+        gestao: aiModulesRaw.gestao !== false,
+        comercial: aiModulesRaw.comercial !== false,
+      },
+      provider: aiGatewayRaw.provider === 'http' || aiGatewayRaw.provider === 'openai' ? aiGatewayRaw.provider : 'mock',
+      model: typeof aiGatewayRaw.model === 'string' && aiGatewayRaw.model.trim() ? aiGatewayRaw.model : 'gpt-4.1-mini',
+      apiBaseUrl: typeof aiGatewayRaw.apiBaseUrl === 'string' ? aiGatewayRaw.apiBaseUrl : '',
+      apiKey: typeof aiGatewayRaw.apiKey === 'string' ? aiGatewayRaw.apiKey : '',
+    } as SystemSettings['aiGateway']
 
     const auditRaw = Array.isArray(parsed.audit) ? parsed.audit : []
     const catalogRaw = Array.isArray(parsed.priceCatalog) ? parsed.priceCatalog : []
@@ -146,6 +187,7 @@ export function loadSystemSettings(): SystemSettings {
       theme,
       labCompany,
       guideAutomation,
+      aiGateway,
       priceCatalog,
       audit,
     }

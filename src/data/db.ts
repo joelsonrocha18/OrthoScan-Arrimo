@@ -17,9 +17,9 @@ export const DB_KEY = 'arrimo_orthoscan_db_v1'
 const DB_MODE_KEY = 'arrimo_orthoscan_seed_mode_v1'
 const HOTFIX_RESET_JOELSON_TREATMENT_KEY = 'arrimo_hotfix_reset_joelson_treatment_v1'
 const HOTFIX_RESET_JOELSON_TARGET = 'JOELSON DOS ANJOS ROCHA'
-const SEED_MODE: 'full' | 'empty' = 'empty'
-const MASTER_EMAIL: string | undefined = undefined
-const LOCAL_DEFAULT_PASSWORD: string | undefined = undefined
+const SEED_MODE: 'full' | 'empty' = 'full'
+const MASTER_EMAIL: string | undefined = 'master@orthoscan.local'
+const LOCAL_DEFAULT_PASSWORD: string | undefined = 'Ortho@1234'
 const FULL_DEMO_INTRA_SLOTS = [
   'intra_frontal',
   'intra_lateral_dir',
@@ -282,67 +282,308 @@ function mockCaseAttachments(caseId: string): CaseAttachment[] {
 }
 
 function seedPatients(): Patient[] {
-  const names = ['Maria Silva', 'Joao Santos', 'Ana Costa', 'Paciente Demo Completo']
-  return names.map((name) => ({
-    id: patientIdFromName(name),
-    name,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  }))
+  const now = nowIso()
+  const seed: Array<Patient> = [
+    {
+      id: 'pat_maria_silva',
+      name: 'Maria Silva',
+      cpf: '123.456.789-10',
+      phone: '(11) 3344-5500',
+      whatsapp: '(11) 99888-1111',
+      email: 'maria.silva@paciente.local',
+      birthDate: '1991-02-10',
+      gender: 'feminino',
+      clinicId: 'clinic_arrimo',
+      primaryDentistId: 'dent_demo',
+      notes: 'Caso de alinhador em fase de produção.',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'pat_joao_santos',
+      name: 'Joao Santos',
+      cpf: '222.333.444-55',
+      phone: '(11) 3232-1212',
+      whatsapp: '(11) 99777-2222',
+      email: 'joao.santos@paciente.local',
+      birthDate: '1988-07-22',
+      gender: 'masculino',
+      clinicId: 'clinic_arrimo',
+      primaryDentistId: 'dent_demo',
+      notes: 'Caso em orçamento.',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'pat_ana_costa',
+      name: 'Ana Costa',
+      cpf: '333.444.555-66',
+      phone: '(11) 3040-2020',
+      whatsapp: '(11) 99666-3333',
+      email: 'ana.costa@paciente.local',
+      birthDate: '1994-11-05',
+      gender: 'feminino',
+      clinicId: 'clinic_arrimo',
+      primaryDentistId: 'dent_demo',
+      notes: 'Caso em entrega.',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'pat_bruno_ramos',
+      name: 'Bruno Ramos',
+      cpf: '444.555.666-77',
+      phone: '(21) 3111-1414',
+      whatsapp: '(21) 99555-4444',
+      email: 'bruno.ramos@paciente.local',
+      birthDate: '1985-03-28',
+      gender: 'masculino',
+      clinicId: 'clinic_parceira',
+      primaryDentistId: 'dent_parceiro_1',
+      notes: 'Contrato pendente.',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'pat_luiza_ferreira',
+      name: 'Luiza Ferreira',
+      cpf: '555.666.777-88',
+      phone: '(21) 3444-8888',
+      whatsapp: '(21) 99444-5555',
+      email: 'luiza.ferreira@paciente.local',
+      birthDate: '1997-09-14',
+      gender: 'feminino',
+      clinicId: 'clinic_parceira',
+      primaryDentistId: 'dent_parceiro_2',
+      notes: 'Planejamento inicial.',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: patientIdFromName('Paciente Demo Completo'),
+      name: 'Paciente Demo Completo',
+      clinicId: 'clinic_arrimo',
+      primaryDentistId: 'dent_demo',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ]
+  return seed
 }
 
 function seedCases(): Case[] {
-  const seed: Array<{
-    id: string
-    patientName: string
-    scanDate: string
-    totalTrays: number
-    changeEveryDays: number
-    status: CaseStatus
-  }> = [
-    { id: 'case_001', patientName: 'Maria Silva', scanDate: '2026-01-06', totalTrays: 24, changeEveryDays: 7, status: 'em_producao' },
-    { id: 'case_002', patientName: 'Joao Santos', scanDate: '2026-01-18', totalTrays: 20, changeEveryDays: 10, status: 'planejamento' },
-    { id: 'case_003', patientName: 'Ana Costa', scanDate: '2025-12-20', totalTrays: 18, changeEveryDays: 14, status: 'em_entrega' },
-  ]
-
-  return seed.map((item) => ({
-    ...item,
-    patientId: patientIdFromName(item.patientName),
-    phase: phaseFromStatus(item.status),
-    contract: {
-      status: item.status === 'planejamento' ? 'pendente' : 'aprovado',
-      approvedAt: item.status === 'planejamento' ? undefined : nowIso(),
+  const now = nowIso()
+  const finishedInstallationDate = daysFromNow(-45)
+  return [
+    {
+      id: 'case_001',
+      patientName: 'Maria Silva',
+      patientId: 'pat_maria_silva',
+      dentistId: 'dent_demo',
+      requestedByDentistId: 'dent_demo',
+      clinicId: 'clinic_arrimo',
+      productType: 'alinhador_12m',
+      productId: 'alinhador_12m',
+      scanDate: daysFromNow(-40),
+      totalTrays: 24,
+      totalTraysUpper: 24,
+      totalTraysLower: 24,
+      changeEveryDays: 7,
+      status: 'em_producao',
+      phase: 'em_producao',
+      budget: { value: 15900, notes: 'Plano premium', createdAt: now },
+      contract: { status: 'aprovado', approvedAt: daysFromNow(-35), notes: 'Contrato assinado digitalmente.' },
+      trays: buildTrays(daysFromNow(-40), 24, 7),
+      attachments: mockCaseAttachments('case_001'),
+      deliveryLots: [],
+      installation: undefined,
+      arch: 'ambos',
+      complaint: 'Apinhamento anterior superior e inferior.',
+      dentistGuidance: 'Controle de torque em incisivos.',
+      createdAt: now,
+      updatedAt: now,
     },
-    budget: item.status === 'planejamento' ? undefined : { value: 12000, notes: 'Orcamento seed', createdAt: nowIso() },
-    trays: buildTrays(item.scanDate, item.totalTrays, item.changeEveryDays),
-    attachments: mockCaseAttachments(item.id),
-    totalTraysUpper: item.totalTrays,
-    totalTraysLower: item.totalTrays,
-    attachmentBondingTray: false,
-    scanFiles: [],
-    deliveryLots: [],
-    installation: undefined,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  }))
+    {
+      id: 'case_002',
+      patientName: 'Joao Santos',
+      patientId: 'pat_joao_santos',
+      dentistId: 'dent_demo',
+      requestedByDentistId: 'dent_demo',
+      clinicId: 'clinic_arrimo',
+      productType: 'alinhador_6m',
+      productId: 'alinhador_6m',
+      scanDate: daysFromNow(-20),
+      totalTrays: 18,
+      totalTraysUpper: 18,
+      totalTraysLower: 18,
+      changeEveryDays: 10,
+      status: 'planejamento',
+      phase: 'orcamento',
+      budget: { value: 9800, notes: 'Aguardando aprovação comercial.', createdAt: now },
+      contract: { status: 'pendente' },
+      trays: buildPendingTrays(daysFromNow(-20), 18, 10),
+      attachments: mockCaseAttachments('case_002'),
+      deliveryLots: [],
+      installation: undefined,
+      arch: 'ambos',
+      complaint: 'Mordida cruzada posterior.',
+      dentistGuidance: 'Setup com expansão leve.',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'case_003',
+      patientName: 'Ana Costa',
+      patientId: 'pat_ana_costa',
+      dentistId: 'dent_demo',
+      requestedByDentistId: 'dent_demo',
+      clinicId: 'clinic_arrimo',
+      productType: 'alinhador_3m',
+      productId: 'alinhador_3m',
+      scanDate: daysFromNow(-70),
+      totalTrays: 10,
+      totalTraysUpper: 10,
+      totalTraysLower: 10,
+      changeEveryDays: 10,
+      status: 'em_entrega',
+      phase: 'em_producao',
+      budget: { value: 6500, notes: 'Plano curto.', createdAt: now },
+      contract: { status: 'aprovado', approvedAt: daysFromNow(-60) },
+      trays: buildTrays(daysFromNow(-70), 10, 10),
+      attachments: mockCaseAttachments('case_003'),
+      deliveryLots: [
+        {
+          id: 'lot_case_003_1',
+          arch: 'ambos',
+          fromTray: 1,
+          toTray: 4,
+          quantity: 4,
+          deliveredToDoctorAt: daysFromNow(-30),
+          note: 'Entrega parcial ao profissional.',
+          createdAt: now,
+        },
+      ],
+      installation: {
+        installedAt: daysFromNow(-28),
+        note: 'Primeira instalação concluída.',
+        deliveredUpper: 4,
+        deliveredLower: 4,
+      },
+      arch: 'ambos',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'case_004',
+      patientName: 'Bruno Ramos',
+      patientId: 'pat_bruno_ramos',
+      dentistId: 'dent_parceiro_1',
+      requestedByDentistId: 'dent_parceiro_1',
+      clinicId: 'clinic_parceira',
+      productType: 'placa_bruxismo',
+      productId: 'placa_bruxismo',
+      scanDate: daysFromNow(-12),
+      totalTrays: 1,
+      totalTraysUpper: 1,
+      totalTraysLower: 0,
+      changeEveryDays: 30,
+      status: 'planejamento',
+      phase: 'contrato_pendente',
+      budget: { value: 1300, notes: 'Aguardando aceite do paciente.', createdAt: now },
+      contract: { status: 'pendente', notes: 'Contrato enviado por WhatsApp.' },
+      trays: buildPendingTrays(daysFromNow(-12), 1, 30),
+      attachments: mockCaseAttachments('case_004'),
+      deliveryLots: [],
+      installation: undefined,
+      arch: 'superior',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'case_005',
+      patientName: 'Luiza Ferreira',
+      patientId: 'pat_luiza_ferreira',
+      dentistId: 'dent_parceiro_2',
+      requestedByDentistId: 'dent_parceiro_2',
+      clinicId: 'clinic_parceira',
+      productType: 'contencao',
+      productId: 'contencao',
+      scanDate: daysFromNow(-10),
+      totalTrays: 1,
+      totalTraysUpper: 1,
+      totalTraysLower: 1,
+      changeEveryDays: 30,
+      status: 'planejamento',
+      phase: 'contrato_aprovado',
+      budget: { value: 1700, notes: 'Contrato aprovado, aguardando OS.', createdAt: now },
+      contract: { status: 'aprovado', approvedAt: daysFromNow(-8) },
+      trays: buildPendingTrays(daysFromNow(-10), 1, 30),
+      attachments: mockCaseAttachments('case_005'),
+      deliveryLots: [],
+      installation: undefined,
+      arch: 'ambos',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'case_006',
+      patientName: 'Paciente Demo Completo',
+      patientId: patientIdFromName('Paciente Demo Completo'),
+      dentistId: 'dent_demo',
+      requestedByDentistId: 'dent_demo',
+      clinicId: 'clinic_arrimo',
+      productType: 'alinhador_12m',
+      productId: 'alinhador_12m',
+      scanDate: daysFromNow(-140),
+      totalTrays: 20,
+      totalTraysUpper: 20,
+      totalTraysLower: 20,
+      changeEveryDays: 7,
+      status: 'finalizado',
+      phase: 'finalizado',
+      budget: { value: 12900, notes: 'Caso encerrado com sucesso.', createdAt: now },
+      contract: { status: 'aprovado', approvedAt: daysFromNow(-130) },
+      trays: buildTrays(daysFromNow(-140), 20, 7).map((tray) => ({ ...tray, state: 'entregue', deliveredAt: daysFromNow(-30) })),
+      attachments: mockCaseAttachments('case_006'),
+      deliveryLots: [
+        {
+          id: 'lot_case_006_1',
+          arch: 'ambos',
+          fromTray: 1,
+          toTray: 20,
+          quantity: 20,
+          deliveredToDoctorAt: daysFromNow(-60),
+          note: 'Lotes completos entregues.',
+          createdAt: now,
+        },
+      ],
+      installation: {
+        installedAt: finishedInstallationDate,
+        note: 'Tratamento finalizado e contido.',
+        deliveredUpper: 20,
+        deliveredLower: 20,
+      },
+      arch: 'ambos',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ]
 }
 
 function seedLabItems(): LabItem[] {
   const timestamp = nowIso()
   return [
-    { id: 'lab_001', caseId: 'case_001', arch: 'ambos', patientName: 'Maria Silva', trayNumber: 11, plannedDate: daysFromNow(-4), dueDate: daysFromNow(-1), status: 'aguardando_iniciar', priority: 'Medio', notes: 'Validar novo escaneamento antes da producao.', createdAt: timestamp, updatedAt: timestamp },
-    { id: 'lab_002', caseId: 'case_002', arch: 'ambos', patientName: 'Joao Santos', trayNumber: 3, plannedDate: daysFromNow(-2), dueDate: daysFromNow(1), status: 'aguardando_iniciar', priority: 'Baixo', createdAt: timestamp, updatedAt: timestamp },
-    { id: 'lab_003', caseId: 'case_001', arch: 'ambos', patientName: 'Maria Silva', trayNumber: 12, plannedDate: daysFromNow(-5), dueDate: daysFromNow(0), status: 'em_producao', priority: 'Medio', createdAt: timestamp, updatedAt: timestamp },
-    { id: 'lab_004', caseId: 'case_003', arch: 'ambos', patientName: 'Ana Costa', trayNumber: 15, plannedDate: daysFromNow(-7), dueDate: daysFromNow(-2), status: 'em_producao', priority: 'Urgente', notes: 'Paciente com evento clinico proximo.', createdAt: timestamp, updatedAt: timestamp },
-    { id: 'lab_005', caseId: 'case_001', arch: 'ambos', patientName: 'Maria Silva', trayNumber: 10, plannedDate: daysFromNow(-6), dueDate: daysFromNow(-3), status: 'controle_qualidade', priority: 'Urgente', notes: 'Rework por ajuste de margem gengival.', createdAt: timestamp, updatedAt: timestamp },
-    { id: 'lab_006', caseId: 'case_003', arch: 'ambos', patientName: 'Ana Costa', trayNumber: 16, plannedDate: daysFromNow(-3), dueDate: daysFromNow(2), status: 'prontas', priority: 'Baixo', createdAt: timestamp, updatedAt: timestamp },
-    { id: 'lab_007', caseId: 'case_002', arch: 'ambos', patientName: 'Joao Santos', trayNumber: 2, plannedDate: daysFromNow(-10), dueDate: daysFromNow(-5), status: 'prontas', priority: 'Baixo', createdAt: timestamp, updatedAt: timestamp },
-    { id: 'lab_008', arch: 'ambos', patientName: 'Carla Menezes', trayNumber: 1, plannedDate: daysFromNow(-1), dueDate: daysFromNow(3), status: 'prontas', priority: 'Medio', createdAt: timestamp, updatedAt: timestamp },
+    { id: 'lab_001', caseId: 'case_001', clinicId: 'clinic_arrimo', patientId: 'pat_maria_silva', dentistId: 'dent_demo', productType: 'alinhador_12m', productId: 'alinhador_12m', requestCode: 'OS-1001', requestKind: 'producao', arch: 'ambos', trayNumber: 11, plannedUpperQty: 2, plannedLowerQty: 2, planningDefinedAt: timestamp, plannedDate: daysFromNow(-4), dueDate: daysFromNow(-1), status: 'aguardando_iniciar', priority: 'Medio', notes: 'Aguardando liberar produção.', patientName: 'Maria Silva', createdAt: timestamp, updatedAt: timestamp },
+    { id: 'lab_002', caseId: 'case_001', clinicId: 'clinic_arrimo', patientId: 'pat_maria_silva', dentistId: 'dent_demo', productType: 'alinhador_12m', productId: 'alinhador_12m', requestCode: 'OS-1002', requestKind: 'producao', arch: 'ambos', trayNumber: 12, plannedUpperQty: 2, plannedLowerQty: 2, planningDefinedAt: timestamp, plannedDate: daysFromNow(-3), dueDate: daysFromNow(1), status: 'em_producao', priority: 'Medio', notes: 'Impressão em andamento.', patientName: 'Maria Silva', createdAt: timestamp, updatedAt: timestamp },
+    { id: 'lab_003', caseId: 'case_001', clinicId: 'clinic_arrimo', patientId: 'pat_maria_silva', dentistId: 'dent_demo', productType: 'alinhador_12m', productId: 'alinhador_12m', requestCode: 'OS-1003', requestKind: 'reconfeccao', arch: 'superior', trayNumber: 10, plannedUpperQty: 1, plannedLowerQty: 0, planningDefinedAt: timestamp, plannedDate: daysFromNow(-6), dueDate: daysFromNow(-2), status: 'controle_qualidade', priority: 'Urgente', notes: 'Rework por ajuste de margem.', patientName: 'Maria Silva', createdAt: timestamp, updatedAt: timestamp },
+    { id: 'lab_004', caseId: 'case_003', clinicId: 'clinic_arrimo', patientId: 'pat_ana_costa', dentistId: 'dent_demo', productType: 'alinhador_3m', productId: 'alinhador_3m', requestCode: 'OS-1004', requestKind: 'producao', arch: 'ambos', trayNumber: 6, plannedUpperQty: 2, plannedLowerQty: 2, planningDefinedAt: timestamp, plannedDate: daysFromNow(-2), dueDate: daysFromNow(2), status: 'prontas', priority: 'Baixo', notes: 'Pronto para entrega ao profissional.', patientName: 'Ana Costa', createdAt: timestamp, updatedAt: timestamp },
+    { id: 'lab_005', caseId: 'case_005', clinicId: 'clinic_parceira', patientId: 'pat_luiza_ferreira', dentistId: 'dent_parceiro_2', productType: 'contencao', productId: 'contencao', requestCode: 'OS-1005', requestKind: 'reposicao_programada', expectedReplacementDate: daysFromNow(30), arch: 'ambos', trayNumber: 1, plannedUpperQty: 1, plannedLowerQty: 1, planningDefinedAt: timestamp, plannedDate: daysFromNow(5), dueDate: daysFromNow(15), status: 'aguardando_iniciar', priority: 'Baixo', notes: 'Reposição automática futura.', patientName: 'Luiza Ferreira', createdAt: timestamp, updatedAt: timestamp },
+    { id: 'lab_006', caseId: 'case_004', clinicId: 'clinic_parceira', patientId: 'pat_bruno_ramos', dentistId: 'dent_parceiro_1', productType: 'placa_bruxismo', productId: 'placa_bruxismo', requestCode: 'OS-1006', requestKind: 'producao', arch: 'superior', trayNumber: 1, plannedUpperQty: 1, plannedLowerQty: 0, planningDefinedAt: timestamp, plannedDate: daysFromNow(-1), dueDate: daysFromNow(3), status: 'em_producao', priority: 'Urgente', notes: 'Paciente com dor ATM.', patientName: 'Bruno Ramos', createdAt: timestamp, updatedAt: timestamp },
   ]
 }
 
 function seedScans(cases: Case[]): Scan[] {
-  const linkedCaseId = cases[0]?.id
+  const linkedCaseId = cases.find((item) => item.id === 'case_001')?.id
   return [
     {
       id: 'scan_001',
@@ -357,6 +598,12 @@ function seedScans(cases: Case[]): Scan[] {
         { id: 'scan_001_att_1', name: 'intra_frontal.jpg', kind: 'foto_intra', slotId: 'intra_frontal', status: 'ok', attachedAt: nowIso(), createdAt: nowIso() },
         { id: 'scan_001_att_2', name: 'extra_face_frontal.jpg', kind: 'foto_extra', slotId: 'extra_face_frontal', status: 'ok', attachedAt: nowIso(), createdAt: nowIso() },
       ],
+      purposeProductId: 'alinhador_12m',
+      purposeProductType: 'alinhador_12m',
+      purposeLabel: 'Alinhador 12 meses',
+      dentistId: 'dent_demo',
+      requestedByDentistId: 'dent_demo',
+      clinicId: 'clinic_arrimo',
       status: 'pendente',
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -376,6 +623,12 @@ function seedScans(cases: Case[]): Scan[] {
         { id: 'scan_002_att_4', name: 'telerradiografia.jpg', kind: 'raiox', rxType: 'teleradiografia', status: 'ok', attachedAt: nowIso(), createdAt: nowIso() },
         { id: 'scan_002_att_5', name: 'tomografia.zip', kind: 'dicom', rxType: 'tomografia', status: 'ok', attachedAt: nowIso(), createdAt: nowIso() },
       ],
+      purposeProductId: 'alinhador_6m',
+      purposeProductType: 'alinhador_6m',
+      purposeLabel: 'Alinhador 6 meses',
+      dentistId: 'dent_parceiro_1',
+      requestedByDentistId: 'dent_parceiro_1',
+      clinicId: 'clinic_parceira',
       status: 'aprovado',
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -389,8 +642,37 @@ function seedScans(cases: Case[]): Scan[] {
       complaint: 'Acompanhar alinhamento inferior.',
       dentistGuidance: 'Plano conservador.',
       attachments: [{ id: 'scan_003_att_1', name: 'registro_inicial.jpg', kind: 'foto_intra', slotId: 'intra_frontal', status: 'ok', attachedAt: nowIso(), createdAt: nowIso() }],
+      purposeProductId: 'alinhador_12m',
+      purposeProductType: 'alinhador_12m',
+      purposeLabel: 'Alinhador 12 meses',
+      dentistId: 'dent_demo',
+      requestedByDentistId: 'dent_demo',
+      clinicId: 'clinic_arrimo',
       status: linkedCaseId ? 'convertido' : 'aprovado',
       linkedCaseId,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    },
+    {
+      id: 'scan_004',
+      patientName: 'Luiza Ferreira',
+      patientId: 'pat_luiza_ferreira',
+      scanDate: daysFromNow(-2),
+      arch: 'superior',
+      complaint: 'Sensibilidade na região molar.',
+      dentistGuidance: 'Repetir escaneamento superior por artefato.',
+      purposeProductId: 'contencao',
+      purposeProductType: 'contencao',
+      purposeLabel: 'Contenção',
+      dentistId: 'dent_parceiro_2',
+      requestedByDentistId: 'dent_parceiro_2',
+      clinicId: 'clinic_parceira',
+      attachments: [
+        { id: 'scan_004_att_1', name: 'scan_superior.stl', kind: 'scan3d', arch: 'superior', status: 'ok', attachedAt: nowIso(), createdAt: nowIso() },
+        { id: 'scan_004_att_2', name: 'foto_extra.png', kind: 'foto_extra', slotId: 'extra_face_frontal', status: 'ok', attachedAt: nowIso(), createdAt: nowIso() },
+      ],
+      status: 'reprovado',
+      notes: 'Reprovado por baixa qualidade do arquivo superior.',
       createdAt: nowIso(),
       updatedAt: nowIso(),
     },
@@ -406,6 +688,38 @@ function seedDentists(): DentistClinic[] {
       type: 'dentista',
       cro: 'CRO-00000',
       phone: '(11) 99999-0000',
+      whatsapp: '(11) 99999-0000',
+      email: 'dentista.demo@orthoscan.local',
+      clinicId: 'clinic_arrimo',
+      gender: 'masculino',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'dent_parceiro_1',
+      name: 'Dra. Camila Lima',
+      type: 'dentista',
+      cro: 'CRO-11223',
+      phone: '(21) 98888-1111',
+      whatsapp: '(21) 98888-1111',
+      email: 'camila.lima@orthoscan.local',
+      clinicId: 'clinic_parceira',
+      gender: 'feminino',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'dent_parceiro_2',
+      name: 'Dr. Renato Alves',
+      type: 'dentista',
+      cro: 'CRO-44556',
+      phone: '(21) 97777-3333',
+      whatsapp: '(21) 97777-3333',
+      email: 'renato.alves@orthoscan.local',
+      clinicId: 'clinic_parceira',
+      gender: 'masculino',
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -420,7 +734,24 @@ function seedClinics(): Clinic[] {
       id: 'clinic_arrimo',
       tradeName: 'ARRIMO',
       legalName: '',
-      cnpj: '',
+      cnpj: '11.111.111/0001-11',
+      phone: '(11) 3000-1000',
+      whatsapp: '(11) 99999-1000',
+      email: 'arrimo@orthoscan.local',
+      notes: 'Clínica interna (origem A-xxxx).',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'clinic_parceira',
+      tradeName: 'Clinica Parceira Alpha',
+      legalName: 'Clinica Parceira Alpha LTDA',
+      cnpj: '22.222.222/0001-22',
+      phone: '(21) 3000-2000',
+      whatsapp: '(21) 98888-2000',
+      email: 'contato@parceira-alpha.local',
+      notes: 'Clínica externa (origem C-xxxx).',
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -430,14 +761,70 @@ function seedClinics(): Clinic[] {
 
 function seedUsers(): User[] {
   const now = nowIso()
+  const defaultPassword = LOCAL_DEFAULT_PASSWORD
   return [
     {
       id: 'user_master',
       name: 'Master Admin',
       email: MASTER_EMAIL || 'master@orthoscan.local',
-      password: LOCAL_DEFAULT_PASSWORD,
+      password: defaultPassword,
       role: 'master_admin',
       isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'user_dentist_admin',
+      name: 'Dentista Admin',
+      email: 'dentist.admin@orthoscan.local',
+      password: defaultPassword,
+      role: 'dentist_admin',
+      isActive: true,
+      linkedClinicId: 'clinic_arrimo',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'user_dentist_client',
+      name: 'Dentista Cliente',
+      email: 'dentist.client@orthoscan.local',
+      password: defaultPassword,
+      role: 'dentist_client',
+      isActive: true,
+      linkedDentistId: 'dent_demo',
+      linkedClinicId: 'clinic_arrimo',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'user_clinic_client',
+      name: 'Clinica Cliente',
+      email: 'clinic.client@orthoscan.local',
+      password: defaultPassword,
+      role: 'clinic_client',
+      isActive: true,
+      linkedClinicId: 'clinic_arrimo',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'user_lab_tech',
+      name: 'Tecnico LAB',
+      email: 'lab.tech@orthoscan.local',
+      password: defaultPassword,
+      role: 'lab_tech',
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: 'user_reception',
+      name: 'Recepcao',
+      email: 'reception@orthoscan.local',
+      password: defaultPassword,
+      role: 'receptionist',
+      isActive: true,
+      linkedClinicId: 'clinic_arrimo',
       createdAt: now,
       updatedAt: now,
     },
@@ -449,6 +836,21 @@ function ensureMasterUser(users: User[]): User[] {
   if (!masterSeed) return users
   const existing = users.find((user) => user.role === 'master_admin')
   if (!existing) return [masterSeed, ...users]
+
+  if (existing.id !== masterSeed.id) {
+    let customChanged = false
+    let customNext = existing
+    if (existing.deletedAt) {
+      customNext = { ...customNext, deletedAt: undefined }
+      customChanged = true
+    }
+    if (!existing.isActive) {
+      customNext = { ...customNext, isActive: true }
+      customChanged = true
+    }
+    if (!customChanged) return users
+    return users.map((user) => (user.id === existing.id ? { ...customNext, updatedAt: nowIso() } : user))
+  }
 
   let changed = false
   let next = existing
@@ -472,6 +874,30 @@ function ensureMasterUser(users: User[]): User[] {
   return users.map((user) => (user.id === existing.id ? { ...next, updatedAt: nowIso() } : user))
 }
 
+function ensureDefaultUsers(users: User[]): User[] {
+  const seed = seedUsers()
+  const byId = new Map(users.map((item) => [item.id, item]))
+  for (const seeded of seed) {
+    const current = byId.get(seeded.id)
+    if (!current) {
+      byId.set(seeded.id, seeded)
+      continue
+    }
+    byId.set(seeded.id, {
+      ...current,
+      email: seeded.email || current.email,
+      password: seeded.password ?? current.password,
+      role: seeded.role,
+      isActive: true,
+      linkedClinicId: seeded.linkedClinicId ?? current.linkedClinicId,
+      linkedDentistId: seeded.linkedDentistId ?? current.linkedDentistId,
+      deletedAt: undefined,
+      updatedAt: nowIso(),
+    })
+  }
+  return Array.from(byId.values())
+}
+
 function buildSeededDb(mode: 'full' | 'empty'): AppDb {
   if (mode === 'empty') {
     return {
@@ -483,7 +909,7 @@ function buildSeededDb(mode: 'full' | 'empty'): AppDb {
       scans: [],
       dentists: [],
       clinics: [],
-      users: ensureMasterUser(seedUsers()),
+      users: ensureMasterUser(ensureDefaultUsers(seedUsers())),
       auditLogs: [],
     }
   }
@@ -498,7 +924,7 @@ function buildSeededDb(mode: 'full' | 'empty'): AppDb {
     scans: seedScans(cases),
     dentists: seedDentists(),
     clinics,
-    users: ensureMasterUser(seedUsers()),
+    users: ensureMasterUser(ensureDefaultUsers(seedUsers())),
     auditLogs: [],
   })
 }
@@ -512,7 +938,7 @@ function readPersistedMode(): 'full' | 'empty' | null {
 function effectiveSeedMode(): 'full' | 'empty' {
   if (import.meta.env.MODE === 'test') return readPersistedMode() ?? 'full'
   if (DATA_MODE === 'supabase') return 'empty'
-  return readPersistedMode() ?? SEED_MODE
+  return SEED_MODE
 }
 
 function fullDemoAttachments(): ScanAttachment[] {
@@ -1095,7 +1521,9 @@ export function ensureSeed() {
       // records used by local UI state between route transitions.
       const nextDb: AppDb = {
         ...normalized,
-        users: ensureMasterUser(normalized.users.length === 0 ? seedUsers() : normalized.users),
+        users: ensureMasterUser(
+          ensureDefaultUsers(normalized.users.length === 0 ? seedUsers() : normalized.users),
+        ),
       }
       localStorage.setItem(DB_KEY, JSON.stringify(nextDb))
       return nextDb
@@ -1115,7 +1543,9 @@ export function ensureSeed() {
       scans: normalized.scans.length === 0 ? seedScans(normalized.cases) : normalized.scans,
       dentists: normalized.dentists.length === 0 ? seedDentists() : normalized.dentists,
       clinics: normalized.clinics.length === 0 ? seedClinics() : normalized.clinics,
-      users: ensureMasterUser(normalized.users.length === 0 ? seedUsers() : normalized.users),
+      users: ensureMasterUser(
+        ensureDefaultUsers(normalized.users.length === 0 ? seedUsers() : normalized.users),
+      ),
     })
     localStorage.setItem(DB_KEY, JSON.stringify(nextDb))
     return nextDb

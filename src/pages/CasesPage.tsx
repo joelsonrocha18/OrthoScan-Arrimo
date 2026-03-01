@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import AppShell from '../layouts/AppShell'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
+import AiEditableModal from '../components/ai/AiEditableModal'
 import Card from '../components/Card'
 import Input from '../components/Input'
 import type { CasePhase } from '../types/Case'
@@ -11,8 +12,10 @@ import { isAlignerProductType, normalizeProductType } from '../types/Product'
 import { DATA_MODE } from '../data/dataMode'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
+import { can } from '../auth/permissions'
 import { listCasesForUser, listLabItemsForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
+import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
@@ -100,6 +103,7 @@ export default function CasesPage() {
   const { db } = useDb()
   const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
+  const canAiComercial = can(currentUser, 'ai.comercial')
   const [supabaseCases, setSupabaseCases] = useState<CaseListItem[]>([])
   const [supabasePatientsById, setSupabasePatientsById] = useState<Map<string, string>>(new Map())
   const [supabaseDentistsById, setSupabaseDentistsById] = useState<Map<string, { name: string; gender?: string }>>(new Map())
@@ -108,6 +112,9 @@ export default function CasesPage() {
   const [search, setSearch] = useState('')
   const [showInTreatment, setShowInTreatment] = useState(true)
   const [showConcluded, setShowConcluded] = useState(false)
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [aiModalTitle, setAiModalTitle] = useState('')
+  const [aiDraft, setAiDraft] = useState('')
 
   useEffect(() => {
     let active = true
@@ -265,6 +272,26 @@ export default function CasesPage() {
     setShowConcluded((current) => !current)
   }
 
+  const runComercialAi = async (endpoint: '/comercial/script' | '/comercial/resumo-leigo' | '/comercial/followup', title: string) => {
+    if (!canAiComercial) return
+    const reference = filteredCases.find((item) => item.phase === 'orcamento' || item.phase === 'contrato_pendente') ?? filteredCases[0]
+    if (!reference) return
+    const result = await runAiRequest(endpoint, {
+      clinicId: currentUser?.linkedClinicId,
+      inputText: `Caso ${reference.treatmentCode ?? reference.id}. Paciente ${reference.patientName}. Fase ${reference.phase}. Status ${reference.status}.`,
+      metadata: {
+        patientId: reference.patientId,
+        dentistId: reference.dentistId,
+        totalTraysUpper: reference.totalTraysUpper,
+        totalTraysLower: reference.totalTraysLower,
+      },
+    })
+    if (!result.ok) return
+    setAiModalTitle(title)
+    setAiDraft(result.output)
+    setAiModalOpen(true)
+  }
+
   return (
     <AppShell breadcrumb={['Inicio', 'Alinhadores']}>
       <section>
@@ -300,6 +327,19 @@ export default function CasesPage() {
             Concluidos
           </Button>
         </div>
+        {canAiComercial ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => void runComercialAi('/comercial/script', 'Script WhatsApp')}>
+              Script WhatsApp
+            </Button>
+            <Button variant="secondary" onClick={() => void runComercialAi('/comercial/resumo-leigo', 'Resumo leigo')}>
+              Resumo leigo
+            </Button>
+            <Button variant="secondary" onClick={() => void runComercialAi('/comercial/followup', 'Follow-up')}>
+              Follow-up
+            </Button>
+          </div>
+        ) : null}
       </section>
 
       <section className="mt-6">
@@ -380,6 +420,18 @@ export default function CasesPage() {
           </div>
         </Card>
       </section>
+
+      <AiEditableModal
+        open={aiModalOpen}
+        title={aiModalTitle}
+        value={aiDraft}
+        onChange={setAiDraft}
+        onClose={() => setAiModalOpen(false)}
+        onSave={() => {
+          setAiModalOpen(false)
+        }}
+        saveLabel="Salvar rascunho"
+      />
     </AppShell>
   )
 }

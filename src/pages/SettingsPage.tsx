@@ -323,9 +323,22 @@ export default function SettingsPage() {
     void (async () => {
       const remote = await loadSystemSettingsSupabase()
       if (!remote || !active) return
-      saveSystemSettings(remote)
-      setSettingsState(remote)
-      setLabForm(remote.labCompany)
+      const localDefaults = loadSystemSettings()
+      const normalized: SystemSettings = {
+        ...localDefaults,
+        ...remote,
+        aiGateway: {
+          ...localDefaults.aiGateway,
+          ...(remote.aiGateway ?? {}),
+          modules: {
+            ...localDefaults.aiGateway.modules,
+            ...(remote.aiGateway?.modules ?? {}),
+          },
+        },
+      }
+      saveSystemSettings(normalized)
+      setSettingsState(normalized)
+      setLabForm(normalized.labCompany)
     })()
     return () => {
       active = false
@@ -576,6 +589,36 @@ export default function SettingsPage() {
     void persistSettings(next)
     setSettingsState(next)
     addToast({ type: 'success', title: 'Automacao de guias salva' })
+  }
+
+  const saveAiGateway = () => {
+    const ai = settingsState.aiGateway
+    const next = addAuditEntry(
+      {
+        ...settingsState,
+        aiGateway: {
+          enabled: ai.enabled !== false,
+          modules: {
+            clinica: ai.modules?.clinica !== false,
+            lab: ai.modules?.lab !== false,
+            gestao: ai.modules?.gestao !== false,
+            comercial: ai.modules?.comercial !== false,
+          },
+          provider: ai.provider === 'http' || ai.provider === 'openai' ? ai.provider : 'mock',
+          model: ai.model?.trim() || 'gpt-4.1-mini',
+          apiBaseUrl: ai.apiBaseUrl?.trim() || '',
+          apiKey: ai.apiKey ?? '',
+        },
+      },
+      {
+        action: 'settings.ai_gateway.updated',
+        actor: currentUser?.email,
+        details: `enabled=${ai.enabled !== false}; provider=${ai.provider}; model=${ai.model}`,
+      },
+    )
+    void persistSettings(next)
+    setSettingsState(next)
+    addToast({ type: 'success', title: 'Configuracoes de IA salvas' })
   }
 
   const addPriceProduct = () => {
@@ -1009,6 +1052,165 @@ export default function SettingsPage() {
           </div>
           <div className="mt-4">
             <Button onClick={saveGuideAutomation}>Salvar automacao de guias</Button>
+          </div>
+        </Card>
+        <Card>
+          <h2 className="text-lg font-semibold text-slate-900">AI Gateway</h2>
+          <p className="mt-1 text-sm text-slate-500">Configure provedor de IA e chaves de ativacao por modulo.</p>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={settingsState.aiGateway?.enabled !== false}
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    aiGateway: {
+                      ...current.aiGateway,
+                      enabled: event.target.checked,
+                    },
+                  }))
+                }
+              />
+              Ativar IA global
+            </label>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Provider</label>
+              <select
+                value={settingsState.aiGateway?.provider ?? 'mock'}
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    aiGateway: {
+                      ...current.aiGateway,
+                      provider: event.target.value as 'mock' | 'http' | 'openai',
+                    },
+                  }))
+                }
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              >
+                <option value="mock">Mock (local)</option>
+                <option value="http">HTTP</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={settingsState.aiGateway?.modules?.clinica !== false}
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    aiGateway: {
+                      ...current.aiGateway,
+                      modules: { ...current.aiGateway.modules, clinica: event.target.checked },
+                    },
+                  }))
+                }
+              />
+              Modulo Clinica
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={settingsState.aiGateway?.modules?.lab !== false}
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    aiGateway: {
+                      ...current.aiGateway,
+                      modules: { ...current.aiGateway.modules, lab: event.target.checked },
+                    },
+                  }))
+                }
+              />
+              Modulo Laboratorio
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={settingsState.aiGateway?.modules?.gestao !== false}
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    aiGateway: {
+                      ...current.aiGateway,
+                      modules: { ...current.aiGateway.modules, gestao: event.target.checked },
+                    },
+                  }))
+                }
+              />
+              Modulo Gestao
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={settingsState.aiGateway?.modules?.comercial !== false}
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    aiGateway: {
+                      ...current.aiGateway,
+                      modules: { ...current.aiGateway.modules, comercial: event.target.checked },
+                    },
+                  }))
+                }
+              />
+              Modulo Comercial
+            </label>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Model</label>
+              <Input
+                value={settingsState.aiGateway?.model ?? ''}
+                placeholder="gpt-4.1-mini"
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    aiGateway: {
+                      ...current.aiGateway,
+                      model: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">API Base URL</label>
+              <Input
+                value={settingsState.aiGateway?.apiBaseUrl ?? ''}
+                placeholder="https://api.openai.com/v1/responses"
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    aiGateway: {
+                      ...current.aiGateway,
+                      apiBaseUrl: event.target.value,
+                    },
+                  }))
+                }
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-700">API Key</label>
+              <Input
+                type="password"
+                value={settingsState.aiGateway?.apiKey ?? ''}
+                placeholder="sk-..."
+                onChange={(event) =>
+                  setSettingsState((current) => ({
+                    ...current,
+                    aiGateway: {
+                      ...current.aiGateway,
+                      apiKey: event.target.value,
+                    },
+                  }))
+                }
+              />
+              <p className="mt-1 text-xs text-slate-500">No modo local, a IA usa mock e nao envia chamadas externas.</p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <Button onClick={saveAiGateway}>Salvar configuracoes de IA</Button>
           </div>
         </Card>
         <Card>
