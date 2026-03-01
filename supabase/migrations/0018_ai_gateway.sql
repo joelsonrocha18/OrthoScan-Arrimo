@@ -1,3 +1,39 @@
+create or replace function public.app_current_clinic()
+returns uuid
+language sql
+stable
+as $$
+  select clinic_id
+  from public.profiles
+  where user_id = auth.uid()
+  limit 1
+$$;
+
+create or replace function public.app_is_admin()
+returns boolean
+language sql
+stable
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where user_id = auth.uid()
+      and role in ('master_admin', 'dentist_admin')
+      and coalesce(is_active, true) = true
+      and deleted_at is null
+  )
+$$;
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
 create table if not exists public.ai_feature_flags (
   clinic_id uuid primary key references public.clinics(id) on delete cascade,
   ai_enabled boolean not null default false,
