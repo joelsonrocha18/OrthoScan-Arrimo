@@ -591,6 +591,14 @@ export default function LabPage() {
     () => getPipelineItems(items, { isDeliveredToProfessional }),
     [isDeliveredToProfessional, items],
   )
+  const aiClinicId = useMemo(
+    () =>
+      currentUser?.linkedClinicId
+      ?? pipelineBaseItems.find((item) => item.clinicId)?.clinicId
+      ?? items.find((item) => item.clinicId)?.clinicId
+      ?? caseSource.find((item) => item.clinicId)?.clinicId,
+    [caseSource, currentUser?.linkedClinicId, items, pipelineBaseItems],
+  )
   const pipelineItems = useMemo(
     () => getPipelineItems(filteredItems, { isDeliveredToProfessional }),
     [filteredItems, isDeliveredToProfessional],
@@ -1125,6 +1133,10 @@ export default function LabPage() {
 
   const runLabAi = async (endpoint: '/lab/auditoria-solicitacao' | '/lab/previsao-entrega', title: string) => {
     if (!canAiLab) return
+    if (!aiClinicId) {
+      addToast({ type: 'error', title: 'IA Laboratorio', message: 'Nao foi possivel identificar a clinica do contexto atual.' })
+      return
+    }
     const highlighted = pipelineItems.slice(0, 8).map((item) => ({
       id: item.id,
       patientName: item.patientName,
@@ -1134,7 +1146,7 @@ export default function LabPage() {
       notes: item.notes,
     }))
     const result = await runAiRequest(endpoint, {
-      clinicId: currentUser?.linkedClinicId,
+      clinicId: aiClinicId,
       inputText: `Itens de laboratorio ativos: ${pipelineBaseItems.length}. Reconfeccoes: ${reworkItems.length}. Prontos: ${readyDeliveryItems.length}.`,
       metadata: {
         highlighted,
