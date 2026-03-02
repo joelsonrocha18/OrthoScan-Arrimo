@@ -31,6 +31,7 @@ import { can } from '../auth/permissions'
 import Button from '../components/Button'
 import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 import { useToast } from '../app/ToastProvider'
+import { useAiModuleEnabled } from '../lib/useAiModuleEnabled'
 
 type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success'
 
@@ -118,7 +119,8 @@ export default function DashboardPage() {
   const { db } = useDb()
   const { addToast } = useToast()
   const currentUser = getCurrentUser(db)
-  const canAiGestao = can(currentUser, 'ai.gestao')
+  const aiGestaoEnabled = useAiModuleEnabled('gestao')
+  const canAiGestao = can(currentUser, 'ai.gestao') && aiGestaoEnabled
   const isSupabaseMode = DATA_MODE === 'supabase'
   const supabaseSyncTick = useSupabaseSyncTick()
   const [supabaseSnapshot, setSupabaseSnapshot] = useState<{

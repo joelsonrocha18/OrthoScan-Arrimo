@@ -36,6 +36,7 @@ import { supabase } from '../lib/supabaseClient'
 import { patientCode } from '../lib/entityCode'
 import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
+import { useAiModuleEnabled } from '../lib/useAiModuleEnabled'
 
 type PatientForm = {
   name: string
@@ -157,7 +158,8 @@ export default function PatientDetailPage() {
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'patients.write')
   const canDelete = can(currentUser, 'patients.delete')
-  const canAiClinica = can(currentUser, 'ai.clinica')
+  const aiClinicaEnabled = useAiModuleEnabled('clinica')
+  const canAiClinica = can(currentUser, 'ai.clinica') && aiClinicaEnabled
   const canDeleteByRole = currentUser?.role === 'master_admin' || currentUser?.role === 'dentist_admin'
   const canDeletePatient = canDelete && canDeleteByRole
   const isExternalUser = currentUser?.role === 'dentist_client' || currentUser?.role === 'clinic_client'

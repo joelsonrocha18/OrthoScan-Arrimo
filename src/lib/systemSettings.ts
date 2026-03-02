@@ -1,4 +1,5 @@
 export const SYSTEM_SETTINGS_KEY = 'arrimo_orthoscan_system_settings_v1'
+export const SYSTEM_SETTINGS_CHANGED_EVENT = 'arrimo:system-settings-changed'
 
 export type AppThemeMode = 'light' | 'dark'
 
@@ -198,6 +199,9 @@ export function loadSystemSettings(): SystemSettings {
 
 export function saveSystemSettings(settings: SystemSettings) {
   localStorage.setItem(SYSTEM_SETTINGS_KEY, JSON.stringify(settings))
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SYSTEM_SETTINGS_CHANGED_EVENT))
+  }
 }
 
 export function applyTheme(theme: AppThemeMode) {

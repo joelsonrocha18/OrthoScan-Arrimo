@@ -26,6 +26,7 @@ import { listCasesForUser, listLabItemsForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
 import { loadSystemSettings } from '../lib/systemSettings'
 import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
+import { useAiModuleEnabled } from '../lib/useAiModuleEnabled'
 import { deleteLabItemSupabase } from '../repo/profileRepo'
 import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 
@@ -226,7 +227,8 @@ export default function LabPage() {
   const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'lab.write')
-  const canAiLab = can(currentUser, 'ai.lab')
+  const aiLabEnabled = useAiModuleEnabled('lab')
+  const canAiLab = can(currentUser, 'ai.lab') && aiLabEnabled
   const canDeleteLab = currentUser?.role === 'master_admin'
   const [search, setSearch] = useState('')
   const [priority, setPriority] = useState<'todos' | 'urgente' | 'medio' | 'baixo'>('todos')

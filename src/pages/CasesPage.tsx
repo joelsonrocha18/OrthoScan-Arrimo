@@ -16,6 +16,7 @@ import { can } from '../auth/permissions'
 import { listCasesForUser, listLabItemsForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
 import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
+import { useAiModuleEnabled } from '../lib/useAiModuleEnabled'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
@@ -104,7 +105,8 @@ export default function CasesPage() {
   const { db } = useDb()
   const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
-  const canAiComercial = can(currentUser, 'ai.comercial')
+  const aiComercialEnabled = useAiModuleEnabled('comercial')
+  const canAiComercial = can(currentUser, 'ai.comercial') && aiComercialEnabled
   const [supabaseCases, setSupabaseCases] = useState<CaseListItem[]>([])
   const [supabasePatientsById, setSupabasePatientsById] = useState<Map<string, { name: string; shortId?: string }>>(new Map())
   const [supabaseDentistsById, setSupabaseDentistsById] = useState<Map<string, { name: string; shortId?: string; gender?: string }>>(new Map())
