@@ -120,12 +120,15 @@ export default function ScansPage() {
     if (!isSupabaseMode || !supabase) return
     ;(async () => {
       const [scansRes, casesRes, patientsRes, dentistsRes, clinicsRes] = await Promise.all([
-        supabase.from('scans').select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, created_at, updated_at, deleted_at, data').is('deleted_at', null),
+        supabase.from('scans').select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, created_at, deleted_at, data').is('deleted_at', null),
         supabase.from('cases').select('id, deleted_at, data').is('deleted_at', null),
         supabase.from('patients').select('id, name, primary_dentist_id, clinic_id, deleted_at').is('deleted_at', null),
         supabase.from('dentists').select('id, name, gender, clinic_id, deleted_at').is('deleted_at', null),
         supabase.from('clinics').select('id, trade_name, deleted_at').is('deleted_at', null),
       ])
+      if (scansRes.error) {
+        addToast({ type: 'error', title: `Falha ao listar exames: ${scansRes.error.message}` })
+      }
       if (!active) return
 
       const patients = ((patientsRes.data ?? []) as Array<{
@@ -168,7 +171,6 @@ export default function ScansPage() {
         dentist_id?: string
         requested_by_dentist_id?: string
         created_at?: string
-        updated_at?: string
         data?: Record<string, unknown>
       }>).map((row) => {
         const data = row.data ?? {}
@@ -197,7 +199,7 @@ export default function ScansPage() {
           status: (data.status as Scan['status'] | undefined) ?? 'pendente',
           linkedCaseId: data.linkedCaseId as string | undefined,
           createdAt: (data.createdAt as string | undefined) ?? row.created_at ?? new Date().toISOString(),
-          updatedAt: (data.updatedAt as string | undefined) ?? row.updated_at ?? row.created_at ?? new Date().toISOString(),
+          updatedAt: (data.updatedAt as string | undefined) ?? row.created_at ?? new Date().toISOString(),
         } satisfies Scan
       })
       setSupabaseScans(scansMapped)
@@ -207,7 +209,7 @@ export default function ScansPage() {
     }
   }, [isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
 
-  const scans = useMemo(() => (canRead ? (isSupabaseMode ? supabaseScans : listScansForUser(db, currentUser)) : []), [canRead, isSupabaseMode, supabaseScans, db, currentUser])
+  const scans = useMemo(() => (isSupabaseMode ? supabaseScans : canRead ? listScansForUser(db, currentUser) : []), [canRead, isSupabaseMode, supabaseScans, db, currentUser])
   const purposeOptions = useMemo(
     () =>
       Array.from(

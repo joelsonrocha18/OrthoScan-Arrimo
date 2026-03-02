@@ -315,7 +315,7 @@ export default function LabPage() {
           .is('deleted_at', null),
         supabase
           .from('lab_items')
-          .select('id, clinic_id, case_id, tray_number, status, priority, notes, created_at, updated_at, deleted_at, data')
+          .select('id, clinic_id, case_id, tray_number, status, priority, notes, created_at, deleted_at, data')
           .is('deleted_at', null),
         supabase.from('patients').select('id, name, clinic_id, primary_dentist_id, deleted_at').is('deleted_at', null),
         supabase.from('dentists').select('id, name, deleted_at').is('deleted_at', null),
