@@ -197,13 +197,23 @@ function reportRowProductionStatus(input: Record<string, unknown>) {
   return typeof value === 'string' ? value : ''
 }
 
+function normalizeEmail(value?: string | null) {
+  return (value ?? '').trim().toLowerCase()
+}
+
+function isValidEmail(value?: string | null) {
+  const email = normalizeEmail(value)
+  if (!email) return false
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 function mapProfilesToUsers(profiles: Awaited<ReturnType<typeof listProfiles>>): User[] {
   return profiles
-    .filter((profile) => profile.deleted_at == null)
+    .filter((profile) => profile.deleted_at == null && isValidEmail(profile.login_email))
     .map((profile) => ({
       id: profile.user_id,
       name: (profile.full_name ?? '').trim() || (profile.login_email ?? '').trim() || profile.user_id,
-      email: (profile.login_email ?? '').trim(),
+      email: normalizeEmail(profile.login_email),
       role: profile.role as Role,
       isActive: Boolean(profile.is_active),
       linkedClinicId: profile.clinic_id ?? undefined,
@@ -220,6 +230,10 @@ function mapProfilesToUsers(profiles: Awaited<ReturnType<typeof listProfiles>>):
 async function reloadSupabaseUsers(isSupabaseMode: boolean, onLoaded: (users: User[]) => void) {
   if (!isSupabaseMode) return
   const profiles = await listProfiles()
+  const invalidProfiles = profiles.filter((profile) => profile.deleted_at == null && !isValidEmail(profile.login_email))
+  if (invalidProfiles.length > 0) {
+    await Promise.all(invalidProfiles.map((profile) => softDeleteProfile(profile.user_id)))
+  }
   onLoaded(mapProfilesToUsers(profiles))
 }
 
