@@ -126,24 +126,24 @@ export default function CasesPage() {
       const [casesRes, patientsRes, dentistsRes, labRes] = await Promise.all([
         supabase
           .from('cases')
-          .select('id, short_id, patient_id, dentist_id, status, product_type, product_id, data, created_at, deleted_at')
+          .select('id, patient_id, dentist_id, status, data, created_at, deleted_at')
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
-        supabase.from('patients').select('id, short_id, name, deleted_at').is('deleted_at', null),
-        supabase.from('dentists').select('id, short_id, name, gender, deleted_at').is('deleted_at', null),
+        supabase.from('patients').select('id, name, deleted_at').is('deleted_at', null),
+        supabase.from('dentists').select('id, name, gender, deleted_at').is('deleted_at', null),
         supabase.from('lab_items').select('case_id, status, deleted_at').is('deleted_at', null),
       ])
       if (!active) return
 
       const patientsMap = new Map<string, { name: string; shortId?: string }>()
-      for (const row of (patientsRes.data ?? []) as Array<{ id: string; short_id?: string; name: string }>) {
-        patientsMap.set(row.id, { name: row.name ?? '', shortId: row.short_id ?? undefined })
+      for (const row of (patientsRes.data ?? []) as Array<{ id: string; name: string }>) {
+        patientsMap.set(row.id, { name: row.name ?? '', shortId: undefined })
       }
       setSupabasePatientsById(patientsMap)
 
       const dentistsMap = new Map<string, { name: string; shortId?: string; gender?: string }>()
-      for (const row of (dentistsRes.data ?? []) as Array<{ id: string; short_id?: string; name: string; gender?: string }>) {
-        dentistsMap.set(row.id, { name: row.name ?? '', shortId: row.short_id ?? undefined, gender: row.gender })
+      for (const row of (dentistsRes.data ?? []) as Array<{ id: string; name: string; gender?: string }>) {
+        dentistsMap.set(row.id, { name: row.name ?? '', shortId: undefined, gender: row.gender })
       }
       setSupabaseDentistsById(dentistsMap)
 
@@ -163,7 +163,7 @@ export default function CasesPage() {
         ),
       )
 
-      const mapped = ((casesRes.data ?? []) as Array<{ id: string; short_id?: string; patient_id?: string; dentist_id?: string; status?: string; product_type?: string; product_id?: string; created_at?: string; data?: Record<string, unknown> }>).map((row) => {
+      const mapped = ((casesRes.data ?? []) as Array<{ id: string; patient_id?: string; dentist_id?: string; status?: string; created_at?: string; data?: Record<string, unknown> }>).map((row) => {
         const data = row.data ?? {}
         const status = (data.status as string | undefined) ?? row.status ?? 'planejamento'
         const phaseRaw = (data.phase as string | undefined) ?? ''
@@ -174,8 +174,8 @@ export default function CasesPage() {
         const caseDate = (data.scanDate as string | undefined) ?? (row.created_at ? row.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10))
         return {
           id: row.id,
-          shortId: row.short_id ?? (data.shortId as string | undefined) ?? undefined,
-          productType: normalizeProductType(row.product_id ?? row.product_type ?? data.productId ?? data.productType),
+          shortId: (data.shortId as string | undefined) ?? undefined,
+          productType: normalizeProductType(data.productId ?? data.productType),
           patientId: row.patient_id,
           patientName,
           dentistId: row.dentist_id,

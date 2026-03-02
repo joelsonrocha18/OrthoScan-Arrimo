@@ -121,8 +121,8 @@ export default function ScansPage() {
     ;(async () => {
       const [scansRes, casesRes, patientsRes, dentistsRes, clinicsRes] = await Promise.all([
         supabase.from('scans').select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, created_at, updated_at, deleted_at, data').is('deleted_at', null),
-        supabase.from('cases').select('id, short_id, deleted_at, data').is('deleted_at', null),
-        supabase.from('patients').select('id, short_id, name, primary_dentist_id, clinic_id, deleted_at').is('deleted_at', null),
+        supabase.from('cases').select('id, deleted_at, data').is('deleted_at', null),
+        supabase.from('patients').select('id, name, primary_dentist_id, clinic_id, deleted_at').is('deleted_at', null),
         supabase.from('dentists').select('id, name, gender, clinic_id, deleted_at').is('deleted_at', null),
         supabase.from('clinics').select('id, trade_name, deleted_at').is('deleted_at', null),
       ])
@@ -130,13 +130,12 @@ export default function ScansPage() {
 
       const patients = ((patientsRes.data ?? []) as Array<{
         id: string
-        short_id?: string
         name: string
         primary_dentist_id?: string
         clinic_id?: string
       }>).map((row) => ({
         id: row.id,
-        shortId: row.short_id ?? undefined,
+        shortId: undefined,
         name: row.name ?? '-',
         primaryDentistId: row.primary_dentist_id ?? undefined,
         clinicId: row.clinic_id ?? undefined,
@@ -156,9 +155,9 @@ export default function ScansPage() {
         tradeName: row.trade_name ?? '-',
       })))
 
-      setSupabaseCases(((casesRes.data ?? []) as Array<{ id: string; short_id?: string; data?: Record<string, unknown> }>).map((row) => ({
+      setSupabaseCases(((casesRes.data ?? []) as Array<{ id: string; data?: Record<string, unknown> }>).map((row) => ({
         id: row.id,
-        shortId: row.short_id ?? undefined,
+        shortId: (row.data?.shortId as string | undefined) ?? undefined,
         treatmentCode: (row.data?.treatmentCode as string | undefined) ?? undefined,
       })))
 

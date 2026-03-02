@@ -311,13 +311,13 @@ export default function LabPage() {
       const [casesRes, labRes, patientsRes, dentistsRes, clinicsRes] = await Promise.all([
         supabase
           .from('cases')
-          .select('id, short_id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, product_type, product_id, data, deleted_at')
+          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, data, deleted_at')
           .is('deleted_at', null),
         supabase
           .from('lab_items')
-          .select('id, clinic_id, case_id, tray_number, status, priority, notes, product_type, product_id, created_at, updated_at, deleted_at, data')
+          .select('id, clinic_id, case_id, tray_number, status, priority, notes, created_at, updated_at, deleted_at, data')
           .is('deleted_at', null),
-        supabase.from('patients').select('id, short_id, name, clinic_id, primary_dentist_id, deleted_at').is('deleted_at', null),
+        supabase.from('patients').select('id, name, clinic_id, primary_dentist_id, deleted_at').is('deleted_at', null),
         supabase.from('dentists').select('id, name, deleted_at').is('deleted_at', null),
         supabase.from('clinics').select('id, trade_name, deleted_at').is('deleted_at', null),
       ])
@@ -329,9 +329,9 @@ export default function LabPage() {
       const clinicsById = new Map(
         ((clinicsRes.data ?? []) as Array<{ id: string; trade_name?: string }>).map((row) => [row.id, row.trade_name ?? '-']),
       )
-      const patientOptions = ((patientsRes.data ?? []) as Array<{ id: string; short_id?: string; name?: string; clinic_id?: string; primary_dentist_id?: string }>).map((row) => ({
+      const patientOptions = ((patientsRes.data ?? []) as Array<{ id: string; name?: string; clinic_id?: string; primary_dentist_id?: string }>).map((row) => ({
         id: row.id,
-        shortId: row.short_id ?? undefined,
+        shortId: undefined,
         name: row.name ?? '-',
         clinicId: row.clinic_id ?? undefined,
         dentistId: row.primary_dentist_id ?? undefined,
@@ -345,9 +345,9 @@ export default function LabPage() {
         const createdAt = new Date().toISOString()
         return {
           id: asText(row.id),
-          shortId: asText(row.short_id) || undefined,
-          productType: normalizeProductType(row.product_type ?? row.product_id ?? data.productType ?? data.productId),
-          productId: normalizeProductType(row.product_id ?? row.product_type ?? data.productId ?? data.productType),
+          shortId: asText(data.shortId) || undefined,
+          productType: normalizeProductType(data.productType ?? data.productId),
+          productId: normalizeProductType(data.productId ?? data.productType),
           patientId: asText(data.patientId, asText(row.patient_id)) || undefined,
           dentistId: asText(data.dentistId, asText(row.dentist_id)) || undefined,
           clinicId: asText(data.clinicId, asText(row.clinic_id)) || undefined,
@@ -385,8 +385,8 @@ export default function LabPage() {
         const updatedAt = asText(row.updated_at, createdAt)
         return {
           id: asText(row.id),
-          productType: normalizeProductType(row.product_type ?? row.product_id ?? data.productType ?? data.productId),
-          productId: normalizeProductType(row.product_id ?? row.product_type ?? data.productId ?? data.productType),
+          productType: normalizeProductType(data.productType ?? data.productId),
+          productId: normalizeProductType(data.productId ?? data.productType),
           patientId: asText(data.patientId) || undefined,
           dentistId: asText(data.dentistId) || undefined,
           clinicId: asText(row.clinic_id, asText(data.clinicId)) || undefined,
