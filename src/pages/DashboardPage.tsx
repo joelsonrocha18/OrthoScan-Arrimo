@@ -115,6 +115,10 @@ function asNumber(value: unknown, fallback = 0) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+function normalizePersonKey(value?: string) {
+  return (value ?? '').trim().toLowerCase()
+}
+
 export default function DashboardPage() {
   const { db } = useDb()
   const { addToast } = useToast()
@@ -290,11 +294,14 @@ export default function DashboardPage() {
     })
     : listLabItemsForUser(db, currentUser)
 
-  const trackedScans = isSupabaseMode
-    ? visibleScans.filter((scan) => Boolean((scan as { shortId?: string }).shortId))
-    : visibleScans
+  const operationalScans = visibleScans.filter((scan) => {
+    const status = (scan.status ?? '').toLowerCase()
+    const hasKnownStatus = status === 'pendente' || status === 'aprovado' || status === 'reprovado' || status === 'convertido'
+    const hasPatientRef = Boolean(scan.patientId) || normalizePersonKey(scan.patientName) !== '' && scan.patientName !== '-'
+    return hasKnownStatus && hasPatientRef
+  })
 
-  const scansRecentItems = trackedScans
+  const scansRecentItems = operationalScans
     .slice()
     .sort((a, b) => (b.scanDate || '').localeCompare(a.scanDate || ''))
   const scansRecent = scansRecentItems.length
@@ -339,14 +346,20 @@ export default function DashboardPage() {
   const reworkItems = visibleLabItems.filter((item) => item.requestKind === 'reconfeccao' && item.status !== 'prontas')
 
   const completedCases = visibleCases.filter((caseItem) => caseItem.phase === 'finalizado' || caseItem.status === 'finalizado')
-  const trackedPatientIds = new Set<string>(
-    [
-      ...trackedScans.map((item) => item.patientId).filter((value): value is string => Boolean(value)),
-      ...visibleCases.map((item) => item.patientId).filter((value): value is string => Boolean(value)),
-      ...visibleLabItems.map((item) => item.patientId).filter((value): value is string => Boolean(value)),
-    ],
-  )
-  const patientsInFollowUp = trackedPatientIds.size
+  const trackedPatientKeys = new Set<string>()
+  operationalScans.forEach((item) => {
+    const key = item.patientId || normalizePersonKey(item.patientName)
+    if (key) trackedPatientKeys.add(key)
+  })
+  visibleCases.forEach((item) => {
+    const key = item.patientId || normalizePersonKey(item.patientName)
+    if (key) trackedPatientKeys.add(key)
+  })
+  visibleLabItems.forEach((item) => {
+    const key = item.patientId || normalizePersonKey(item.patientName)
+    if (key) trackedPatientKeys.add(key)
+  })
+  const patientsInFollowUp = trackedPatientKeys.size
 
   const planningPendingTone: Tone = planningPending > 0 ? (planningPending >= 10 ? 'danger' : 'warning') : 'success'
   const reworksTone: Tone = reworkItems.length > 0 ? 'danger' : 'neutral'
