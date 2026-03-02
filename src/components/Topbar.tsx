@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Menu } from 'lucide-react'
-import { profileLabel } from '../auth/permissions'
 import { DATA_MODE } from '../data/dataMode'
 import { formatUserDisplayName } from '../lib/displayName'
 import { getCurrentUser } from '../lib/auth'
@@ -38,7 +37,13 @@ export default function Topbar({ breadcrumb, onMenuToggle }: TopbarProps) {
   const displayUser = currentUser
     ? { ...currentUser, name: profileDisplayName || currentUser.name || currentUser.email }
     : null
-  const userDisplayName = formatUserDisplayName(displayUser, db.dentists)
+  const baseUserDisplayName = formatUserDisplayName(displayUser, db.dentists)
+  const userPrefix = currentUser?.role === 'lab_tech'
+    ? 'TEC'
+    : currentUser?.role === 'dentist_admin' || currentUser?.role === 'dentist_client'
+      ? 'Dr'
+      : ''
+  const userDisplayName = userPrefix ? `${userPrefix} ${baseUserDisplayName}` : baseUserDisplayName
 
   return (
     <header className="border-b border-slate-200 bg-white px-4 py-2.5 sm:px-5">
@@ -53,7 +58,6 @@ export default function Topbar({ breadcrumb, onMenuToggle }: TopbarProps) {
             <span className="font-semibold text-emerald-700">Online</span>
             <span className="hidden text-slate-500 sm:inline">|</span>
             <span className="max-w-[170px] truncate font-medium text-slate-700 sm:max-w-[260px]">{userDisplayName}</span>
-            <span className="hidden text-slate-400 sm:inline">({profileLabel(currentUser.role)})</span>
           </div>
         ) : null}
       </div>
