@@ -10,7 +10,6 @@ import { addAttachment, clearCaseScanFileError, deleteCase, getCase, handleRewor
 import { addLabItem, generateLabOrder } from '../data/labRepo'
 import { DATA_MODE } from '../data/dataMode'
 import { ensureReplacementBankForCase } from '../data/replacementBankRepo'
-import { getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
 import { slotLabel as getPhotoSlotLabel } from '../lib/photoSlots'
 import type { Case, CasePhase, CaseTray, TrayState } from '../types/Case'
@@ -74,6 +73,13 @@ function addDays(baseIsoDate: string, days: number) {
   return base.toISOString().slice(0, 10)
 }
 
+function diffDaysBetweenIso(targetIsoDate: string, baseIsoDate: string) {
+  const target = new Date(`${targetIsoDate}T00:00:00`)
+  const base = new Date(`${baseIsoDate}T00:00:00`)
+  const ms = target.getTime() - base.getTime()
+  return Math.ceil(ms / (1000 * 60 * 60 * 24))
+}
+
 function deriveTreatmentStatus(payload: {
   installedAt?: string
   changeEveryDays: number
@@ -81,6 +87,8 @@ function deriveTreatmentStatus(payload: {
   totalLower: number
   deliveredUpper: number
   deliveredLower: number
+  completedUpper?: number
+  completedLower?: number
   todayIso: string
   nextDueDate?: string
 }) {
@@ -88,8 +96,10 @@ function deriveTreatmentStatus(payload: {
   const totalLower = Math.max(0, Math.trunc(payload.totalLower))
   const deliveredUpper = Math.max(0, Math.trunc(payload.deliveredUpper))
   const deliveredLower = Math.max(0, Math.trunc(payload.deliveredLower))
+  const completedUpper = Math.max(0, Math.trunc(payload.completedUpper ?? deliveredUpper))
+  const completedLower = Math.max(0, Math.trunc(payload.completedLower ?? deliveredLower))
   const deliveredAny = deliveredUpper > 0 || deliveredLower > 0
-  const finished = deliveredUpper >= totalUpper && deliveredLower >= totalLower
+  const finished = completedUpper >= totalUpper && completedLower >= totalLower
   if (finished) return 'finalizado' as const
   if (!payload.installedAt || !deliveredAny) return 'em_entrega' as const
 
@@ -582,7 +592,7 @@ export default function CaseDetailPage() {
   }, [currentCase, deliveredLower, deliveredUpper, totalLower, totalUpper])
 
   useEffect(() => {
-    if (!currentCase?.installation || currentCase.status === 'finalizado') return
+    if (!currentCase?.installation) return
     const nextStatus = deriveTreatmentStatus({
       installedAt: currentCase.installation.installedAt,
       changeEveryDays: currentCase.changeEveryDays,
@@ -590,6 +600,8 @@ export default function CaseDetailPage() {
       totalLower,
       deliveredUpper: currentCase.installation.deliveredUpper ?? 0,
       deliveredLower: currentCase.installation.deliveredLower ?? 0,
+      completedUpper: patientProgressUpper.delivered,
+      completedLower: patientProgressLower.delivered,
       todayIso: new Date().toISOString().slice(0, 10),
       nextDueDate: nextReplacementDueDate,
     })
@@ -607,7 +619,7 @@ export default function CaseDetailPage() {
       return
     }
     updateCase(currentCase.id, { status: nextStatus, phase: nextPhase })
-  }, [currentCase, isSupabaseMode, nextReplacementDueDate, totalLower, totalUpper])
+  }, [currentCase, isSupabaseMode, nextReplacementDueDate, patientProgressLower.delivered, patientProgressUpper.delivered, totalLower, totalUpper])
   const groupedScanFiles = useMemo(() => {
     const scanFiles = currentCase?.scanFiles ?? []
     const scan3d = {
@@ -629,7 +641,38 @@ export default function CaseDetailPage() {
     const planejamento = scanFiles.filter((item) => item.kind === 'projeto')
     return { scan3d, fotosIntra, fotosExtra, radiografias, planejamento }
   }, [currentCase])
-  const replenishmentAlerts = useMemo(() => (currentCase ? getReplenishmentAlerts(currentCase) : []), [currentCase])
+  const replenishmentAlerts = useMemo(() => {
+    if (!currentCase?.installation?.installedAt || !nextReplacementDueDate) return []
+    const daysLeft = diffDaysBetweenIso(nextReplacementDueDate, todayIso)
+    if (daysLeft <= 15 && daysLeft > 10) {
+      return [
+        {
+          id: `${currentCase.id}_15d_${nextReplacementDueDate}`,
+          type: 'warning_15d' as const,
+          severity: 'medium' as const,
+        },
+      ]
+    }
+    if (daysLeft <= 10 && daysLeft >= 0) {
+      return [
+        {
+          id: `${currentCase.id}_10d_${nextReplacementDueDate}`,
+          type: 'warning_10d' as const,
+          severity: 'high' as const,
+        },
+      ]
+    }
+    if (daysLeft < 0) {
+      return [
+        {
+          id: `${currentCase.id}_late_${nextReplacementDueDate}`,
+          type: 'overdue' as const,
+          severity: 'urgent' as const,
+        },
+      ]
+    }
+    return []
+  }, [currentCase, nextReplacementDueDate, todayIso])
   const patientDisplayName = useMemo(() => {
     if (!currentCase) return ''
     if (!currentCase.patientId) return currentCase.patientName

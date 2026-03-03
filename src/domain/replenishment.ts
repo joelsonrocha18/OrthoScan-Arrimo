@@ -50,10 +50,22 @@ export function getNextNeededTray(caseItem: Case): number | null {
 export function getNextDeliveryDueDate(caseItem: Case): string | null {
   if (!caseItem.installation?.installedAt) return null
   const { maxDelivered } = getDeliveredRange(caseItem)
-  const daysToAdd = maxDelivered * caseItem.changeEveryDays
-  const base = toDateOnly(caseItem.installation.installedAt)
-  base.setDate(base.getDate() + daysToAdd)
-  return base.toISOString().slice(0, 10)
+  const actualDates = (caseItem.installation.actualChangeDates ?? [])
+    .filter((entry) => entry.trayNumber > 0 && typeof entry.changedAt === 'string' && entry.changedAt.length >= 10)
+    .sort((a, b) => a.trayNumber - b.trayNumber)
+
+  const anchorActual = actualDates
+    .filter((entry) => entry.trayNumber <= Math.max(0, maxDelivered))
+    .at(-1)
+
+  const baseDate = anchorActual?.changedAt
+    ? toDateOnly(anchorActual.changedAt)
+    : toDateOnly(caseItem.installation.installedAt)
+
+  const deliveredOffset = anchorActual ? Math.max(0, maxDelivered - anchorActual.trayNumber) : maxDelivered
+  const daysToAdd = deliveredOffset * caseItem.changeEveryDays
+  baseDate.setDate(baseDate.getDate() + daysToAdd)
+  return baseDate.toISOString().slice(0, 10)
 }
 
 export function getReplenishmentAlerts(caseItem: Case, nowIso = new Date().toISOString()): ReplenishmentAlert[] {

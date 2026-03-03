@@ -982,6 +982,156 @@ export default function LabPage() {
     return { fromTray, toTray }
   }
 
+  const createAdvanceLabOrderSupabase = useCallback(
+    async (
+      sourceLabItemId: string,
+      payload: { plannedUpperQty: number; plannedLowerQty: number; dueDate?: string },
+    ) => {
+      if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+      const { data: source, error: sourceError } = await supabase
+        .from('lab_items')
+        .select('id, case_id, tray_number, status, priority, notes, product_type, product_id, data')
+        .eq('id', sourceLabItemId)
+        .is('deleted_at', null)
+        .maybeSingle()
+      if (sourceError || !source) {
+        return { ok: false as const, error: sourceError?.message ?? 'OS de origem nao encontrada.' }
+      }
+
+      const sourceCaseId = asText((source as Record<string, unknown>).case_id)
+      if (!sourceCaseId) return { ok: false as const, error: 'OS sem caso vinculado.' }
+      const { data: linkedCaseRow, error: caseError } = await supabase
+        .from('cases')
+        .select('id, data')
+        .eq('id', sourceCaseId)
+        .is('deleted_at', null)
+        .maybeSingle()
+      if (caseError || !linkedCaseRow) {
+        return { ok: false as const, error: caseError?.message ?? 'Caso vinculado nao encontrado.' }
+      }
+
+      const linkedCase = asObject(linkedCaseRow.data)
+      const contractStatus = asText(asObject(linkedCase.contract).status, 'pendente')
+      if (contractStatus !== 'aprovado') {
+        return { ok: false as const, error: 'Contrato nao aprovado para gerar reposicao.' }
+      }
+
+      const treatmentArch = asText(linkedCase.arch, 'ambos') as 'superior' | 'inferior' | 'ambos'
+      const totals = normalizeByTreatmentArch(
+        getCaseTotalsByArch({
+          totalTrays: asNumber(linkedCase.totalTrays, 0),
+          totalTraysUpper: asNumber(linkedCase.totalTraysUpper, asNumber(linkedCase.totalTrays, 0)),
+          totalTraysLower: asNumber(linkedCase.totalTraysLower, asNumber(linkedCase.totalTrays, 0)),
+        }),
+        treatmentArch,
+      )
+      const delivered = normalizeByTreatmentArch(
+        getDeliveredByArch({
+          installation: asObject(linkedCase.installation) as { deliveredUpper?: number; deliveredLower?: number },
+          deliveryLots: Array.isArray(linkedCase.deliveryLots)
+            ? (linkedCase.deliveryLots as Array<{ arch: 'superior' | 'inferior' | 'ambos'; quantity: number }>)
+            : undefined,
+        }),
+        treatmentArch,
+      )
+      const remaining = {
+        upper: Math.max(0, totals.upper - delivered.upper),
+        lower: Math.max(0, totals.lower - delivered.lower),
+      }
+
+      let plannedUpperQty = Math.max(0, Math.trunc(payload.plannedUpperQty))
+      let plannedLowerQty = Math.max(0, Math.trunc(payload.plannedLowerQty))
+      if (treatmentArch === 'superior') plannedLowerQty = 0
+      if (treatmentArch === 'inferior') plannedUpperQty = 0
+      if (plannedUpperQty + plannedLowerQty <= 0) {
+        return { ok: false as const, error: 'Informe quantidade maior que zero para gerar reposicao.' }
+      }
+      if (plannedUpperQty > remaining.upper || plannedLowerQty > remaining.lower) {
+        return { ok: false as const, error: 'Quantidade solicitada maior que o saldo disponivel no banco.' }
+      }
+
+      const trays = Array.isArray(linkedCase.trays) ? (linkedCase.trays as Array<Record<string, unknown>>) : []
+      const pendingTrays = trays
+        .filter((tray) => asText(tray.state) === 'pendente')
+        .map((tray) => asNumber(tray.trayNumber, 0))
+        .filter((value) => value > 0)
+        .sort((a, b) => a - b)
+      const nextTrayNumber = pendingTrays[0]
+      if (!nextTrayNumber) {
+        return { ok: false as const, error: 'Nao ha placas pendentes para gerar reposicao.' }
+      }
+
+      const { data: caseRows, error: rowsError } = await supabase
+        .from('lab_items')
+        .select('id, data')
+        .eq('case_id', sourceCaseId)
+        .is('deleted_at', null)
+      if (rowsError) return { ok: false as const, error: rowsError.message }
+
+      const sourceData = asObject(source.data)
+      const baseCode = asText(linkedCase.treatmentCode, sourceCaseId)
+      const requestCodes = ((caseRows ?? []) as Array<Record<string, unknown>>)
+        .map((row) => asText(asObject(row.data).requestCode))
+        .filter((code) => !!code)
+      const sourceRequestCode = asText(sourceData.requestCode)
+      const sourceIsRevision = Boolean(sourceRequestCode && new RegExp(`^${baseCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/\\d+$`).test(sourceRequestCode))
+      const requestCode = asText(sourceData.requestKind, 'producao') === 'reposicao_programada' && sourceIsRevision
+        ? sourceRequestCode
+        : `${baseCode}/${nextRequestRevisionFromCodes(baseCode, requestCodes)}`
+
+      const nowIso = new Date().toISOString()
+      const today = nowIso.slice(0, 10)
+      const dueDate = payload.dueDate ?? asText(sourceData.expectedReplacementDate, asText(sourceData.dueDate, today))
+      const resolvedProductType = normalizeProductType(
+        (source as Record<string, unknown>).product_id ?? source.product_type ?? sourceData.productId ?? sourceData.productType,
+      )
+      const nextData = {
+        ...sourceData,
+        requestCode,
+        requestKind: 'producao',
+        expectedReplacementDate: asText(sourceData.expectedReplacementDate, dueDate),
+        productType: resolvedProductType,
+        productId: resolvedProductType,
+        trayNumber: nextTrayNumber,
+        plannedUpperQty,
+        plannedLowerQty,
+        planningDefinedAt: nowIso,
+        plannedDate: today,
+        dueDate,
+        status: 'aguardando_iniciar',
+        priority: 'Urgente',
+        notes: `Reposicao solicitada manualmente a partir de ${sourceRequestCode || source.id}.`,
+      }
+
+      const { error: insertError } = await supabase
+        .from('lab_items')
+        .insert({
+          clinic_id: asText(sourceData.clinicId) || null,
+          case_id: sourceCaseId,
+          tray_number: nextTrayNumber,
+          status: 'aguardando_iniciar',
+          priority: 'Urgente',
+          notes: asText(nextData.notes) || null,
+          product_type: resolvedProductType,
+          product_id: resolvedProductType,
+          data: nextData,
+          updated_at: nowIso,
+        })
+      if (insertError) return { ok: false as const, error: insertError.message }
+
+      if (asText(sourceData.requestKind, 'producao') === 'reposicao_programada') {
+        const { error: deleteError } = await supabase
+          .from('lab_items')
+          .update({ deleted_at: nowIso, updated_at: nowIso })
+          .eq('id', sourceLabItemId)
+        if (deleteError) return { ok: false as const, error: deleteError.message }
+      }
+
+      return { ok: true as const }
+    },
+    [],
+  )
+
   const seedInitialReplenishmentSupabase = useCallback(
     async (source: {
       caseId?: string
@@ -1217,9 +1367,6 @@ export default function LabPage() {
               Registrar entrega ao profissional
             </Button>
           ) : null}
-          {canWrite ? (
-            <Button className="w-full sm:w-auto" onClick={() => setModal({ open: true, mode: 'create', item: null })}>Solicitacao avulsa</Button>
-          ) : null}
         </div>
       </section>
 
@@ -1372,18 +1519,20 @@ export default function LabPage() {
                           <td className="px-3 py-2">{replenishmentLabDate ? formatDate(replenishmentLabDate) : '-'}</td>
                           <td className="px-3 py-2">{treatmentStatus}</td>
                           <td className="px-3 py-2">
-                            {canWrite && !isSupabaseMode && item.caseId ? (
+                            {canWrite && item.caseId ? (
                               <Button
                                 size="sm"
                                 variant="secondary"
                                 onClick={() => {
                                   setAdvanceTarget(item)
-                                  setAdvanceUpperQty(String(Math.max(1, item.plannedUpperQty ?? 0)))
-                                  setAdvanceLowerQty(String(Math.max(1, item.plannedLowerQty ?? 0)))
+                                  const nextUpper = treatmentArch === 'inferior' ? 0 : Math.max(0, remaining.upper)
+                                  const nextLower = treatmentArch === 'superior' ? 0 : Math.max(0, remaining.lower)
+                                  setAdvanceUpperQty(String(nextUpper))
+                                  setAdvanceLowerQty(String(nextLower))
                                   setAdvanceModalOpen(true)
                                 }}
                               >
-                                Gerar OS antecipada
+                                Solicitar reposicao
                               </Button>
                             ) : null}
                           </td>
@@ -1626,7 +1775,7 @@ export default function LabPage() {
       {advanceModalOpen && advanceTarget ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
           <Card className="w-full max-w-md">
-            <h3 className="text-lg font-semibold text-slate-900">Gerar OS antecipada</h3>
+            <h3 className="text-lg font-semibold text-slate-900">Solicitar reposicao</h3>
             <p className="mt-1 text-sm text-slate-500">
               {advanceTarget.patientName} - {advanceTarget.requestCode ?? `Placa #${advanceTarget.trayNumber}`}
             </p>
@@ -1646,24 +1795,42 @@ export default function LabPage() {
               </Button>
               <Button
                 onClick={() => {
-                  const result = createAdvanceLabOrder(advanceTarget.id, {
-                    plannedUpperQty: Number(advanceUpperQty),
-                    plannedLowerQty: Number(advanceLowerQty),
-                  })
-                  if (!result.ok) {
-                    addToast({ type: 'error', title: 'OS antecipada', message: result.error })
-                    return
-                  }
-                  if (!result.sync.ok) {
-                    addToast({ type: 'error', title: 'OS antecipada', message: result.sync.message })
-                    return
-                  }
-                  setAdvanceModalOpen(false)
-                  setAdvanceTarget(null)
-                  addToast({ type: 'success', title: 'OS antecipada gerada' })
+                  void (async () => {
+                    if (isSupabaseMode) {
+                      const result = await createAdvanceLabOrderSupabase(advanceTarget.id, {
+                        plannedUpperQty: Number(advanceUpperQty),
+                        plannedLowerQty: Number(advanceLowerQty),
+                      })
+                      if (!result.ok) {
+                        addToast({ type: 'error', title: 'Solicitacao de reposicao', message: result.error })
+                        return
+                      }
+                      setSupabaseRefreshKey((current) => current + 1)
+                      setAdvanceModalOpen(false)
+                      setAdvanceTarget(null)
+                      addToast({ type: 'success', title: 'Guia gerada na esteira de aguardando iniciar' })
+                      return
+                    }
+
+                    const result = createAdvanceLabOrder(advanceTarget.id, {
+                      plannedUpperQty: Number(advanceUpperQty),
+                      plannedLowerQty: Number(advanceLowerQty),
+                    })
+                    if (!result.ok) {
+                      addToast({ type: 'error', title: 'Solicitacao de reposicao', message: result.error })
+                      return
+                    }
+                    if (!result.sync.ok) {
+                      addToast({ type: 'error', title: 'Solicitacao de reposicao', message: result.sync.message })
+                      return
+                    }
+                    setAdvanceModalOpen(false)
+                    setAdvanceTarget(null)
+                    addToast({ type: 'success', title: 'Guia gerada na esteira de aguardando iniciar' })
+                  })()
                 }}
               >
-                Gerar
+                Gerar guia
               </Button>
             </div>
           </Card>
