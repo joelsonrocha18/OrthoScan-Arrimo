@@ -59,7 +59,7 @@ type CaseListItem = {
 }
 
 function isConcluded(item: CaseListItem) {
-  return item.phase === 'finalizado' || item.status === 'finalizado'
+  return item.status === 'finalizado'
 }
 
 function isInProductionFlow(item: CaseListItem) {
