@@ -22,7 +22,7 @@ import { getPipelineItems } from '../domain/labPipeline'
 import type { Case, CasePhase, CaseStatus, CaseTray } from '../types/Case'
 import type { LabItem, LabStatus } from '../types/Lab'
 import AppShell from '../layouts/AppShell'
-import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
+import { getReplenishmentAlerts } from '../domain/replenishment'
 import { getCurrentUser } from '../lib/auth'
 import { supabase } from '../lib/supabaseClient'
 import { useDb } from '../lib/useDb'
@@ -117,6 +117,70 @@ function asNumber(value: unknown, fallback = 0) {
 
 function normalizePersonKey(value?: string) {
   return (value ?? '').trim().toLowerCase()
+}
+
+function toNonNegativeInt(value?: number) {
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.trunc(value ?? 0))
+}
+
+function getCaseTotalsByArch(caseItem?: { totalTrays: number; totalTraysUpper?: number; totalTraysLower?: number }) {
+  if (!caseItem) return { upper: 0, lower: 0 }
+  return {
+    upper: toNonNegativeInt(caseItem.totalTraysUpper ?? caseItem.totalTrays),
+    lower: toNonNegativeInt(caseItem.totalTraysLower ?? caseItem.totalTrays),
+  }
+}
+
+function normalizeByTreatmentArch(
+  counts: { upper: number; lower: number },
+  arch: 'superior' | 'inferior' | 'ambos' | '',
+) {
+  if (arch === 'superior') return { upper: counts.upper, lower: 0 }
+  if (arch === 'inferior') return { upper: 0, lower: counts.lower }
+  return counts
+}
+
+function getDeliveredByArch(caseItem?: {
+  installation?: { deliveredUpper?: number; deliveredLower?: number }
+  deliveryLots?: Array<{ arch: 'superior' | 'inferior' | 'ambos'; quantity?: number }>
+}) {
+  if (!caseItem) return { upper: 0, lower: 0 }
+  const fromDentistLots = (caseItem.deliveryLots ?? []).reduce(
+    (acc, lot) => {
+      const qty = toNonNegativeInt(lot.quantity)
+      if (lot.arch === 'superior') acc.upper += qty
+      if (lot.arch === 'inferior') acc.lower += qty
+      if (lot.arch === 'ambos') {
+        acc.upper += qty
+        acc.lower += qty
+      }
+      return acc
+    },
+    { upper: 0, lower: 0 },
+  )
+  if (fromDentistLots.upper > 0 || fromDentistLots.lower > 0) {
+    return fromDentistLots
+  }
+  return {
+    upper: toNonNegativeInt(caseItem.installation?.deliveredUpper),
+    lower: toNonNegativeInt(caseItem.installation?.deliveredLower),
+  }
+}
+
+function hasRemainingByArch(caseItem?: {
+  totalTrays: number
+  totalTraysUpper?: number
+  totalTraysLower?: number
+  arch?: 'superior' | 'inferior' | 'ambos'
+  installation?: { deliveredUpper?: number; deliveredLower?: number }
+  deliveryLots?: Array<{ arch: 'superior' | 'inferior' | 'ambos'; quantity?: number }>
+}) {
+  if (!caseItem) return false
+  const treatmentArch = caseItem.arch ?? 'ambos'
+  const totals = normalizeByTreatmentArch(getCaseTotalsByArch(caseItem), treatmentArch)
+  const delivered = normalizeByTreatmentArch(getDeliveredByArch(caseItem), treatmentArch)
+  return Math.max(0, totals.upper - delivered.upper) > 0 || Math.max(0, totals.lower - delivered.lower) > 0
 }
 
 export default function DashboardPage() {
@@ -380,21 +444,36 @@ export default function DashboardPage() {
     const phaseClosed = caseItem.phase === 'contrato_aprovado' || caseItem.phase === 'em_producao' || caseItem.phase === 'finalizado'
     return contractClosed || phaseClosed
   })
-  const supplySummaries = closedContractCases.map((caseItem) => ({ caseItem, supply: getCaseSupplySummary(caseItem) }))
-  const remainingTotal = supplySummaries.reduce((acc, item) => acc + item.supply.remaining, 0)
-  const remainingCases = supplySummaries.filter((item) => item.supply.remaining > 0).length
-  const remainingByArch = closedContractCases.reduce(
+  const bankCaseIds = new Set(
+    visibleLabItems
+      .filter((item) => {
+        const caseItem = item.caseId ? caseById.get(item.caseId) : undefined
+        if (!caseItem || caseItem.status === 'finalizado') return false
+        if (!hasRemainingByArch(caseItem)) return false
+        return (
+          isDeliveredToProfessional(item) ||
+          (item.requestKind === 'reposicao_programada' && item.status === 'aguardando_iniciar') ||
+          item.requestKind === 'reconfeccao' ||
+          isReworkItem(item.notes, item.requestKind)
+        )
+      })
+      .map((item) => item.caseId)
+      .filter((value): value is string => Boolean(value)),
+  )
+  const bankCases = visibleCases.filter((caseItem) => bankCaseIds.has(caseItem.id))
+  const remainingByArch = bankCases.reduce(
     (acc, caseItem) => {
-      const totalSup = caseItem.totalTraysUpper ?? caseItem.totalTrays
-      const totalInf = caseItem.totalTraysLower ?? caseItem.totalTrays
-      const deliveredSup = caseItem.installation?.deliveredUpper ?? 0
-      const deliveredInf = caseItem.installation?.deliveredLower ?? 0
-      acc.sup += Math.max(0, totalSup - deliveredSup)
-      acc.inf += Math.max(0, totalInf - deliveredInf)
+      const treatmentArch = caseItem.arch ?? 'ambos'
+      const totals = normalizeByTreatmentArch(getCaseTotalsByArch(caseItem), treatmentArch)
+      const delivered = normalizeByTreatmentArch(getDeliveredByArch(caseItem), treatmentArch)
+      acc.sup += Math.max(0, totals.upper - delivered.upper)
+      acc.inf += Math.max(0, totals.lower - delivered.lower)
       return acc
     },
     { sup: 0, inf: 0 },
   )
+  const remainingCases = bankCases.length
+  const remainingTotal = remainingByArch.sup + remainingByArch.inf
   const replenishmentAlerts = closedContractCases.flatMap((caseItem) => getReplenishmentAlerts(caseItem))
   const overdueReplenishments = replenishmentAlerts.filter((item) => item.severity === 'urgent').length
   const dueSoonReplenishments = replenishmentAlerts.filter((item) => item.severity === 'high' || item.severity === 'medium').length
