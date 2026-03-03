@@ -17,7 +17,6 @@ import { parseDentistsSpreadsheet, readSpreadsheetFileText } from '../lib/spread
 import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import { dentistCode } from '../lib/entityCode'
 import { createOnboardingInvite } from '../repo/onboardingRepo'
-import { getAuthProvider } from '../auth/authProvider'
 import { useToast } from '../app/ToastProvider'
 
 function nowIso() {
@@ -107,11 +106,6 @@ export default function DentistsPage() {
   const handleGenerateSelfSignupLink = async () => {
     if (!isSupabaseMode) return
     if (!canWrite) return
-    const authUser = await getAuthProvider().getCurrentUser()
-    if (!authUser) {
-      addToast({ type: 'error', title: 'Sessao expirada. Faca login novamente.' })
-      return
-    }
     const clinicId = resolveDefaultClinicId()
     if (!clinicId) {
       addToast({ type: 'error', title: 'Nenhuma clinica ativa encontrada para gerar o link.' })
