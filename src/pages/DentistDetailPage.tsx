@@ -16,6 +16,8 @@ import { DATA_MODE } from '../data/dataMode'
 import { supabase } from '../lib/supabaseClient'
 import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import { dentistCode } from '../lib/entityCode'
+import { createOnboardingInvite } from '../repo/onboardingRepo'
+import { useToast } from '../app/ToastProvider'
 
 type DentistForm = {
   name: string
@@ -83,6 +85,7 @@ export default function DentistDetailPage() {
   const params = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { db } = useDb()
+  const { addToast } = useToast()
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'dentists.write')
   const canDelete = can(currentUser, 'dentists.delete')
@@ -99,6 +102,8 @@ export default function DentistDetailPage() {
 
   const [form, setForm] = useState<DentistForm>(emptyForm)
   const [error, setError] = useState('')
+  const [inviteLink, setInviteLink] = useState('')
+  const [inviting, setInviting] = useState(false)
   const [cepStatus, setCepStatus] = useState('')
   const [cepError, setCepError] = useState('')
 
@@ -389,6 +394,54 @@ export default function DentistDetailPage() {
     setError('')
   }
 
+  const handleGenerateInvite = async () => {
+    if (!isSupabaseMode) {
+      setError('Convite por link disponivel apenas no modo Supabase.')
+      return
+    }
+    if (isNew || !existing) {
+      setError('Salve o dentista antes de gerar o link de cadastro.')
+      return
+    }
+    const clinicId = form.clinicId.trim() || existing.clinicId || ''
+    if (!clinicId) {
+      setError('Vincule uma clinica ao dentista antes de gerar o link.')
+      return
+    }
+    setInviting(true)
+    setError('')
+    const result = await createOnboardingInvite({
+      fullName: form.name.trim() || existing.name,
+      phone: form.whatsapp.trim() || form.phone.trim() || undefined,
+      role: 'dentist_client',
+      clinicId,
+      dentistId: existing.id,
+    })
+    setInviting(false)
+    if (!result.ok || !result.inviteLink) {
+      setError(result.error ?? 'Falha ao gerar link de cadastro.')
+      return
+    }
+    setInviteLink(result.inviteLink)
+    addToast({ type: 'success', title: 'Link gerado com sucesso' })
+    try {
+      await navigator.clipboard.writeText(result.inviteLink)
+      addToast({ type: 'success', title: 'Link copiado para a area de transferencia' })
+    } catch {
+      // no-op
+    }
+  }
+
+  const handleCopyInviteLink = async () => {
+    if (!inviteLink) return
+    try {
+      await navigator.clipboard.writeText(inviteLink)
+      addToast({ type: 'success', title: 'Link copiado' })
+    } catch {
+      setError('Nao foi possivel copiar automaticamente. Copie manualmente o link.')
+    }
+  }
+
   return (
     <AppShell breadcrumb={['Inicio', 'Dentistas', isNew ? 'Novo' : existing?.name ?? 'Detalhe']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -485,6 +538,31 @@ export default function DentistDetailPage() {
             </div>
           </div>
         </Card>
+
+        {!isNew && isSupabaseMode ? (
+          <Card>
+            <h2 className="text-lg font-semibold text-slate-900">Cadastro por link</h2>
+            <p className="mt-1 text-sm text-slate-500">Envie este link ao dentista para ele completar cadastro e acesso.</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Button onClick={() => void handleGenerateInvite()} disabled={inviting}>
+                {inviting ? 'Gerando...' : 'Gerar link de cadastro'}
+              </Button>
+              {inviteLink ? (
+                <Button variant="secondary" onClick={() => void handleCopyInviteLink()}>
+                  Copiar link
+                </Button>
+              ) : null}
+            </div>
+            {inviteLink ? (
+              <Input
+                className="mt-3"
+                value={inviteLink}
+                readOnly
+                onFocus={(event) => event.currentTarget.select()}
+              />
+            ) : null}
+          </Card>
+        ) : null}
 
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Endereco</h2>
