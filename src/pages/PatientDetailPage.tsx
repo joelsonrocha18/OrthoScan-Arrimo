@@ -423,7 +423,7 @@ export default function PatientDetailPage() {
       clinicId: safeText(existing.clinicId),
       notes: safeText(existing.notes),
     })
-  }, [existing])
+  }, [existing?.id, isNew])
 
   useEffect(() => {
     let active = true
