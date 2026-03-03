@@ -108,9 +108,13 @@ Deno.serve(async (req) => {
   if (!['master_admin', 'dentist_admin'].includes(actorRole)) {
     return json(req, { ok: false, error: 'Forbidden.' }, 403)
   }
-  if (actorRole === 'dentist_admin' && actorProfile?.clinic_id !== payload.clinicId) {
-    return json(req, { ok: false, error: 'Clinic mismatch.' }, 403)
+
+  let targetClinicId = payload.clinicId
+  if (actorRole === 'dentist_admin') {
+    if (!actorProfile?.clinic_id) return json(req, { ok: false, error: 'Clinic missing for actor.' }, 403)
+    targetClinicId = actorProfile.clinic_id
   }
+
   if (actorRole === 'dentist_admin' && ['master_admin', 'dentist_admin'].includes(payload.role)) {
     return json(req, { ok: false, error: 'Role not allowed for actor.' }, 403)
   }
@@ -135,7 +139,7 @@ Deno.serve(async (req) => {
     .insert({
       token_hash: tokenHash,
       role: payload.role,
-      clinic_id: payload.clinicId,
+      clinic_id: targetClinicId,
       dentist_id: payload.dentistId ?? null,
       full_name: payload.fullName.trim(),
       cpf: payload.cpf?.trim() || null,
@@ -158,7 +162,7 @@ Deno.serve(async (req) => {
     metadata: {
       invite_id: invite.id,
       role: payload.role,
-      clinic_id: payload.clinicId,
+      clinic_id: targetClinicId,
       dentist_id: payload.dentistId ?? null,
     },
   })
