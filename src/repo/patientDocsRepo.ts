@@ -11,19 +11,21 @@ function nowIso() {
 }
 
 function mapSupabaseDoc(row: Record<string, unknown>): PatientDocument {
+  const note = typeof row.note === 'string' ? row.note : undefined
+  const errorNote = typeof row.error_note === 'string' ? row.error_note : undefined
   return {
     id: String(row.id ?? ''),
     patientId: String(row.patient_id ?? ''),
     title: String(row.title ?? 'Documento'),
     category: (String(row.category ?? 'outro') as PatientDocument['category']) ?? 'outro',
     createdAt: String(row.created_at ?? nowIso()),
-    note: (row.note as string | null) ?? undefined,
+    note,
     isLocal: false,
     filePath: (row.file_path as string | null) ?? undefined,
     fileName: String(row.file_name ?? row.title ?? 'arquivo'),
     mimeType: (row.mime_type as string | null) ?? undefined,
     status: ((row.status as 'ok' | 'erro' | null) ?? 'ok') as 'ok' | 'erro',
-    errorNote: (row.error_note as string | null) ?? undefined,
+    errorNote,
   }
 }
 

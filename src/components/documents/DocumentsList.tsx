@@ -41,6 +41,10 @@ function formatPtBrDate(iso: string) {
   }
 }
 
+function asText(value: unknown) {
+  return typeof value === 'string' ? value : ''
+}
+
 type DocumentsListProps = {
   items: PatientDocument[]
   imagePreviewUrls?: Record<string, string>
@@ -142,11 +146,11 @@ export default function DocumentsList(props: DocumentsListProps) {
                 <p className="mt-0.5 text-xs text-slate-500">
                   {doc.category} • {formatPtBrDate(doc.createdAt)} • {doc.fileName}
                 </p>
-                {doc.note ? <p className="mt-1 text-xs text-slate-500">Obs: {doc.note}</p> : null}
+                {asText(doc.note) ? <p className="mt-1 text-xs text-slate-500">Obs: {asText(doc.note)}</p> : null}
                 {doc.status === 'erro' ? (
                   <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-red-700">
                     <TriangleAlert className="h-3.5 w-3.5" />
-                    Erro: {doc.errorNote || '-'}
+                    Erro: {asText(doc.errorNote) || '-'}
                   </p>
                 ) : null}
               </div>
