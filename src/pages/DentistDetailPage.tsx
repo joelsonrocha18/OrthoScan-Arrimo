@@ -539,12 +539,15 @@ export default function DentistDetailPage() {
           </div>
         </Card>
 
-        {!isNew && isSupabaseMode ? (
+        {isSupabaseMode ? (
           <Card>
             <h2 className="text-lg font-semibold text-slate-900">Cadastro por link</h2>
-            <p className="mt-1 text-sm text-slate-500">Envie este link ao dentista para ele completar cadastro e acesso.</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Envie este link ao dentista para ele completar cadastro e acesso.
+              {isNew ? ' Primeiro salve o dentista.' : ''}
+            </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button onClick={() => void handleGenerateInvite()} disabled={inviting}>
+              <Button onClick={() => void handleGenerateInvite()} disabled={inviting || isNew}>
                 {inviting ? 'Gerando...' : 'Gerar link de cadastro'}
               </Button>
               {inviteLink ? (
