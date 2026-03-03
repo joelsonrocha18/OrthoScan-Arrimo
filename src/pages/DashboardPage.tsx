@@ -32,6 +32,7 @@ import Button from '../components/Button'
 import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 import { useToast } from '../app/ToastProvider'
 import { useAiModuleEnabled } from '../lib/useAiModuleEnabled'
+import { isAlignerProductType, normalizeProductType } from '../types/Product'
 
 type Tone = 'neutral' | 'info' | 'warning' | 'danger' | 'success'
 
@@ -310,6 +311,8 @@ export default function DashboardPage() {
       const updatedAt = asText(row.updated_at, createdAt)
       const caseItem: Case = {
         id: asText(row.id),
+        productType: normalizeProductType(data.productId ?? data.productType),
+        productId: normalizeProductType(data.productId ?? data.productType),
         clinicId: asText(row.clinic_id),
         patientId: asText(row.patient_id),
         dentistId: asText(row.dentist_id),
@@ -338,6 +341,7 @@ export default function DashboardPage() {
         totalTrays,
         totalTraysUpper: asNumber(data.totalTraysUpper, totalTrays),
         totalTraysLower: asNumber(data.totalTraysLower, totalTrays),
+        arch: asText(data.arch, 'ambos') as Case['arch'],
         attachments: [],
         createdAt,
         updatedAt,
@@ -420,30 +424,21 @@ export default function DashboardPage() {
   const reworkItems = visibleLabItems.filter((item) => item.requestKind === 'reconfeccao' && item.status !== 'prontas')
 
   const completedCases = visibleCases.filter((caseItem) => caseItem.phase === 'finalizado' || caseItem.status === 'finalizado')
-  const trackedPatientKeys = new Set<string>()
-  operationalScans.forEach((item) => {
-    const key = item.patientId || normalizePersonKey(item.patientName)
-    if (key) trackedPatientKeys.add(key)
-  })
-  visibleCases.forEach((item) => {
-    const key = item.patientId || normalizePersonKey(item.patientName)
-    if (key) trackedPatientKeys.add(key)
-  })
-  visibleLabItems.forEach((item) => {
-    const key = item.patientId || normalizePersonKey(item.patientName)
-    if (key) trackedPatientKeys.add(key)
-  })
-  const patientsInFollowUp = trackedPatientKeys.size
+  const alignerInTreatmentCases = visibleCases.filter(
+    (caseItem) =>
+      isAlignerProductType(normalizeProductType(caseItem.productId ?? caseItem.productType))
+      && caseItem.status !== 'finalizado',
+  )
+  const patientsInFollowUp = new Set(
+    alignerInTreatmentCases
+      .map((item) => item.patientId || normalizePersonKey(item.patientName))
+      .filter((value): value is string => Boolean(value)),
+  ).size
 
   const planningPendingTone: Tone = planningPending > 0 ? (planningPending >= 10 ? 'danger' : 'warning') : 'success'
   const reworksTone: Tone = reworkItems.length > 0 ? 'danger' : 'neutral'
 
-  const hasCases = visibleCases.length > 0
-  const closedContractCases = visibleCases.filter((caseItem) => {
-    const contractClosed = caseItem.contract?.status === 'aprovado'
-    const phaseClosed = caseItem.phase === 'contrato_aprovado' || caseItem.phase === 'em_producao' || caseItem.phase === 'finalizado'
-    return contractClosed || phaseClosed
-  })
+  const hasCases = alignerInTreatmentCases.length > 0
   const bankCaseIds = new Set(
     visibleLabItems
       .filter((item) => {
@@ -460,7 +455,7 @@ export default function DashboardPage() {
       .map((item) => item.caseId)
       .filter((value): value is string => Boolean(value)),
   )
-  const bankCases = visibleCases.filter((caseItem) => bankCaseIds.has(caseItem.id))
+  const bankCases = alignerInTreatmentCases.filter((caseItem) => bankCaseIds.has(caseItem.id))
   const remainingByArch = bankCases.reduce(
     (acc, caseItem) => {
       const treatmentArch = caseItem.arch ?? 'ambos'
@@ -474,7 +469,7 @@ export default function DashboardPage() {
   )
   const remainingCases = bankCases.length
   const remainingTotal = remainingByArch.sup + remainingByArch.inf
-  const replenishmentAlerts = closedContractCases.flatMap((caseItem) => getReplenishmentAlerts(caseItem))
+  const replenishmentAlerts = alignerInTreatmentCases.flatMap((caseItem) => getReplenishmentAlerts(caseItem))
   const overdueReplenishments = replenishmentAlerts.filter((item) => item.severity === 'urgent').length
   const dueSoonReplenishments = replenishmentAlerts.filter((item) => item.severity === 'high' || item.severity === 'medium').length
   const remainingTone: Tone = remainingTotal > 0 ? (overdueReplenishments > 0 ? 'danger' : dueSoonReplenishments > 0 ? 'warning' : 'info') : 'neutral'
@@ -671,7 +666,7 @@ export default function DashboardPage() {
               title="Pacientes em acompanhamento"
               value={String(patientsInFollowUp)}
               meta="Ativos"
-              info="Origem: pacientes visiveis para o perfil atual."
+              info="Origem: pacientes em tratamento na aba Alinhadores (status diferente de finalizado)."
               tone="neutral"
               icon={<UsersRound className="h-4 w-4" />}
             />
