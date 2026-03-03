@@ -17,24 +17,6 @@ function normalizeInviteErrorMessage(raw: string) {
   return raw || 'Falha ao gerar convite.'
 }
 
-async function extractFunctionErrorMessage(error: unknown) {
-  const defaultMessage = (error as { message?: string } | null)?.message ?? 'Falha ao processar solicitação.'
-  const response = (error as { context?: { text?: () => Promise<string> } } | null)?.context
-  if (!response?.text) return normalizeInviteErrorMessage(defaultMessage)
-  try {
-    const body = await response.text()
-    if (!body) return normalizeInviteErrorMessage(defaultMessage)
-    try {
-      const parsed = JSON.parse(body) as { error?: string; message?: string }
-      return normalizeInviteErrorMessage(parsed.error ?? parsed.message ?? body)
-    } catch {
-      return normalizeInviteErrorMessage(body)
-    }
-  } catch {
-    return normalizeInviteErrorMessage(defaultMessage)
-  }
-}
-
 export async function createOnboardingInvite(payload: {
   fullName: string
   cpf?: string
@@ -65,17 +47,30 @@ export async function createOnboardingInvite(payload: {
   if (!accessToken) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  if (!supabaseUrl) return { ok: false as const, error: 'Supabase URL ausente no build.' }
 
-  const { data, error } = await supabase.functions.invoke('create-onboarding-invite', {
-    body: payload,
-    // Functions gateway rejects ES256 auth JWT as "Invalid JWT" when used as Authorization.
-    // Send anon in Authorization and pass the real user JWT via `x-user-jwt`.
-    headers: { Authorization: `Bearer ${anonKey}`, 'x-user-jwt': accessToken },
-  })
-  if (error) {
-    const message = await extractFunctionErrorMessage(error)
-    return { ok: false as const, error: message }
+  let data: { inviteId?: string; inviteLink?: string } | null = null
+  try {
+    const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/create-onboarding-invite`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${anonKey}`,
+        'x-user-jwt': accessToken,
+        apikey: anonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ...payload, userJwt: accessToken }),
+    })
+    data = (await response.json().catch(() => null)) as { inviteId?: string; inviteLink?: string; error?: string } | null
+    if (!response.ok || !data || (data as { error?: string }).error) {
+      const rawError = (data as { error?: string } | null)?.error ?? `Falha ao gerar convite (HTTP ${response.status}).`
+      return { ok: false as const, error: normalizeInviteErrorMessage(rawError) }
+    }
+  } catch (networkError) {
+    return { ok: false as const, error: `Falha de rede ao gerar convite: ${networkError instanceof Error ? networkError.message : String(networkError)}` }
   }
+
   return {
     ok: true as const,
     inviteId: data?.inviteId as string | undefined,
@@ -135,3 +130,4 @@ export async function completeOnboardingInvite(payload: {
   }
   return { ok: true as const }
 }
+

@@ -7,6 +7,7 @@ type Payload = {
   role: string
   clinicId: string
   dentistId?: string
+  userJwt?: string
 }
 
 const APP_ROLES = new Set([
@@ -80,10 +81,10 @@ Deno.serve(async (req) => {
 
   // The Functions gateway must receive `Authorization: Bearer <anon>` when the project issues ES256 JWTs.
   // We pass the authenticated user access token via `x-user-jwt` and validate it explicitly here.
-  const userJwtRaw = req.headers.get('x-user-jwt') ?? ''
-  const userJwt = userJwtRaw.replace(/^Bearer\\s+/i, '').trim()
-
   const payload = (await req.json()) as Payload
+  const bodyJwt = typeof payload.userJwt === 'string' ? payload.userJwt.trim() : ''
+  const headerJwt = (req.headers.get('x-user-jwt') ?? '').replace(/^Bearer\\s+/i, '').trim()
+  const userJwt = bodyJwt || headerJwt
   if (!payload.fullName?.trim() || !payload.role?.trim() || !payload.clinicId?.trim()) {
     return json(req, { ok: false, error: 'Missing fullName, role or clinicId.' }, 400)
   }
