@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabaseClient'
 import type { Role } from '../types/User'
 import { getSupabaseAccessToken } from '../lib/auth'
+import { getAuthProvider } from '../auth/authProvider'
 
 function normalizeInviteErrorMessage(raw: string) {
   const text = (raw || '').toLowerCase()
@@ -45,9 +46,20 @@ export async function createOnboardingInvite(payload: {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
 
   // In production, Edge Functions that change data require the user's JWT (not the anon key).
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
-  if (sessionError) return { ok: false as const, error: sessionError.message }
-  const accessToken = sessionData.session?.access_token ?? getSupabaseAccessToken()
+  let accessToken = ''
+  const { data: sessionData } = await supabase.auth.getSession()
+  accessToken = sessionData.session?.access_token ?? ''
+
+  if (!accessToken) {
+    const { data: refreshed } = await supabase.auth.refreshSession()
+    accessToken = refreshed.session?.access_token ?? ''
+  }
+
+  if (!accessToken) {
+    await getAuthProvider().getCurrentUser()
+    accessToken = getSupabaseAccessToken() ?? ''
+  }
+
   if (!accessToken) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
