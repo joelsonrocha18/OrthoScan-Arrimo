@@ -10,7 +10,7 @@ import { addAttachment, clearCaseScanFileError, deleteCase, getCase, handleRewor
 import { addLabItem, generateLabOrder } from '../data/labRepo'
 import { DATA_MODE } from '../data/dataMode'
 import { ensureReplacementBankForCase } from '../data/replacementBankRepo'
-import { getCaseSupplySummary, getReplenishmentAlerts } from '../domain/replenishment'
+import { getReplenishmentAlerts } from '../domain/replenishment'
 import AppShell from '../layouts/AppShell'
 import { slotLabel as getPhotoSlotLabel } from '../lib/photoSlots'
 import type { Case, CasePhase, CaseTray, TrayState } from '../types/Case'
@@ -82,6 +82,7 @@ function deriveTreatmentStatus(payload: {
   deliveredUpper: number
   deliveredLower: number
   todayIso: string
+  nextDueDate?: string
 }) {
   const totalUpper = Math.max(0, Math.trunc(payload.totalUpper))
   const totalLower = Math.max(0, Math.trunc(payload.totalLower))
@@ -92,12 +93,14 @@ function deriveTreatmentStatus(payload: {
   if (finished) return 'finalizado' as const
   if (!payload.installedAt || !deliveredAny) return 'em_entrega' as const
 
-  const nextDueDates: string[] = []
-  if (totalUpper > 0 && deliveredUpper < totalUpper) {
-    nextDueDates.push(addDays(payload.installedAt, (deliveredUpper + 1 - 1) * payload.changeEveryDays))
-  }
-  if (totalLower > 0 && deliveredLower < totalLower) {
-    nextDueDates.push(addDays(payload.installedAt, (deliveredLower + 1 - 1) * payload.changeEveryDays))
+  const nextDueDates: string[] = payload.nextDueDate ? [payload.nextDueDate] : []
+  if (nextDueDates.length === 0) {
+    if (totalUpper > 0 && deliveredUpper < totalUpper) {
+      nextDueDates.push(addDays(payload.installedAt, (deliveredUpper + 1 - 1) * payload.changeEveryDays))
+    }
+    if (totalLower > 0 && deliveredLower < totalLower) {
+      nextDueDates.push(addDays(payload.installedAt, (deliveredLower + 1 - 1) * payload.changeEveryDays))
+    }
   }
   if (nextDueDates.length === 0) return 'em_tratamento' as const
   const nextDue = nextDueDates.sort()[0]
@@ -459,6 +462,17 @@ export default function CaseDetailPage() {
     const progressed = Math.min(eligibleByDate, Math.max(0, Math.trunc(deliveredLower)))
     return caseProgress(totalLower, progressed)
   }, [changeSchedule, deliveredLower, todayIso, totalLower])
+  const nextTrayRequired = useMemo(() => {
+    if (hasUpperArch && hasLowerArch) return Math.max(0, Math.min(deliveredUpper, deliveredLower)) + 1
+    if (hasUpperArch) return Math.max(0, Math.trunc(deliveredUpper)) + 1
+    if (hasLowerArch) return Math.max(0, Math.trunc(deliveredLower)) + 1
+    return 0
+  }, [deliveredLower, deliveredUpper, hasLowerArch, hasUpperArch])
+  const maxPlannedTrays = Math.max(totalUpper, totalLower)
+  const nextReplacementDueDate = useMemo(() => {
+    if (nextTrayRequired <= 0 || nextTrayRequired > maxPlannedTrays) return undefined
+    return changeSchedule.find((row) => row.trayNumber === nextTrayRequired)?.changeDate
+  }, [changeSchedule, maxPlannedTrays, nextTrayRequired])
   const linkedLabItems = useMemo(
     () => (currentCase ? (isSupabaseMode ? supabaseLabItems : db.labItems.filter((item) => item.caseId === currentCase.id)) : []),
     [currentCase, isSupabaseMode, supabaseLabItems, db.labItems],
@@ -524,16 +538,38 @@ export default function CaseDetailPage() {
     () => (currentCase?.deliveryLots?.length ?? 0) > 0,
     [currentCase],
   )
+  const deliveredToProfessionalCount = useMemo(() => {
+    if (hasUpperArch && hasLowerArch) return Math.max(0, Math.min(deliveredToDentist.upper, deliveredToDentist.lower))
+    if (hasUpperArch) return Math.max(0, deliveredToDentist.upper)
+    if (hasLowerArch) return Math.max(0, deliveredToDentist.lower)
+    return 0
+  }, [deliveredToDentist.lower, deliveredToDentist.upper, hasLowerArch, hasUpperArch])
   const labSummary = useMemo(
-    () => ({
-      aguardando_iniciar: pipelineLabItems.filter((item) => item.status === 'aguardando_iniciar').length,
-      em_producao: pipelineLabItems.filter((item) => item.status === 'em_producao').length,
-      controle_qualidade: pipelineLabItems.filter((item) => item.status === 'controle_qualidade').length,
-      prontas: readyLabItems.length,
-      entregues: deliveredLabItemIds.size,
-      osItens: linkedLabItems.length,
-    }),
-    [deliveredLabItemIds.size, linkedLabItems.length, pipelineLabItems, readyLabItems.length],
+    () => {
+      const emProducao = pipelineLabItems.filter((item) => item.status === 'em_producao').length
+      const controleQualidade = pipelineLabItems.filter((item) => item.status === 'controle_qualidade').length
+      const prontas = readyLabItems.length
+      if (isAlignerCase && maxPlannedTrays > 0) {
+        const aguardando = Math.max(0, maxPlannedTrays - deliveredToProfessionalCount - emProducao - controleQualidade - prontas)
+        return {
+          aguardando_iniciar: aguardando,
+          em_producao: emProducao,
+          controle_qualidade: controleQualidade,
+          prontas,
+          entregues: Math.min(deliveredToProfessionalCount, maxPlannedTrays),
+          osItens: linkedLabItems.length,
+        }
+      }
+      return {
+        aguardando_iniciar: pipelineLabItems.filter((item) => item.status === 'aguardando_iniciar').length,
+        em_producao: emProducao,
+        controle_qualidade: controleQualidade,
+        prontas,
+        entregues: deliveredLabItemIds.size,
+        osItens: linkedLabItems.length,
+      }
+    },
+    [deliveredLabItemIds.size, deliveredToProfessionalCount, isAlignerCase, linkedLabItems.length, maxPlannedTrays, pipelineLabItems, readyLabItems.length],
   )
   const replacementSummary = useMemo(() => {
     if (!currentCase) {
@@ -555,6 +591,7 @@ export default function CaseDetailPage() {
       deliveredUpper: currentCase.installation.deliveredUpper ?? 0,
       deliveredLower: currentCase.installation.deliveredLower ?? 0,
       todayIso: new Date().toISOString().slice(0, 10),
+      nextDueDate: nextReplacementDueDate,
     })
     if (nextStatus === currentCase.status) return
     const nextPhase = nextStatus === 'finalizado' ? 'finalizado' : 'em_producao'
@@ -570,7 +607,7 @@ export default function CaseDetailPage() {
       return
     }
     updateCase(currentCase.id, { status: nextStatus, phase: nextPhase })
-  }, [currentCase, isSupabaseMode, totalLower, totalUpper])
+  }, [currentCase, isSupabaseMode, nextReplacementDueDate, totalLower, totalUpper])
   const groupedScanFiles = useMemo(() => {
     const scanFiles = currentCase?.scanFiles ?? []
     const scan3d = {
@@ -592,7 +629,6 @@ export default function CaseDetailPage() {
     const planejamento = scanFiles.filter((item) => item.kind === 'projeto')
     return { scan3d, fotosIntra, fotosExtra, radiografias, planejamento }
   }, [currentCase])
-  const supplySummary = useMemo(() => (currentCase ? getCaseSupplySummary(currentCase) : null), [currentCase])
   const replenishmentAlerts = useMemo(() => (currentCase ? getReplenishmentAlerts(currentCase) : []), [currentCase])
   const patientDisplayName = useMemo(() => {
     if (!currentCase) return ''
@@ -1293,6 +1329,16 @@ export default function CaseDetailPage() {
           createdAt: new Date().toISOString(),
         })
       }
+      const nextTrayAfterDelivery =
+        hasUpperArch && hasLowerArch
+          ? Math.max(0, Math.min(deliveredUpper, deliveredLower)) + 1
+          : hasUpperArch
+            ? Math.max(0, Math.trunc(deliveredUpper)) + 1
+            : Math.max(0, Math.trunc(deliveredLower)) + 1
+      const nextDueAfterDelivery =
+        nextTrayAfterDelivery > 0
+          ? changeSchedule.find((row) => row.trayNumber === nextTrayAfterDelivery)?.changeDate
+          : undefined
       const nextStatus = deriveTreatmentStatus({
         installedAt: currentInstallation?.installedAt ?? installationDate,
         changeEveryDays: currentCase.changeEveryDays,
@@ -1301,6 +1347,7 @@ export default function CaseDetailPage() {
         deliveredUpper,
         deliveredLower,
         todayIso: new Date().toISOString().slice(0, 10),
+        nextDueDate: nextDueAfterDelivery,
       })
       const nextPhase = nextStatus === 'finalizado' ? 'finalizado' : 'em_producao'
       void (async () => {
@@ -1341,6 +1388,16 @@ export default function CaseDetailPage() {
     }
     const nextDeliveredUpper = (currentCase.installation?.deliveredUpper ?? 0) + Math.trunc(upperCount)
     const nextDeliveredLower = (currentCase.installation?.deliveredLower ?? 0) + Math.trunc(lowerCount)
+    const nextTrayAfterDelivery =
+      hasUpperArch && hasLowerArch
+        ? Math.max(0, Math.min(nextDeliveredUpper, nextDeliveredLower)) + 1
+        : hasUpperArch
+          ? Math.max(0, Math.trunc(nextDeliveredUpper)) + 1
+          : Math.max(0, Math.trunc(nextDeliveredLower)) + 1
+    const nextDueAfterDelivery =
+      nextTrayAfterDelivery > 0
+        ? changeSchedule.find((row) => row.trayNumber === nextTrayAfterDelivery)?.changeDate
+        : undefined
     const nextStatus = deriveTreatmentStatus({
       installedAt: currentCase.installation?.installedAt ?? installationDate,
       changeEveryDays: currentCase.changeEveryDays,
@@ -1349,6 +1406,7 @@ export default function CaseDetailPage() {
       deliveredUpper: nextDeliveredUpper,
       deliveredLower: nextDeliveredLower,
       todayIso: new Date().toISOString().slice(0, 10),
+      nextDueDate: nextDueAfterDelivery,
     })
     updateCase(currentCase.id, {
       status: nextStatus,
@@ -1800,10 +1858,10 @@ export default function CaseDetailPage() {
                   : `Inferior ${progressLower.delivered}/${progressLower.total}`}
             </p>
             <p>Total geral planejado: {Math.max(progressUpper.total, progressLower.total)}</p>
-            <p>Proxima placa necessaria: {supplySummary?.nextTray ? `#${supplySummary.nextTray}` : 'Nenhuma (pedido completo)'}</p>
+            <p>Proxima placa necessaria: {nextTrayRequired > 0 && nextTrayRequired <= maxPlannedTrays ? `#${nextTrayRequired}` : 'Nenhuma (pedido completo)'}</p>
             <p>
               Proxima reposicao prevista para:{' '}
-              {supplySummary?.nextDueDate ? new Date(`${supplySummary.nextDueDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'}
+              {nextReplacementDueDate ? new Date(`${nextReplacementDueDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'}
             </p>
             {!currentCase.installation?.installedAt ? (
               <p className="text-sm text-slate-500">Registre a instalacao para calcular reposicÃµes.</p>
