@@ -49,8 +49,10 @@ export async function createOnboardingInvite(payload: {
   let accessToken = ''
   const { data: sessionData } = await supabase.auth.getSession()
   accessToken = sessionData.session?.access_token ?? ''
+  const expiresAt = sessionData.session?.expires_at ?? 0
+  const isExpiredOrNear = !expiresAt || (expiresAt * 1000) <= (Date.now() + 60_000)
 
-  if (!accessToken) {
+  if (!accessToken || isExpiredOrNear) {
     const { data: refreshed } = await supabase.auth.refreshSession()
     accessToken = refreshed.session?.access_token ?? ''
   }
