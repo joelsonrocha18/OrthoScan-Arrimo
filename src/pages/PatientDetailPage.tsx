@@ -151,6 +151,67 @@ type OrthocamMediaItem = {
   canPreview: boolean
 }
 
+type StructuredPatientDocSlot = {
+  id: string
+  label: string
+  category: PatientDocument['category']
+  accept: string
+}
+
+const STRUCTURED_PATIENT_DOC_SECTIONS: Array<{ title: string; slots: StructuredPatientDocSlot[] }> = [
+  {
+    title: 'Scan 3D',
+    slots: [
+      { id: 'scan3d_superior', label: 'Superior (.stl, .obj, .ply)', category: 'exame', accept: '.stl,.obj,.ply,model/stl,application/sla,application/octet-stream' },
+      { id: 'scan3d_inferior', label: 'Inferior (.stl, .obj, .ply)', category: 'exame', accept: '.stl,.obj,.ply,model/stl,application/sla,application/octet-stream' },
+      { id: 'scan3d_mordida', label: 'Mordida (.stl, .obj, .ply)', category: 'exame', accept: '.stl,.obj,.ply,model/stl,application/sla,application/octet-stream' },
+    ],
+  },
+  {
+    title: 'Fotos Intraorais',
+    slots: [
+      { id: 'foto_intra_frontal', label: 'Intraoral - Frontal', category: 'foto', accept: 'image/*' },
+      { id: 'foto_intra_lateral_direita', label: 'Intraoral - Lateral direita', category: 'foto', accept: 'image/*' },
+      { id: 'foto_intra_lateral_esquerda', label: 'Intraoral - Lateral esquerda', category: 'foto', accept: 'image/*' },
+      { id: 'foto_intra_oclusal_superior', label: 'Intraoral - Oclusal superior', category: 'foto', accept: 'image/*' },
+      { id: 'foto_intra_oclusal_inferior', label: 'Intraoral - Oclusal inferior', category: 'foto', accept: 'image/*' },
+    ],
+  },
+  {
+    title: 'Fotos Extraorais',
+    slots: [
+      { id: 'foto_extra_face_frontal', label: 'Extraoral - Face frontal', category: 'foto', accept: 'image/*' },
+      { id: 'foto_extra_face_lateral_direita', label: 'Extraoral - Face lateral direita', category: 'foto', accept: 'image/*' },
+      { id: 'foto_extra_face_lateral_esquerda', label: 'Extraoral - Face lateral esquerda', category: 'foto', accept: 'image/*' },
+      { id: 'foto_extra_diagonal_direita_3_4', label: 'Extraoral - Diagonal direita (3/4)', category: 'foto', accept: 'image/*' },
+      { id: 'foto_extra_diagonal_esquerda_3_4', label: 'Extraoral - Diagonal esquerda (3/4)', category: 'foto', accept: 'image/*' },
+      { id: 'foto_extra_sorriso_frontal', label: 'Extraoral - Sorriso frontal', category: 'foto', accept: 'image/*' },
+    ],
+  },
+  {
+    title: 'Radiografias',
+    slots: [
+      { id: 'rx_panoramica', label: 'Panoramica', category: 'exame', accept: '.pdf,.jpg,.jpeg,.png,image/*,application/pdf' },
+      { id: 'rx_teleradiografia', label: 'Teleradiografia', category: 'exame', accept: '.pdf,.jpg,.jpeg,.png,image/*,application/pdf' },
+      { id: 'rx_tomografia', label: 'Tomografia / DICOM', category: 'exame', accept: '.zip,.dcm,.pdf,.jpg,.jpeg,.png,image/*,application/pdf,application/zip' },
+    ],
+  },
+  {
+    title: 'Planejamento',
+    slots: [
+      { id: 'planejamento', label: 'Planejamento', category: 'exame', accept: '.pdf,.zip,.stl,.obj,.ply,application/pdf,application/zip' },
+    ],
+  },
+]
+
+function structuredSlotTag(slotId: string) {
+  return `[slot:${slotId}]`
+}
+
+function hasStructuredSlotTag(note: string | undefined, slotId: string) {
+  return (note ?? '').includes(structuredSlotTag(slotId))
+}
+
 export default function PatientDetailPage() {
   const params = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -212,6 +273,7 @@ export default function PatientDetailPage() {
     [db.clinics, isSupabaseMode, supabaseClinics],
   )
   const [docs, setDocs] = useState<PatientDocument[]>([])
+  const [slotUploadBusy, setSlotUploadBusy] = useState('')
 
   useEffect(() => {
     if (!isSupabaseMode || !supabase) return
@@ -932,6 +994,54 @@ export default function PatientDetailPage() {
     setDocs(items)
   }
 
+  const structuredDocsBySlot = useMemo(() => {
+    const map = new Map<string, PatientDocument>()
+    STRUCTURED_PATIENT_DOC_SECTIONS.flatMap((section) => section.slots).forEach((slot) => {
+      const found = docs
+        .filter((doc) => hasStructuredSlotTag(doc.note, slot.id))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+      if (found) map.set(slot.id, found)
+    })
+    return map
+  }, [docs])
+
+  const uploadStructuredSlot = async (slot: StructuredPatientDocSlot, file: File) => {
+    if (!existing) {
+      setError('Salve o cadastro do paciente antes de anexar arquivos.')
+      return
+    }
+    if (!canDocsWrite) {
+      setError('Sem permissao para anexar documentos.')
+      return
+    }
+    const valid = validatePatientDocFile(file)
+    if (!valid.ok) {
+      setError(valid.error)
+      return
+    }
+    setSlotUploadBusy(slot.id)
+    const existingTaggedNote = structuredDocsBySlot.get(slot.id)?.note ?? ''
+    const mergedNote = `${existingTaggedNote.replace(structuredSlotTag(slot.id), '').trim()}\n${structuredSlotTag(slot.id)}`
+      .trim()
+    const result = await addPatientDoc({
+      patientId: existing.id,
+      clinicId: existing.clinicId ?? (form.clinicId || undefined),
+      title: slot.label,
+      category: slot.category,
+      note: mergedNote,
+      createdAt: new Date().toISOString().slice(0, 10),
+      file,
+    })
+    setSlotUploadBusy('')
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setError('')
+    const items = await listPatientDocs(existing.id)
+    setDocs(items)
+  }
+
   const acceptDocs =
     '.pdf,.jpg,.jpeg,.png,.heic,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*'
 
@@ -1360,6 +1470,47 @@ export default function PatientDetailPage() {
             {canDocsWrite ? <Button onClick={() => setDocModalOpen(true)}>Adicionar documento</Button> : null}
           </div>
           <div className="mt-4">
+            <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-3">
+                <p className="text-sm font-semibold text-slate-900">Anexos de exame (pos-cadastro)</p>
+                <p className="text-xs text-slate-500">Permite anexar arquivos depois de gerar o exame, no mesmo formato operacional.</p>
+              </div>
+              <div className="space-y-3">
+                {STRUCTURED_PATIENT_DOC_SECTIONS.map((section) => (
+                  <div key={section.title} className="rounded-lg border border-slate-200 bg-white p-3">
+                    <h3 className="text-sm font-semibold text-slate-900">{section.title}</h3>
+                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {section.slots.map((slot) => {
+                        const slotDoc = structuredDocsBySlot.get(slot.id)
+                        const statusOk = Boolean(slotDoc)
+                        return (
+                          <div key={slot.id} className="rounded-lg border border-slate-200 p-2">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <p className="text-xs font-semibold text-slate-700">{slot.label}</p>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusOk ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                {statusOk ? 'OK' : 'Falta'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <FilePickerWithCamera
+                                accept={slot.accept}
+                                onFileSelected={(file) => void uploadStructuredSlot(slot, file)}
+                              />
+                              {slotDoc ? (
+                                <Button variant="secondary" size="sm" onClick={() => void openDoc(slotDoc)}>
+                                  Ver
+                                </Button>
+                              ) : null}
+                            </div>
+                            {slotUploadBusy === slot.id ? <p className="mt-1 text-[11px] text-slate-500">Enviando...</p> : null}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
             <DocumentsList
               items={docs}
               imagePreviewUrls={docPreviewUrls}
