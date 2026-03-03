@@ -9,7 +9,7 @@ import { completeOnboardingInvite, validateOnboardingInvite } from '../repo/onbo
 type InviteState =
   | { status: 'loading' }
   | { status: 'invalid'; message: string }
-  | { status: 'ready'; preview: { fullName: string; roleLabel: string; clinicName: string } }
+  | { status: 'ready'; preview: { fullName: string; role: string; roleLabel: string; clinicName: string } }
 
 export default function OnboardingInvitePage() {
   const [params] = useSearchParams()
@@ -22,6 +22,14 @@ export default function OnboardingInvitePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [fullName, setFullName] = useState('')
+  const [gender, setGender] = useState<'masculino' | 'feminino'>('masculino')
+  const [cro, setCro] = useState('')
+  const [phone, setPhone] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
+  const [notes, setNotes] = useState('')
+
+  const isDentistInvite = inviteState.status === 'ready' && (inviteState.preview.role === 'dentist_admin' || inviteState.preview.role === 'dentist_client')
 
   useEffect(() => {
     let active = true
@@ -48,6 +56,7 @@ export default function OnboardingInvitePage() {
         setInviteState({ status: 'invalid', message: result.error })
         return
       }
+      setFullName(result.preview.fullName ?? '')
       setInviteState({ status: 'ready', preview: result.preview })
     })
     return () => {
@@ -63,6 +72,10 @@ export default function OnboardingInvitePage() {
       setError('Informe seu email.')
       return
     }
+    if (!fullName.trim()) {
+      setError('Informe seu nome completo.')
+      return
+    }
     if (!password.trim() || password.trim().length < 10) {
       setError('Senha deve ter ao menos 10 caracteres.')
       return
@@ -76,6 +89,18 @@ export default function OnboardingInvitePage() {
       token,
       email: email.trim(),
       password: password.trim(),
+      fullName: fullName.trim(),
+      dentist: isDentistInvite
+        ? {
+            name: fullName.trim(),
+            gender,
+            cro: cro.trim() || undefined,
+            phone: phone.trim() || undefined,
+            whatsapp: whatsapp.trim() || undefined,
+            email: email.trim(),
+            notes: notes.trim() || undefined,
+          }
+        : undefined,
     })
     setLoading(false)
     if (!result.ok) {
@@ -114,9 +139,44 @@ export default function OnboardingInvitePage() {
           {inviteState.status === 'ready' ? (
             <div className="mt-6 space-y-3">
               <div>
+                <label className="mb-1 block text-sm font-medium text-slate-200">Nome completo</label>
+                <Input value={fullName} onChange={(event) => setFullName(event.target.value)} />
+              </div>
+              <div>
                 <label className="mb-1 block text-sm font-medium text-slate-200">Email</label>
                 <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
               </div>
+              {isDentistInvite ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-200">Sexo</label>
+                    <select
+                      value={gender}
+                      onChange={(event) => setGender(event.target.value as 'masculino' | 'feminino')}
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"
+                    >
+                      <option value="masculino">Masculino</option>
+                      <option value="feminino">Feminino</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-200">CRO</label>
+                    <Input value={cro} onChange={(event) => setCro(event.target.value)} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-200">Telefone</label>
+                    <Input value={phone} onChange={(event) => setPhone(event.target.value)} />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-200">WhatsApp</label>
+                    <Input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-slate-200">Observacoes</label>
+                    <Input value={notes} onChange={(event) => setNotes(event.target.value)} />
+                  </div>
+                </div>
+              ) : null}
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-200">Senha</label>
                 <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />

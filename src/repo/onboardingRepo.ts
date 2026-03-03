@@ -89,11 +89,25 @@ export async function validateOnboardingInvite(token: string) {
   }
   return {
     ok: true as const,
-    preview: data.preview as { fullName: string; roleLabel: string; clinicName: string },
+    preview: data.preview as { fullName: string; role: string; roleLabel: string; clinicName: string },
   }
 }
 
-export async function completeOnboardingInvite(payload: { token: string; email: string; password: string }) {
+export async function completeOnboardingInvite(payload: {
+  token: string
+  email: string
+  password: string
+  fullName?: string
+  dentist?: {
+    name?: string
+    gender?: 'masculino' | 'feminino'
+    cro?: string
+    phone?: string
+    whatsapp?: string
+    email?: string
+    notes?: string
+  }
+}) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }

@@ -4,6 +4,16 @@ type Payload = {
   token: string
   email: string
   password: string
+  fullName?: string
+  dentist?: {
+    name?: string
+    gender?: 'masculino' | 'feminino'
+    cro?: string
+    phone?: string
+    whatsapp?: string
+    email?: string
+    notes?: string
+  }
 }
 
 function buildFallbackProfileShortId(role: string) {
@@ -63,6 +73,8 @@ Deno.serve(async (req) => {
   const email = payload.email?.trim().toLowerCase()
   const password = payload.password?.trim()
   const token = payload.token?.trim()
+  const fullNameOverride = payload.fullName?.trim() || null
+  const dentistPayload = payload.dentist ?? null
 
   if (!token || !email || !password) {
     return json(req, { ok: false, error: 'Token, email e senha sao obrigatorios.' }, 400)
@@ -97,16 +109,73 @@ Deno.serve(async (req) => {
   }
 
   const userId = created.user.id
+  const profilePhone = dentistPayload?.whatsapp?.trim() || dentistPayload?.phone?.trim() || invite.phone
+  let resolvedDentistId = invite.dentist_id as string | null
+
+  if (invite.role === 'dentist_admin' || invite.role === 'dentist_client') {
+    const dentistName =
+      dentistPayload?.name?.trim() ||
+      fullNameOverride ||
+      invite.full_name?.trim() ||
+      'Dentista'
+    const dentistGender = dentistPayload?.gender === 'feminino' ? 'feminino' : 'masculino'
+    const dentistCro = dentistPayload?.cro?.trim() || null
+    const dentistPhone = dentistPayload?.phone?.trim() || invite.phone || null
+    const dentistWhatsapp = dentistPayload?.whatsapp?.trim() || null
+    const dentistEmail = dentistPayload?.email?.trim().toLowerCase() || email
+    const dentistNotes = dentistPayload?.notes?.trim() || null
+
+    if (resolvedDentistId) {
+      const { error: dentistUpdateError } = await supabase
+        .from('dentists')
+        .update({
+          name: dentistName,
+          gender: dentistGender,
+          cro: dentistCro,
+          phone: dentistPhone,
+          whatsapp: dentistWhatsapp,
+          email: dentistEmail,
+          notes: dentistNotes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', resolvedDentistId)
+      if (dentistUpdateError) {
+        await supabase.auth.admin.deleteUser(userId)
+        return json(req, { ok: false, error: dentistUpdateError.message }, 400)
+      }
+    } else {
+      const { data: createdDentist, error: dentistInsertError } = await supabase
+        .from('dentists')
+        .insert({
+          clinic_id: invite.clinic_id,
+          name: dentistName,
+          gender: dentistGender,
+          cro: dentistCro,
+          phone: dentistPhone,
+          whatsapp: dentistWhatsapp,
+          email: dentistEmail,
+          notes: dentistNotes,
+          is_active: true,
+        })
+        .select('id')
+        .single()
+      if (dentistInsertError || !createdDentist?.id) {
+        await supabase.auth.admin.deleteUser(userId)
+        return json(req, { ok: false, error: dentistInsertError?.message ?? 'Falha ao criar cadastro do dentista.' }, 400)
+      }
+      resolvedDentistId = createdDentist.id as string
+    }
+  }
 
   const profilePayload = {
     user_id: userId,
     login_email: email,
     role: invite.role,
     clinic_id: invite.clinic_id,
-    dentist_id: invite.dentist_id,
-    full_name: invite.full_name,
+    dentist_id: resolvedDentistId,
+    full_name: fullNameOverride || invite.full_name,
     cpf: invite.cpf,
-    phone: invite.phone,
+    phone: profilePhone,
     onboarding_completed_at: new Date().toISOString(),
     is_active: true,
     deleted_at: null,

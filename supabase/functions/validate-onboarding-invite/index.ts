@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
     used: false,
     preview: {
       fullName: invite.full_name,
+      role: invite.role,
       roleLabel: ROLE_LABEL[invite.role] ?? invite.role,
       clinicName: clinic?.trade_name ?? 'Clinica',
     },

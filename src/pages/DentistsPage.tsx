@@ -16,6 +16,9 @@ import { supabase } from '../lib/supabaseClient'
 import { parseDentistsSpreadsheet, readSpreadsheetFileText } from '../lib/spreadsheetImport'
 import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import { dentistCode } from '../lib/entityCode'
+import { createOnboardingInvite } from '../repo/onboardingRepo'
+import { getAuthProvider } from '../auth/authProvider'
+import { useToast } from '../app/ToastProvider'
 
 function nowIso() {
   return new Date().toISOString()
@@ -29,6 +32,7 @@ function statusLabel(item: { isActive: boolean; deletedAt?: string }) {
 
 export default function DentistsPage() {
   const { db } = useDb()
+  const { addToast } = useToast()
   const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
   const canWrite = can(currentUser, 'dentists.write')
@@ -40,7 +44,10 @@ export default function DentistsPage() {
   const [importMessage, setImportMessage] = useState('')
   const [importing, setImporting] = useState(false)
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteLink, setInviteLink] = useState('')
   const supabaseSyncTick = useSupabaseSyncTick()
+  const [supabaseClinics, setSupabaseClinics] = useState<Array<{ id: string; tradeName: string }>>([])
   const [supabaseDentists, setSupabaseDentists] = useState<Array<{
     id: string
     shortId?: string
@@ -56,7 +63,10 @@ export default function DentistsPage() {
     let active = true
     if (!isSupabaseMode || !supabase) return
     ;(async () => {
-      const dentistsRes = await supabase.from('dentists').select('id, short_id, name, cro, phone, whatsapp, is_active, deleted_at')
+      const [dentistsRes, clinicsRes] = await Promise.all([
+        supabase.from('dentists').select('id, short_id, name, cro, phone, whatsapp, is_active, deleted_at'),
+        supabase.from('clinics').select('id, trade_name').is('deleted_at', null),
+      ])
       if (!active) return
       const dentists = ((dentistsRes.data ?? []) as Array<{
         id: string
@@ -78,11 +88,55 @@ export default function DentistsPage() {
         deletedAt: row.deleted_at ?? undefined,
       }))
       setSupabaseDentists(dentists)
+      setSupabaseClinics(((clinicsRes.data ?? []) as Array<{ id: string; trade_name?: string }>).map((row) => ({
+        id: row.id,
+        tradeName: row.trade_name ?? '-',
+      })))
     })()
     return () => {
       active = false
     }
   }, [isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
+
+  const resolveDefaultClinicId = () => {
+    const linkedClinicId = currentUser?.linkedClinicId?.trim() ?? ''
+    if (linkedClinicId) return linkedClinicId
+    return supabaseClinics[0]?.id ?? ''
+  }
+
+  const handleGenerateSelfSignupLink = async () => {
+    if (!isSupabaseMode) return
+    if (!canWrite) return
+    const authUser = await getAuthProvider().getCurrentUser()
+    if (!authUser) {
+      addToast({ type: 'error', title: 'Sessao expirada. Faca login novamente.' })
+      return
+    }
+    const clinicId = resolveDefaultClinicId()
+    if (!clinicId) {
+      addToast({ type: 'error', title: 'Nenhuma clinica ativa encontrada para gerar o link.' })
+      return
+    }
+    setInviteLoading(true)
+    const result = await createOnboardingInvite({
+      fullName: 'Dentista',
+      role: 'dentist_client',
+      clinicId,
+    })
+    setInviteLoading(false)
+    if (!result.ok || !result.inviteLink) {
+      addToast({ type: 'error', title: result.error ?? 'Falha ao gerar link de cadastro.' })
+      return
+    }
+    setInviteLink(result.inviteLink)
+    addToast({ type: 'success', title: 'Link de cadastro gerado' })
+    try {
+      await navigator.clipboard.writeText(result.inviteLink)
+      addToast({ type: 'success', title: 'Link copiado para a area de transferencia' })
+    } catch {
+      // no-op
+    }
+  }
 
   const dentistsSource = isSupabaseMode ? supabaseDentists : db.dentists.filter((item) => item.type === 'dentista')
 
@@ -195,6 +249,11 @@ export default function DentistsPage() {
           <p className="mt-2 text-sm text-slate-500">Cadastro de profissionais.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {canWrite && isSupabaseMode ? (
+            <Button variant="secondary" onClick={() => void handleGenerateSelfSignupLink()} disabled={inviteLoading}>
+              {inviteLoading ? 'Gerando link...' : 'Link de cadastro'}
+            </Button>
+          ) : null}
           {canWrite ? (
             <Button variant="secondary" onClick={() => setShowImport((current) => !current)}>
               Importar planilha
@@ -234,6 +293,29 @@ export default function DentistsPage() {
               </Button>
             </div>
             {importMessage ? <p className="mt-2 text-sm text-slate-700">{importMessage}</p> : null}
+          </Card>
+        </section>
+      ) : null}
+
+      {isSupabaseMode && inviteLink ? (
+        <section className="mt-4">
+          <Card>
+            <h2 className="text-base font-semibold text-slate-900">Link de cadastro do dentista</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              O dentista abre o link, preenche os dados e salva. O cadastro entra no sistema automaticamente.
+            </p>
+            <Input className="mt-3" value={inviteLink} readOnly onFocus={(event) => event.currentTarget.select()} />
+            <div className="mt-3 flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  void navigator.clipboard.writeText(inviteLink)
+                  addToast({ type: 'success', title: 'Link copiado' })
+                }}
+              >
+                Copiar link
+              </Button>
+            </div>
           </Card>
         </section>
       ) : null}
