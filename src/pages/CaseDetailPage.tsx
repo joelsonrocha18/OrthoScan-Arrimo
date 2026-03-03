@@ -24,21 +24,21 @@ import { deleteCaseSupabase, generateCaseLabOrderSupabase, listCaseLabItemsSupab
 import type { LabItem } from '../types/Lab'
 import { isAlignerProductType, normalizeProductType, PRODUCT_TYPE_LABEL } from '../types/Product'
 
-const phaseLabelMap: Record<CasePhase, string> = {
+const caseStatusLabelMap: Record<Case['status'], string> = {
   planejamento: 'Planejamento',
-  orcamento: 'Orcamento',
-  contrato_pendente: 'Contrato pendente',
-  contrato_aprovado: 'Contrato aprovado',
   em_producao: 'Em producao',
+  em_entrega: 'Em entrega',
+  em_tratamento: 'Em tratamento',
+  aguardando_reposicao: 'Aguardando reposicao',
   finalizado: 'Finalizado',
 }
 
-const phaseToneMap: Record<CasePhase, 'neutral' | 'info' | 'success'> = {
+const caseStatusToneMap: Record<Case['status'], 'neutral' | 'info' | 'success' | 'danger'> = {
   planejamento: 'neutral',
-  orcamento: 'neutral',
-  contrato_pendente: 'neutral',
-  contrato_aprovado: 'info',
   em_producao: 'info',
+  em_entrega: 'info',
+  em_tratamento: 'info',
+  aguardando_reposicao: 'danger',
   finalizado: 'success',
 }
 
@@ -72,6 +72,36 @@ function addDays(baseIsoDate: string, days: number) {
   const base = new Date(`${baseIsoDate}T00:00:00`)
   base.setDate(base.getDate() + days)
   return base.toISOString().slice(0, 10)
+}
+
+function deriveTreatmentStatus(payload: {
+  installedAt?: string
+  changeEveryDays: number
+  totalUpper: number
+  totalLower: number
+  deliveredUpper: number
+  deliveredLower: number
+  todayIso: string
+}) {
+  const totalUpper = Math.max(0, Math.trunc(payload.totalUpper))
+  const totalLower = Math.max(0, Math.trunc(payload.totalLower))
+  const deliveredUpper = Math.max(0, Math.trunc(payload.deliveredUpper))
+  const deliveredLower = Math.max(0, Math.trunc(payload.deliveredLower))
+  const deliveredAny = deliveredUpper > 0 || deliveredLower > 0
+  const finished = deliveredUpper >= totalUpper && deliveredLower >= totalLower
+  if (finished) return 'finalizado' as const
+  if (!payload.installedAt || !deliveredAny) return 'em_entrega' as const
+
+  const nextDueDates: string[] = []
+  if (totalUpper > 0 && deliveredUpper < totalUpper) {
+    nextDueDates.push(addDays(payload.installedAt, (deliveredUpper + 1 - 1) * payload.changeEveryDays))
+  }
+  if (totalLower > 0 && deliveredLower < totalLower) {
+    nextDueDates.push(addDays(payload.installedAt, (deliveredLower + 1 - 1) * payload.changeEveryDays))
+  }
+  if (nextDueDates.length === 0) return 'em_tratamento' as const
+  const nextDue = nextDueDates.sort()[0]
+  return nextDue <= payload.todayIso ? ('aguardando_reposicao' as const) : ('em_tratamento' as const)
 }
 
 function deliveredToDentistByArch(caseItem: Case | null) {
@@ -514,6 +544,33 @@ export default function CaseDetailPage() {
     const saldoRestante = Math.max(0, totalContratado - entreguePaciente)
     return { totalContratado, entreguePaciente, saldoRestante, rework: 0, defeituosa: 0 }
   }, [currentCase, deliveredLower, deliveredUpper, totalLower, totalUpper])
+
+  useEffect(() => {
+    if (!currentCase?.installation || currentCase.status === 'finalizado') return
+    const nextStatus = deriveTreatmentStatus({
+      installedAt: currentCase.installation.installedAt,
+      changeEveryDays: currentCase.changeEveryDays,
+      totalUpper,
+      totalLower,
+      deliveredUpper: currentCase.installation.deliveredUpper ?? 0,
+      deliveredLower: currentCase.installation.deliveredLower ?? 0,
+      todayIso: new Date().toISOString().slice(0, 10),
+    })
+    if (nextStatus === currentCase.status) return
+    const nextPhase = nextStatus === 'finalizado' ? 'finalizado' : 'em_producao'
+    if (isSupabaseMode) {
+      void (async () => {
+        const result = await patchCaseDataSupabase(
+          currentCase.id,
+          { status: nextStatus, phase: nextPhase },
+          { status: nextStatus, phase: nextPhase },
+        )
+        if (result.ok) setSupabaseRefreshKey((current) => current + 1)
+      })()
+      return
+    }
+    updateCase(currentCase.id, { status: nextStatus, phase: nextPhase })
+  }, [currentCase, isSupabaseMode, totalLower, totalUpper])
   const groupedScanFiles = useMemo(() => {
     const scanFiles = currentCase?.scanFiles ?? []
     const scan3d = {
@@ -1236,7 +1293,16 @@ export default function CaseDetailPage() {
           createdAt: new Date().toISOString(),
         })
       }
-      const finished = deliveredUpper >= upperTotal && deliveredLower >= lowerTotal
+      const nextStatus = deriveTreatmentStatus({
+        installedAt: currentInstallation?.installedAt ?? installationDate,
+        changeEveryDays: currentCase.changeEveryDays,
+        totalUpper: upperTotal,
+        totalLower: lowerTotal,
+        deliveredUpper,
+        deliveredLower,
+        todayIso: new Date().toISOString().slice(0, 10),
+      })
+      const nextPhase = nextStatus === 'finalizado' ? 'finalizado' : 'em_producao'
       void (async () => {
         const result = await patchCaseDataSupabase(
           currentCase.id,
@@ -1249,10 +1315,10 @@ export default function CaseDetailPage() {
               patientDeliveryLots,
               actualChangeDates: currentInstallation?.actualChangeDates,
             },
-            status: finished ? 'finalizado' : 'em_entrega',
-            phase: finished ? 'finalizado' : 'em_producao',
+            status: nextStatus,
+            phase: nextPhase,
           },
-          { status: finished ? 'finalizado' : 'em_entrega', phase: finished ? 'finalizado' : 'em_producao' },
+          { status: nextStatus, phase: nextPhase },
         )
         if (!result.ok) {
           addToast({ type: 'error', title: 'Instalacao', message: result.error })
@@ -1273,6 +1339,21 @@ export default function CaseDetailPage() {
       addToast({ type: 'error', title: 'Instalacao', message: result.error })
       return
     }
+    const nextDeliveredUpper = (currentCase.installation?.deliveredUpper ?? 0) + Math.trunc(upperCount)
+    const nextDeliveredLower = (currentCase.installation?.deliveredLower ?? 0) + Math.trunc(lowerCount)
+    const nextStatus = deriveTreatmentStatus({
+      installedAt: currentCase.installation?.installedAt ?? installationDate,
+      changeEveryDays: currentCase.changeEveryDays,
+      totalUpper,
+      totalLower,
+      deliveredUpper: nextDeliveredUpper,
+      deliveredLower: nextDeliveredLower,
+      todayIso: new Date().toISOString().slice(0, 10),
+    })
+    updateCase(currentCase.id, {
+      status: nextStatus,
+      phase: nextStatus === 'finalizado' ? 'finalizado' : 'em_producao',
+    })
     addToast({ type: 'success', title: 'Instalacao registrada' })
   }
 
@@ -1460,7 +1541,7 @@ export default function CaseDetailPage() {
             | Troca {currentCase.changeEveryDays} dias | Attachments: {currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}
           </p>
           <div className="mt-3 flex items-center gap-3">
-            <Badge tone={phaseToneMap[currentCase.phase]}>{phaseLabelMap[currentCase.phase]}</Badge>
+            <Badge tone={caseStatusToneMap[currentCase.status]}>{caseStatusLabelMap[currentCase.status]}</Badge>
             <span className="text-xs text-slate-500">
               Ultima atualizacao: {new Date(currentCase.updatedAt).toLocaleString('pt-BR')}
             </span>
@@ -1531,7 +1612,7 @@ export default function CaseDetailPage() {
         <section className="mt-6">
           <Card>
             <h2 className="text-lg font-semibold text-slate-900">Fluxo do Pedido</h2>
-            <p className="mt-1 text-sm text-slate-500">Fase atual: {phaseLabelMap[currentCase.phase]}</p>
+            <p className="mt-1 text-sm text-slate-500">Status atual: {caseStatusLabelMap[currentCase.status]}</p>
 
             <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
               <div className="rounded-lg border border-slate-200 p-3">

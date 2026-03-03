@@ -1,6 +1,12 @@
 import type { ProductType } from './Product'
 
-export type CaseStatus = 'planejamento' | 'em_producao' | 'em_entrega' | 'finalizado'
+export type CaseStatus =
+  | 'planejamento'
+  | 'em_producao'
+  | 'em_entrega'
+  | 'em_tratamento'
+  | 'aguardando_reposicao'
+  | 'finalizado'
 export type CasePhase =
   | 'planejamento'
   | 'orcamento'

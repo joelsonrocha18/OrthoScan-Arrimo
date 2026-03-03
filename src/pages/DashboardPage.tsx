@@ -195,10 +195,20 @@ export default function DashboardPage() {
       const nowIso = new Date().toISOString()
       const statusRaw = asText(data.status, asText(row.status, 'planejamento'))
       const status: CaseStatus =
-        statusRaw === 'finalizado' || statusRaw === 'em_producao' || statusRaw === 'em_entrega' ? statusRaw : 'planejamento'
+        statusRaw === 'finalizado'
+        || statusRaw === 'em_producao'
+        || statusRaw === 'em_entrega'
+        || statusRaw === 'em_tratamento'
+        || statusRaw === 'aguardando_reposicao'
+          ? statusRaw
+          : 'planejamento'
       const phaseRaw = asText(data.phase)
       const derivedPhase: CasePhase =
-        status === 'finalizado' ? 'finalizado' : status === 'em_producao' || status === 'em_entrega' ? 'em_producao' : 'planejamento'
+        status === 'finalizado'
+          ? 'finalizado'
+          : status === 'em_producao' || status === 'em_entrega' || status === 'em_tratamento' || status === 'aguardando_reposicao'
+            ? 'em_producao'
+            : 'planejamento'
       const phase: CasePhase =
         phaseRaw === 'orcamento' ||
         phaseRaw === 'contrato_pendente' ||

@@ -272,7 +272,7 @@ function mapLegacyKind(item: { kind?: string; type?: string; rxType?: string; ar
 
 function phaseFromStatus(status: CaseStatus): CasePhase {
   if (status === 'finalizado') return 'finalizado'
-  if (status === 'em_producao' || status === 'em_entrega') return 'em_producao'
+  if (status === 'em_producao' || status === 'em_entrega' || status === 'em_tratamento' || status === 'aguardando_reposicao') return 'em_producao'
   return 'planejamento'
 }
 

@@ -361,7 +361,7 @@ export default function LabPage() {
           totalTraysUpper: asNumber(data.totalTraysUpper, asNumber(data.totalTrays, 0)),
           totalTraysLower: asNumber(data.totalTraysLower, asNumber(data.totalTrays, 0)),
           attachmentBondingTray: Boolean(data.attachmentBondingTray),
-          status: (asText(data.status, 'planejamento') as 'planejamento' | 'em_producao' | 'em_entrega' | 'finalizado'),
+          status: (asText(data.status, 'planejamento') as 'planejamento' | 'em_producao' | 'em_entrega' | 'em_tratamento' | 'aguardando_reposicao' | 'finalizado'),
           phase: (asText(data.phase, 'planejamento') as 'planejamento' | 'orcamento' | 'contrato_pendente' | 'contrato_aprovado' | 'em_producao' | 'finalizado'),
           budget: data.budget as typeof db.cases[number]['budget'],
           contract: data.contract as typeof db.cases[number]['contract'],

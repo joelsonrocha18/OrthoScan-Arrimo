@@ -87,6 +87,8 @@ function buildLabStatusByCase(items: Array<{ caseId?: string; status?: string }>
 
 function caseStatusBadge(item: CaseListItem, liveLabStatus: LiveLabStatus, hasLabOrder: boolean) {
   if (isConcluded(item)) return { label: 'Concluido', tone: 'success' as const }
+  if (item.status === 'em_tratamento') return { label: 'Em tratamento', tone: 'info' as const }
+  if (item.status === 'aguardando_reposicao') return { label: 'Aguardando reposicao', tone: 'danger' as const }
   if (item.phase === 'planejamento') return { label: 'Planejamento', tone: 'neutral' as const }
   if (item.phase === 'orcamento') return { label: 'Orcamento', tone: 'neutral' as const }
   if (item.phase === 'contrato_pendente') return { label: 'Aguardando aprovacao de contrato', tone: 'neutral' as const }
@@ -167,7 +169,19 @@ export default function CasesPage() {
         const data = row.data ?? {}
         const status = (data.status as string | undefined) ?? row.status ?? 'planejamento'
         const phaseRaw = (data.phase as string | undefined) ?? ''
-        const phase = (phaseRaw || (status === 'finalizado' ? 'finalizado' : status === 'em_producao' || status === 'em_entrega' ? 'em_producao' : 'planejamento')) as CasePhase
+        const phase = (
+          phaseRaw
+          || (
+            status === 'finalizado'
+              ? 'finalizado'
+              : status === 'em_producao'
+                || status === 'em_entrega'
+                || status === 'em_tratamento'
+                || status === 'aguardando_reposicao'
+                ? 'em_producao'
+                : 'planejamento'
+          )
+        ) as CasePhase
         const patientName = (data.patientName as string | undefined)
           ?? (row.patient_id ? patientsMap.get(row.patient_id)?.name : undefined)
           ?? '-'
