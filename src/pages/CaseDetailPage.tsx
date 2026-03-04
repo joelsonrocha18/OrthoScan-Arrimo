@@ -816,6 +816,15 @@ export default function CaseDetailPage() {
     ? (isAlignerCase ? 'Alinhadores' : PRODUCT_TYPE_LABEL[currentCase.productType ?? 'alinhador_12m'])
     : '-'
   const displayCaseCode = currentCase ? toReadableCaseCode(currentCase.treatmentCode ?? currentCase.id) : '-'
+  const displayTreatmentOrigin = useMemo(() => {
+    if (!currentCase) return 'externo' as const
+    const normalizedClinicName = (clinicName ?? '').trim().toUpperCase()
+    const normalizedClinicId = (currentCase.clinicId ?? '').trim().toLowerCase()
+    if (normalizedClinicName === 'ARRIMO' || normalizedClinicId === 'clinic_arrimo' || normalizedClinicId === 'cli-0001') {
+      return 'interno' as const
+    }
+    return currentCase.treatmentOrigin === 'interno' ? ('interno' as const) : ('externo' as const)
+  }, [clinicName, currentCase])
 
   const removeTrayFromDeliveryLots = (
     lots: NonNullable<Case['deliveryLots']>,
@@ -1778,7 +1787,7 @@ export default function CaseDetailPage() {
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Paciente: {patientDisplayName}</h1>
           {currentCase.treatmentCode ? (
             <p className="mt-1 text-sm font-semibold text-slate-700">
-              Identificacao: {displayCaseCode} ({currentCase.treatmentOrigin === 'interno' ? 'Interno ARRIMO' : 'Externo'})
+              Identificacao: {displayCaseCode} ({displayTreatmentOrigin === 'interno' ? 'Interno ARRIMO' : 'Externo'})
             </p>
           ) : null}
           <p className="mt-1 text-sm font-medium text-slate-600">

@@ -181,6 +181,22 @@ async function nextTreatmentCodeSupabase() {
   return nextOrthTreatmentCode(collected)
 }
 
+async function inferTreatmentOriginSupabase(clinicId?: string | null): Promise<'interno' | 'externo'> {
+  if (!clinicId) return 'externo'
+  const normalizedId = clinicId.trim().toLowerCase()
+  if (normalizedId === 'clinic_arrimo') return 'interno'
+  if (!supabase) return 'externo'
+  const { data } = await supabase
+    .from('clinics')
+    .select('id, short_id, trade_name')
+    .eq('id', clinicId)
+    .maybeSingle()
+  const shortId = asText((data as Record<string, unknown> | null)?.short_id).trim().toUpperCase()
+  const tradeName = asText((data as Record<string, unknown> | null)?.trade_name).trim().toUpperCase()
+  if (shortId === 'CLI-0001' || tradeName === 'ARRIMO') return 'interno'
+  return 'externo'
+}
+
 export async function createScanSupabase(scan: Omit<Scan, 'id' | 'createdAt' | 'updatedAt'>) {
   if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
   const now = new Date().toISOString()
@@ -277,12 +293,14 @@ export async function createCaseFromScanSupabase(
 
   const now = new Date().toISOString()
   const treatmentCode = normalizeOrthTreatmentCode(scan.serviceOrderCode) || (await nextTreatmentCodeSupabase())
+  const treatmentOrigin = await inferTreatmentOriginSupabase(scan.clinicId ?? null)
   const status = 'planejamento'
   const phase = 'planejamento'
   const nextData = {
     productType: selectedProductType as ProductType,
     productId: selectedProductType as ProductType,
     treatmentCode,
+    treatmentOrigin,
     patientName: scan.patientName,
     scanDate: scan.scanDate,
     totalTrays: isAlignerFlow ? totalTrays : 0,

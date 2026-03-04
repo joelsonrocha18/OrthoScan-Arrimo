@@ -31,7 +31,8 @@ function isInternalClinic(db: ReturnType<typeof loadDb>, clinicId?: string) {
   if (!clinicId) return false
   const clinic = db.clinics.find((item) => item.id === clinicId)
   if (!clinic) return false
-  return clinic.id === 'clinic_arrimo' || clinic.tradeName.trim().toUpperCase() === 'ARRIMO'
+  const shortId = (clinic.shortId ?? '').trim().toUpperCase()
+  return clinic.id === 'clinic_arrimo' || shortId === 'CLI-0001' || clinic.tradeName.trim().toUpperCase() === 'ARRIMO'
 }
 
 function nextTreatmentCode(db: ReturnType<typeof loadDb>) {

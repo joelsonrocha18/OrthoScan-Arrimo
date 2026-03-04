@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
@@ -95,8 +95,15 @@ export default function ClinicDetailPage() {
   const [cepError, setCepError] = useState('')
   const [existingSupabase, setExistingSupabase] = useState<Clinic | null>(null)
   const [loadingSupabase, setLoadingSupabase] = useState(false)
+  const [isFormDirty, setIsFormDirty] = useState(false)
+  const hydratedClinicIdRef = useRef<string | null>(null)
 
   const existing = isSupabaseMode ? existingSupabase : existingLocal
+
+  const patchForm = (updater: (current: ClinicForm) => ClinicForm) => {
+    setIsFormDirty(true)
+    setForm(updater)
+  }
 
   useEffect(() => {
     let active = true
@@ -145,11 +152,18 @@ export default function ClinicDetailPage() {
 
   useEffect(() => {
     if (!existing) {
+      hydratedClinicIdRef.current = null
+      setIsFormDirty(false)
       setForm(emptyForm)
       return
     }
-    setForm(mapToForm(existing))
-  }, [existing])
+    const isNewRecord = hydratedClinicIdRef.current !== existing.id
+    if (!isFormDirty || isNewRecord) {
+      hydratedClinicIdRef.current = existing.id
+      setForm(mapToForm(existing))
+      setIsFormDirty(false)
+    }
+  }, [existing?.id, existing?.updatedAt, isFormDirty])
 
   useEffect(() => {
     const cep = normalizeCep(form.address.cep)
@@ -314,12 +328,14 @@ export default function ClinicDetailPage() {
         return
       }
       setExistingSupabase((current) => (current ? { ...current, ...payload, updatedAt: new Date().toISOString() } : current))
+      setIsFormDirty(false)
     } else {
       const result = updateClinic(existing.id, payload)
       if (!result.ok) {
         setError(result.error)
         return
       }
+      setIsFormDirty(false)
     }
     setError('')
   }
@@ -412,21 +428,21 @@ export default function ClinicDetailPage() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Nome Fantasia *</label>
-              <Input value={form.tradeName} onChange={(event) => setForm((current) => ({ ...current, tradeName: event.target.value }))} />
+              <Input value={form.tradeName} onChange={(event) => patchForm((current) => ({ ...current, tradeName: event.target.value }))} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Razao Social</label>
-              <Input value={form.legalName} onChange={(event) => setForm((current) => ({ ...current, legalName: event.target.value }))} />
+              <Input value={form.legalName} onChange={(event) => patchForm((current) => ({ ...current, legalName: event.target.value }))} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">CNPJ</label>
-              <Input value={form.cnpj} onChange={(event) => setForm((current) => ({ ...current, cnpj: formatCnpj(event.target.value) }))} />
+              <Input value={form.cnpj} onChange={(event) => patchForm((current) => ({ ...current, cnpj: formatCnpj(event.target.value) }))} />
             </div>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={form.isActive}
-                onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))}
+                onChange={(event) => patchForm((current) => ({ ...current, isActive: event.target.checked }))}
               />
               <span className="text-sm text-slate-700">{form.isActive ? 'Ativa' : 'Inativa'}</span>
             </div>
@@ -438,11 +454,11 @@ export default function ClinicDetailPage() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo</label>
-              <Input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: formatFixedPhone(event.target.value) }))} />
+              <Input value={form.phone} onChange={(event) => patchForm((current) => ({ ...current, phone: formatFixedPhone(event.target.value) }))} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Celular (WhatsApp)</label>
-              <Input value={form.whatsapp} onChange={(event) => setForm((current) => ({ ...current, whatsapp: formatMobilePhone(event.target.value) }))} />
+              <Input value={form.whatsapp} onChange={(event) => patchForm((current) => ({ ...current, whatsapp: formatMobilePhone(event.target.value) }))} />
               <WhatsappLink value={form.whatsapp} className="mt-2 text-xs font-semibold" />
             </div>
             <div>
@@ -450,7 +466,7 @@ export default function ClinicDetailPage() {
               <Input
                 type="email"
                 value={form.email}
-                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                onChange={(event) => patchForm((current) => ({ ...current, email: event.target.value }))}
               />
             </div>
           </div>
@@ -464,7 +480,7 @@ export default function ClinicDetailPage() {
               <Input
                 value={form.address.cep}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, address: { ...current.address, cep: normalizeCep(event.target.value) } }))
+                  patchForm((current) => ({ ...current, address: { ...current.address, cep: normalizeCep(event.target.value) } }))
                 }
               />
               {cepStatus ? <p className="mt-1 text-xs text-emerald-700">{cepStatus}</p> : null}
@@ -475,7 +491,7 @@ export default function ClinicDetailPage() {
               <Input
                 value={form.address.street}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, address: { ...current.address, street: event.target.value } }))
+                  patchForm((current) => ({ ...current, address: { ...current.address, street: event.target.value } }))
                 }
               />
             </div>
@@ -484,7 +500,7 @@ export default function ClinicDetailPage() {
               <Input
                 value={form.address.number}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, address: { ...current.address, number: event.target.value } }))
+                  patchForm((current) => ({ ...current, address: { ...current.address, number: event.target.value } }))
                 }
               />
             </div>
@@ -493,7 +509,7 @@ export default function ClinicDetailPage() {
               <Input
                 value={form.address.district}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, address: { ...current.address, district: event.target.value } }))
+                  patchForm((current) => ({ ...current, address: { ...current.address, district: event.target.value } }))
                 }
               />
             </div>
@@ -502,7 +518,7 @@ export default function ClinicDetailPage() {
               <Input
                 value={form.address.city}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, address: { ...current.address, city: event.target.value } }))
+                  patchForm((current) => ({ ...current, address: { ...current.address, city: event.target.value } }))
                 }
               />
             </div>
@@ -511,7 +527,7 @@ export default function ClinicDetailPage() {
               <Input
                 value={form.address.state}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, address: { ...current.address, state: event.target.value.toUpperCase().slice(0, 2) } }))
+                  patchForm((current) => ({ ...current, address: { ...current.address, state: event.target.value.toUpperCase().slice(0, 2) } }))
                 }
               />
             </div>
@@ -523,7 +539,7 @@ export default function ClinicDetailPage() {
           <textarea
             rows={4}
             value={form.notes}
-            onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+            onChange={(event) => patchForm((current) => ({ ...current, notes: event.target.value }))}
             className="mt-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
           />
         </Card>
