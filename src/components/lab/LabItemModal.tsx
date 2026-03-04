@@ -92,6 +92,16 @@ const archLabelMap: Record<'superior' | 'inferior' | 'ambos', string> = {
   ambos: 'Ambas',
 }
 
+function isStartWaitingStatus(status?: string) {
+  const normalized = (status ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replaceAll('-', '_')
+    .replaceAll(' ', '_')
+  return normalized === 'aguardando_iniciar'
+}
+
 function treatmentArchSummary(
   arch: 'superior' | 'inferior' | 'ambos',
   upper: number,
@@ -522,7 +532,7 @@ export default function LabItemModal({
 
         <div className="mt-6 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            {!readOnly && mode === 'edit' && item?.status === 'aguardando_iniciar' && item && onReprintGuide ? (
+            {!readOnly && mode === 'edit' && isStartWaitingStatus(item?.status) && item && onReprintGuide ? (
               <Button variant="secondary" onClick={() => onReprintGuide(item)}>
                 Reimpressao O.S
               </Button>
