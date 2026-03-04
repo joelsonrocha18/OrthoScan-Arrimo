@@ -1215,6 +1215,7 @@ export default function CaseDetailPage() {
           title: 'OS do laboratorio',
           message: result.alreadyExists ? 'OS ja existia para este pedido.' : 'OS gerada com sucesso.',
         })
+        printLabOrder(true)
       })()
       return
     }
@@ -1228,10 +1229,11 @@ export default function CaseDetailPage() {
       title: 'OS do laboratorio',
       message: result.alreadyExists ? 'OS ja existia para este pedido.' : 'OS gerada com sucesso.',
     })
+    printLabOrder(true)
   }
 
-  const printLabOrder = () => {
-    if (!hasProductionOrder) {
+  const printLabOrder = (skipProductionCheck = false) => {
+    if (!skipProductionCheck && !hasProductionOrder) {
       addToast({ type: 'error', title: 'Imprimir OS', message: 'Gere a OS do LAB antes de imprimir.' })
       return
     }
@@ -1760,14 +1762,6 @@ export default function CaseDetailPage() {
               Concluir tratamento
             </Button>
           ) : null}
-          <Button
-            variant="secondary"
-            onClick={printLabOrder}
-            disabled={!isAlignerCase || !hasProductionOrder}
-            title={!hasProductionOrder ? 'Gere a OS do LAB antes de imprimir.' : ''}
-          >
-            Imprimir OS
-          </Button>
           <Link
             to="/app/cases"
             className="inline-flex h-10 items-center rounded-lg bg-slate-200 px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-300"
