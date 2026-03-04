@@ -249,6 +249,8 @@ export default function LabPage() {
   const [supabaseItems, setSupabaseItems] = useState<LabItem[]>([])
   const [supabaseCases, setSupabaseCases] = useState<typeof db.cases>([])
   const [supabasePatientOptions, setSupabasePatientOptions] = useState<PatientOption[]>([])
+  const [supabaseDentists, setSupabaseDentists] = useState<Array<{ id: string; name: string }>>([])
+  const [supabaseClinics, setSupabaseClinics] = useState<Array<{ id: string; tradeName: string }>>([])
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
   const supabaseSyncTick = useSupabaseSyncTick()
   const [productionConfirm, setProductionConfirm] = useState<ProductionConfirmState>({
@@ -307,6 +309,8 @@ export default function LabPage() {
       setSupabaseItems([])
       setSupabaseCases([])
       setSupabasePatientOptions([])
+      setSupabaseDentists([])
+      setSupabaseClinics([])
       return
     }
     let active = true
@@ -330,8 +334,20 @@ export default function LabPage() {
       const dentistsById = new Map(
         ((dentistsRes.data ?? []) as Array<{ id: string; name?: string }>).map((row) => [row.id, row.name ?? '-']),
       )
+      setSupabaseDentists(
+        ((dentistsRes.data ?? []) as Array<{ id: string; name?: string }>).map((row) => ({
+          id: row.id,
+          name: row.name ?? '-',
+        })),
+      )
       const clinicsById = new Map(
         ((clinicsRes.data ?? []) as Array<{ id: string; trade_name?: string }>).map((row) => [row.id, row.trade_name ?? '-']),
+      )
+      setSupabaseClinics(
+        ((clinicsRes.data ?? []) as Array<{ id: string; trade_name?: string }>).map((row) => ({
+          id: row.id,
+          tradeName: row.trade_name ?? '-',
+        })),
       )
       const patientOptions = ((patientsRes.data ?? []) as Array<{ id: string; name?: string; birth_date?: string; clinic_id?: string; primary_dentist_id?: string }>).map((row) => ({
         id: row.id,
@@ -1369,7 +1385,20 @@ export default function LabPage() {
         .replaceAll("'", '&#39;')
 
     const caseItem = item.caseId ? caseById.get(item.caseId) : undefined
-    const patientOption = caseItem?.patientId ? patientOptions.find((option) => option.id === caseItem.patientId) : undefined
+    const patientId = caseItem?.patientId ?? item.patientId
+    const patientOption = patientId ? patientOptions.find((option) => option.id === patientId) : undefined
+    const dentistsById = new Map(
+      (isSupabaseMode
+        ? supabaseDentists
+        : db.dentists.map((entry) => ({ id: entry.id, name: entry.name ?? '-' }))
+      ).map((entry) => [entry.id, entry.name]),
+    )
+    const clinicsById = new Map(
+      (isSupabaseMode
+        ? supabaseClinics
+        : db.clinics.map((entry) => ({ id: entry.id, tradeName: entry.tradeName ?? '-' }))
+      ).map((entry) => [entry.id, entry.tradeName]),
+    )
     const hasUpperArch = (caseItem?.arch ?? item.arch ?? 'ambos') !== 'inferior'
     const hasLowerArch = (caseItem?.arch ?? item.arch ?? 'ambos') !== 'superior'
     const totalUpper = hasUpperArch ? toNonNegativeInt(caseItem?.totalTraysUpper ?? caseItem?.totalTrays) : 0
@@ -1386,14 +1415,17 @@ export default function LabPage() {
     const issueDateLabel = issueDate.toLocaleString('pt-BR')
     const emittedByRaw = currentUser?.name || currentUser?.email || 'Sistema'
     const emittedBy = emittedByRaw.includes('@') ? emittedByRaw.split('@')[0] : emittedByRaw
-    const clinicName = caseItem?.clinicId
-      ? patientOption?.clinicName || db.clinics.find((entry) => entry.id === caseItem.clinicId)?.tradeName || '-'
-      : '-'
-    const dentistNameRaw = caseItem?.dentistId
-      ? patientOption?.dentistName || db.dentists.find((entry) => entry.id === caseItem.dentistId)?.name || '-'
-      : '-'
-    const dentistName = dentistNameRaw && dentistNameRaw !== '-' ? `Dr. ${dentistNameRaw}` : '-'
-    const patientBirthDateRaw = patientOption?.birthDate || (caseItem?.patientId ? db.patients.find((entry) => entry.id === caseItem.patientId)?.birthDate : undefined)
+    const clinicId = caseItem?.clinicId ?? patientOption?.clinicId ?? item.clinicId
+    const clinicName = clinicId ? clinicsById.get(clinicId) || patientOption?.clinicName || '-' : patientOption?.clinicName || '-'
+    const dentistId = caseItem?.dentistId ?? patientOption?.dentistId ?? item.dentistId
+    const requesterDentistId = caseItem?.requestedByDentistId ?? dentistId
+    const dentistNameRaw = dentistId ? dentistsById.get(dentistId) || patientOption?.dentistName || '-' : patientOption?.dentistName || '-'
+    const requesterNameRaw = requesterDentistId ? dentistsById.get(requesterDentistId) || dentistNameRaw : dentistNameRaw
+    const withDrPrefix = (name: string) => (name && name !== '-' ? (name.toLowerCase().startsWith('dr.') ? name : `Dr. ${name}`) : '-')
+    const dentistName = withDrPrefix(dentistNameRaw)
+    const requesterName = withDrPrefix(requesterNameRaw)
+    const patientBirthDateRaw =
+      patientOption?.birthDate || (patientId ? db.patients.find((entry) => entry.id === patientId)?.birthDate : undefined)
     const patientBirthDateLabel = patientBirthDateRaw ? new Date(`${patientBirthDateRaw}T00:00:00`).toLocaleDateString('pt-BR') : '-'
     const generationDate = item.createdAt ? new Date(item.createdAt) : issueDate
     const deliveryExpectedDate = new Date(generationDate)
@@ -1444,7 +1476,7 @@ export default function LabPage() {
           <div class="meta-box"><div class="meta-label">Data de nascimento</div><div class="meta-value">${escapeHtml(patientBirthDateLabel)}</div></div>
           <div class="meta-box"><div class="meta-label">Clinica</div><div class="meta-value">${escapeHtml(clinicName)}</div></div>
           <div class="meta-box"><div class="meta-label">Dentista responsavel</div><div class="meta-value">${escapeHtml(dentistName)}</div></div>
-          <div class="meta-box"><div class="meta-label">Solicitante</div><div class="meta-value">${escapeHtml(dentistName)}</div></div>
+          <div class="meta-box"><div class="meta-label">Solicitante</div><div class="meta-value">${escapeHtml(requesterName)}</div></div>
           <div class="meta-box"><div class="meta-label">Produto</div><div class="meta-value">${escapeHtml(productLabel)}</div></div>
           <div class="meta-box"><div class="meta-label">Planejamento</div><div class="meta-value">${escapeHtml(planLabel)}</div></div>
           <div class="meta-box"><div class="meta-label">Troca</div><div class="meta-value">${escapeHtml(changeDaysLabel)} dias</div></div>
