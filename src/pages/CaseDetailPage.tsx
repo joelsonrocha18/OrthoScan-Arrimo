@@ -1329,25 +1329,22 @@ export default function CaseDetailPage() {
           ? `Inferior ${totalLower}`
           : '-'
 
-    const issueDateLabel = new Date().toLocaleString('pt-BR')
+    const issueDate = new Date()
+    const issueDateLabel = issueDate.toLocaleString('pt-BR')
     const productLabel = displayProductLabel
-    const dentistLabel = dentistNameResolved ? `${dentistPrefix} ${dentistNameResolved}`.trim() : '-'
-    const requesterLabel = requesterNameResolved ? `${requesterPrefix} ${requesterNameResolved}`.trim() : dentistLabel
+    const dentistLabel = dentistNameResolved ? `Dr. ${dentistNameResolved}` : '-'
+    const requesterLabel = requesterNameResolved ? `Dr. ${requesterNameResolved}` : dentistLabel
     const patientBirthDate = currentCase.patientId
       ? (isSupabaseMode
           ? supabaseCaseRefs.patientBirthDate
           : db.patients.find((item) => item.id === currentCase.patientId)?.birthDate)
       : undefined
     const patientBirthDateLabel = patientBirthDate ? new Date(`${patientBirthDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'
-    const expectedDeliveryDateRaw = linkedLabItems
-      .filter((item) => (item.requestKind ?? 'producao') === 'producao')
-      .map((item) => item.dueDate || item.plannedDate || (item.createdAt ? addDays(item.createdAt.slice(0, 10), 10) : ''))
-      .filter((value): value is string => Boolean(value))
-      .sort()[0]
-    const expectedDeliveryLabel = expectedDeliveryDateRaw
-      ? new Date(`${expectedDeliveryDateRaw}T00:00:00`).toLocaleDateString('pt-BR')
-      : new Date(`${addDays(new Date().toISOString().slice(0, 10), 10)}T00:00:00`).toLocaleDateString('pt-BR')
-    const emittedBy = currentUser?.name || currentUser?.email || 'Sistema'
+    const expectedDeliveryDate = new Date(issueDate)
+    expectedDeliveryDate.setDate(expectedDeliveryDate.getDate() + 10)
+    const expectedDeliveryLabel = expectedDeliveryDate.toLocaleDateString('pt-BR')
+    const emittedByRaw = currentUser?.name || currentUser?.email || 'Sistema'
+    const emittedBy = emittedByRaw.includes('@') ? emittedByRaw.split('@')[0] : emittedByRaw
     const emitOrigin = window.location.origin
 
     const html = `
@@ -1355,7 +1352,7 @@ export default function CaseDetailPage() {
       <html lang="pt-BR">
         <head>
           <meta charset="utf-8" />
-          <title>Ordem de Servico LAB - ${escapeHtml(caseLabel)}</title>
+          <title>Ordem de Servico Inicial</title>
           <style>
             @page { size: A4; margin: 14mm; }
             body { font-family: Arial, sans-serif; color: #0f172a; font-size: 12px; margin: 0; }
@@ -1414,7 +1411,7 @@ export default function CaseDetailPage() {
             </div>
           </div>
 
-          <div class="emit">Emitido por "${escapeHtml(emittedBy)}" Atraves da plataforma "ControleODONTO(orthoscan laboratorio)" Em ${escapeHtml(issueDateLabel)} - ${escapeHtml(emitOrigin)}</div>
+          <div class="emit">Emitido por ${escapeHtml(emittedBy)} Atraves da plataforma Orthoscan Laboratorio Em ${escapeHtml(issueDateLabel)} - ${escapeHtml(emitOrigin)}</div>
         </body>
       </html>
     `

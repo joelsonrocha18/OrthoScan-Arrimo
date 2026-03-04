@@ -1370,17 +1370,23 @@ export default function LabPage() {
           ? `Inferior ${totalLower}`
           : '-'
     const caseLabel = formatFriendlyRequestCode(caseItem?.treatmentCode ?? item.requestCode ?? caseItem?.id ?? item.id)
-    const issueDateLabel = new Date().toLocaleString('pt-BR')
-    const emittedBy = currentUser?.name || currentUser?.email || 'Sistema'
+    const issueDate = new Date()
+    const issueDateLabel = issueDate.toLocaleString('pt-BR')
+    const emittedByRaw = currentUser?.name || currentUser?.email || 'Sistema'
+    const emittedBy = emittedByRaw.includes('@') ? emittedByRaw.split('@')[0] : emittedByRaw
     const clinicName = caseItem?.clinicId
       ? patientOption?.clinicName || db.clinics.find((entry) => entry.id === caseItem.clinicId)?.tradeName || '-'
       : '-'
-    const dentistName = caseItem?.dentistId
+    const dentistNameRaw = caseItem?.dentistId
       ? patientOption?.dentistName || db.dentists.find((entry) => entry.id === caseItem.dentistId)?.name || '-'
       : '-'
+    const dentistName = dentistNameRaw && dentistNameRaw !== '-' ? `Dr. ${dentistNameRaw}` : '-'
     const patientBirthDateRaw = patientOption?.birthDate || (caseItem?.patientId ? db.patients.find((entry) => entry.id === caseItem.patientId)?.birthDate : undefined)
     const patientBirthDateLabel = patientBirthDateRaw ? new Date(`${patientBirthDateRaw}T00:00:00`).toLocaleDateString('pt-BR') : '-'
-    const deliveryExpectedLabel = item.dueDate ? formatDate(item.dueDate) : formatDate(new Date().toISOString().slice(0, 10))
+    const generationDate = item.createdAt ? new Date(item.createdAt) : issueDate
+    const deliveryExpectedDate = new Date(generationDate)
+    deliveryExpectedDate.setDate(deliveryExpectedDate.getDate() + 10)
+    const deliveryExpectedLabel = deliveryExpectedDate.toLocaleDateString('pt-BR')
     const changeDaysLabel = String(caseItem?.changeEveryDays ?? 10)
     const productLabel = isAlignerProductType(item.productType ?? caseItem?.productType) ? 'Alinhadores' : PRODUCT_TYPE_LABEL[item.productType ?? 'alinhador_12m']
     const html = `
@@ -1388,7 +1394,7 @@ export default function LabPage() {
       <html lang="pt-BR">
       <head>
         <meta charset="utf-8" />
-        <title>Ordem de Servico LAB - ${escapeHtml(caseLabel)}</title>
+        <title>Ordem de Servico Inicial</title>
         <style>
           @page { size: A4; margin: 14mm; }
           body { font-family: Arial, sans-serif; color: #0f172a; font-size: 12px; margin: 0; }
@@ -1446,7 +1452,7 @@ export default function LabPage() {
           </div>
         </div>
 
-        <div class="emit">Emitido por "${escapeHtml(emittedBy)}" Atraves da plataforma "ControleODONTO(orthoscan laboratorio)" Em ${escapeHtml(issueDateLabel)} - ${escapeHtml(window.location.origin)}</div>
+        <div class="emit">Emitido por ${escapeHtml(emittedBy)} Atraves da plataforma Orthoscan Laboratorio Em ${escapeHtml(issueDateLabel)} - ${escapeHtml(window.location.origin)}</div>
       </body>
       </html>
     `
