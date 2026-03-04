@@ -54,11 +54,7 @@ export default function LabCard({
 }: LabCardProps) {
   const formatDisplayCode = (code?: string) => {
     if (!code) return undefined
-    const trimmed = code.trim()
-    if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(trimmed)) {
-      return `GUIA-${trimmed.slice(0, 8).toUpperCase()}`
-    }
-    return trimmed
+    return code.trim()
   }
   const displayCode = formatDisplayCode(caseLabel ?? item.requestCode)
   const isRework = item.requestKind === 'reconfeccao' || (item.notes ?? '').toLowerCase().includes('rework')

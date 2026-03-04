@@ -99,12 +99,13 @@ function formatInfSupByArch(
 
 function formatFriendlyRequestCode(code?: string) {
   if (!code) return '-'
-  const trimmed = code.trim()
-  const match = trimmed.match(/^([0-9a-f]{8})-[0-9a-f-]+(\/\d+)?$/i)
-  if (match) {
-    return `GUIA-${match[1].toUpperCase()}${match[2] ?? ''}`
-  }
-  return trimmed
+  return code.trim()
+}
+
+function revisionSuffix(code?: string) {
+  if (!code) return ''
+  const match = code.trim().match(/(\/\d+)$/)
+  return match ? match[1] : ''
 }
 
 function getDeliveredByArch(caseItem?: {
@@ -718,8 +719,8 @@ export default function LabPage() {
   const caseLabel = (item: LabItem) => {
     const caseItem = item.caseId ? caseById.get(item.caseId) : undefined
     const treatment = caseItem?.treatmentCode
-    if (item.requestCode) return item.requestCode
-    return item.requestCode ?? treatment
+    if (treatment) return `${treatment}${revisionSuffix(item.requestCode)}`
+    return item.requestCode
   }
 
   const handleCreate = async (payload: {
