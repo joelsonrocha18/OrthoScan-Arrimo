@@ -265,7 +265,18 @@ function parseBrlCurrencyInput(raw: string) {
   return Number(digits) / 100
 }
 
-function mapSupabaseCaseRowToCase(row: { id: string; product_type?: string; product_id?: string; data?: Record<string, unknown> }): Case {
+function mapSupabaseCaseRowToCase(
+  row: {
+    id: string
+    product_type?: string
+    product_id?: string
+    clinic_id?: string | null
+    patient_id?: string | null
+    dentist_id?: string | null
+    requested_by_dentist_id?: string | null
+    data?: Record<string, unknown>
+  },
+): Case {
   const data = row.data ?? {}
   const now = new Date().toISOString()
   const status = (data.status as Case['status'] | undefined) ?? 'planejamento'
@@ -277,10 +288,10 @@ function mapSupabaseCaseRowToCase(row: { id: string; product_type?: string; prod
     treatmentCode: data.treatmentCode as string | undefined,
     treatmentOrigin: data.treatmentOrigin as Case['treatmentOrigin'] | undefined,
     patientName: (data.patientName as string | undefined) ?? '-',
-    patientId: data.patientId as string | undefined,
-    dentistId: data.dentistId as string | undefined,
-    requestedByDentistId: data.requestedByDentistId as string | undefined,
-    clinicId: data.clinicId as string | undefined,
+    patientId: (data.patientId as string | undefined) ?? row.patient_id ?? undefined,
+    dentistId: (data.dentistId as string | undefined) ?? row.dentist_id ?? undefined,
+    requestedByDentistId: (data.requestedByDentistId as string | undefined) ?? row.requested_by_dentist_id ?? undefined,
+    clinicId: (data.clinicId as string | undefined) ?? row.clinic_id ?? undefined,
     scanDate: (data.scanDate as string | undefined) ?? now.slice(0, 10),
     totalTrays: (data.totalTrays as number | undefined) ?? 0,
     changeEveryDays: (data.changeEveryDays as number | undefined) ?? 7,
@@ -337,6 +348,14 @@ export default function CaseDetailPage() {
   const initializedCaseIdRef = useRef<string | null>(null)
   const [supabaseCase, setSupabaseCase] = useState<Case | null>(null)
   const [supabaseLabItems, setSupabaseLabItems] = useState<LabItem[]>([])
+  const [supabaseCaseRefs, setSupabaseCaseRefs] = useState<{
+    clinicName?: string
+    dentistName?: string
+    dentistGender?: string
+    requesterName?: string
+    requesterGender?: string
+    patientBirthDate?: string
+  }>({})
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
   const supabaseSyncTick = useSupabaseSyncTick()
 
@@ -349,7 +368,7 @@ export default function CaseDetailPage() {
     void (async () => {
       const { data } = await supabase
         .from('cases')
-        .select('id, product_type, product_id, data, deleted_at')
+        .select('id, product_type, product_id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, data, deleted_at')
         .eq('id', params.id)
         .is('deleted_at', null)
         .maybeSingle()
@@ -358,7 +377,20 @@ export default function CaseDetailPage() {
         setSupabaseCase(null)
         return
       }
-      setSupabaseCase(mapSupabaseCaseRowToCase(data as { id: string; product_type?: string; product_id?: string; data?: Record<string, unknown> }))
+      setSupabaseCase(
+        mapSupabaseCaseRowToCase(
+          data as {
+            id: string
+            product_type?: string
+            product_id?: string
+            clinic_id?: string | null
+            patient_id?: string | null
+            dentist_id?: string | null
+            requested_by_dentist_id?: string | null
+            data?: Record<string, unknown>
+          },
+        ),
+      )
     })()
     return () => {
       active = false
@@ -389,6 +421,42 @@ export default function CaseDetailPage() {
     [currentCase],
   )
   const scopedCases = useMemo(() => listCasesForUser(db, currentUser), [db, currentUser])
+
+  useEffect(() => {
+    if (!isSupabaseMode || !supabase || !currentCase) {
+      setSupabaseCaseRefs({})
+      return
+    }
+    let active = true
+    void (async () => {
+      const [clinicRes, dentistRes, requesterRes, patientRes] = await Promise.all([
+        currentCase.clinicId
+          ? supabase.from('clinics').select('id, trade_name').eq('id', currentCase.clinicId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        currentCase.dentistId
+          ? supabase.from('dentists').select('id, name, gender').eq('id', currentCase.dentistId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        currentCase.requestedByDentistId
+          ? supabase.from('dentists').select('id, name, gender').eq('id', currentCase.requestedByDentistId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        currentCase.patientId
+          ? supabase.from('patients').select('id, birth_date').eq('id', currentCase.patientId).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ])
+      if (!active) return
+      setSupabaseCaseRefs({
+        clinicName: (clinicRes.data as { trade_name?: string } | null)?.trade_name,
+        dentistName: (dentistRes.data as { name?: string } | null)?.name,
+        dentistGender: (dentistRes.data as { gender?: string } | null)?.gender,
+        requesterName: (requesterRes.data as { name?: string } | null)?.name,
+        requesterGender: (requesterRes.data as { gender?: string } | null)?.gender,
+        patientBirthDate: (patientRes.data as { birth_date?: string } | null)?.birth_date,
+      })
+    })()
+    return () => {
+      active = false
+    }
+  }, [isSupabaseMode, currentCase, supabaseRefreshKey, supabaseSyncTick])
 
   const totalUpper = useMemo(() => {
     if (!currentCase) return 0
@@ -733,11 +801,17 @@ export default function CaseDetailPage() {
   }, [currentCase, db.patients])
   const dentistsById = useMemo(() => new Map(db.dentists.map((item) => [item.id, item])), [db.dentists])
   const clinicsById = useMemo(() => new Map(db.clinics.map((item) => [item.id, item])), [db.clinics])
-  const clinicName = currentCase?.clinicId ? clinicsById.get(currentCase.clinicId)?.tradeName : undefined
+  const clinicName = isSupabaseMode
+    ? (supabaseCaseRefs.clinicName ?? (currentCase?.clinicId ? clinicsById.get(currentCase.clinicId)?.tradeName : undefined))
+    : (currentCase?.clinicId ? clinicsById.get(currentCase.clinicId)?.tradeName : undefined)
   const dentist = currentCase?.dentistId ? dentistsById.get(currentCase.dentistId) : undefined
   const requester = currentCase?.requestedByDentistId ? dentistsById.get(currentCase.requestedByDentistId) : undefined
-  const dentistPrefix = dentist?.gender === 'feminino' ? 'Dra.' : dentist ? 'Dr.' : ''
-  const requesterPrefix = requester?.gender === 'feminino' ? 'Dra.' : requester ? 'Dr.' : ''
+  const dentistNameResolved = isSupabaseMode ? (supabaseCaseRefs.dentistName ?? dentist?.name) : dentist?.name
+  const requesterNameResolved = isSupabaseMode ? (supabaseCaseRefs.requesterName ?? requester?.name) : requester?.name
+  const dentistGenderResolved = isSupabaseMode ? (supabaseCaseRefs.dentistGender ?? dentist?.gender) : dentist?.gender
+  const requesterGenderResolved = isSupabaseMode ? (supabaseCaseRefs.requesterGender ?? requester?.gender) : requester?.gender
+  const dentistPrefix = dentistNameResolved ? (dentistGenderResolved === 'feminino' ? 'Dra.' : 'Dr.') : ''
+  const requesterPrefix = requesterNameResolved ? (requesterGenderResolved === 'feminino' ? 'Dra.' : 'Dr.') : ''
   const displayProductLabel = currentCase
     ? (isAlignerCase ? 'Alinhadores' : PRODUCT_TYPE_LABEL[currentCase.productType ?? 'alinhador_12m'])
     : '-'
@@ -1257,20 +1331,22 @@ export default function CaseDetailPage() {
 
     const issueDateLabel = new Date().toLocaleString('pt-BR')
     const productLabel = displayProductLabel
-    const dentistLabel = dentist ? `${dentistPrefix} ${dentist.name}`.trim() : '-'
-    const requesterLabel = requester ? `${requesterPrefix} ${requester.name}`.trim() : dentistLabel
+    const dentistLabel = dentistNameResolved ? `${dentistPrefix} ${dentistNameResolved}`.trim() : '-'
+    const requesterLabel = requesterNameResolved ? `${requesterPrefix} ${requesterNameResolved}`.trim() : dentistLabel
     const patientBirthDate = currentCase.patientId
-      ? db.patients.find((item) => item.id === currentCase.patientId)?.birthDate
+      ? (isSupabaseMode
+          ? supabaseCaseRefs.patientBirthDate
+          : db.patients.find((item) => item.id === currentCase.patientId)?.birthDate)
       : undefined
     const patientBirthDateLabel = patientBirthDate ? new Date(`${patientBirthDate}T00:00:00`).toLocaleDateString('pt-BR') : '-'
     const expectedDeliveryDateRaw = linkedLabItems
       .filter((item) => (item.requestKind ?? 'producao') === 'producao')
-      .map((item) => item.dueDate || item.plannedDate)
+      .map((item) => item.dueDate || item.plannedDate || (item.createdAt ? addDays(item.createdAt.slice(0, 10), 10) : ''))
       .filter((value): value is string => Boolean(value))
       .sort()[0]
     const expectedDeliveryLabel = expectedDeliveryDateRaw
       ? new Date(`${expectedDeliveryDateRaw}T00:00:00`).toLocaleDateString('pt-BR')
-      : '-'
+      : new Date(`${addDays(new Date().toISOString().slice(0, 10), 10)}T00:00:00`).toLocaleDateString('pt-BR')
     const emittedBy = currentUser?.name || currentUser?.email || 'Sistema'
     const emitOrigin = window.location.origin
 
@@ -1338,7 +1414,7 @@ export default function CaseDetailPage() {
             </div>
           </div>
 
-          <div class="emit">Emitido por ${escapeHtml(emittedBy)} Atraves da plataforma ControleODONTO Em ${escapeHtml(issueDateLabel)} - ${escapeHtml(emitOrigin)}</div>
+          <div class="emit">Emitido por "${escapeHtml(emittedBy)}" Atraves da plataforma "ControleODONTO(orthoscan laboratorio)" Em ${escapeHtml(issueDateLabel)} - ${escapeHtml(emitOrigin)}</div>
         </body>
       </html>
     `
