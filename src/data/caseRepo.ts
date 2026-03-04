@@ -60,11 +60,8 @@ function removeTrayFromDeliveryLots(
 function deriveCaseLifecycle(caseItem: Case, nextTrays: CaseTray[]): Pick<Case, 'status' | 'phase'> {
   const hasDelivery = nextTrays.some((item) => item.state === 'entregue')
   const hasProduction = nextTrays.some((item) => item.state === 'em_producao' || item.state === 'pronta' || item.state === 'rework')
-  const allDelivered = nextTrays.length > 0 && nextTrays.every((item) => item.state === 'entregue')
-
-  if (allDelivered) {
-    return { status: 'finalizado', phase: 'finalizado' }
-  }
+  // Entrega total das placas nao finaliza automaticamente.
+  // A finalizacao do tratamento e manual.
   if (hasDelivery || !!caseItem.installation?.installedAt) {
     return { status: 'em_entrega', phase: 'em_producao' }
   }
@@ -389,8 +386,6 @@ export function registerCaseInstallation(
       createdAt: nowIso(),
     })
   }
-  const finishedByRemaining = normalizedDeliveredUpper >= upperTotal && normalizedDeliveredLower >= lowerTotal
-
   const updated = updateCase(caseId, {
     installation: {
       installedAt: currentInstallation?.installedAt ?? payload.installedAt,
@@ -400,8 +395,8 @@ export function registerCaseInstallation(
       patientDeliveryLots,
       actualChangeDates: currentInstallation?.actualChangeDates,
     },
-    status: finishedByRemaining || targetCase.status === 'finalizado' ? 'finalizado' : 'em_entrega',
-    phase: finishedByRemaining || targetCase.phase === 'finalizado' ? 'finalizado' : 'em_producao',
+    status: targetCase.status === 'finalizado' ? 'finalizado' : 'em_tratamento',
+    phase: targetCase.phase === 'finalizado' ? 'finalizado' : 'em_producao',
   })
   if (!updated) {
     return { ok: false, error: 'Nao foi possivel registrar a instalacao.' }
@@ -484,8 +479,8 @@ export function registerCaseDeliveryLot(
   const updated = updateCase(caseId, {
     trays: nextTrays,
     deliveryLots: [...existing, newLot],
-    status: nextTrays.every((item) => item.state === 'entregue') ? 'finalizado' : 'em_entrega',
-    phase: nextTrays.every((item) => item.state === 'entregue') ? 'finalizado' : 'em_producao',
+    status: 'em_entrega',
+    phase: 'em_producao',
   })
   if (!updated) {
     return { ok: false, error: 'Nao foi possivel registrar o lote.' }

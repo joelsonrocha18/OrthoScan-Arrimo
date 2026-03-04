@@ -100,7 +100,9 @@ function deriveTreatmentStatus(payload: {
   const completedLower = Math.max(0, Math.trunc(payload.completedLower ?? deliveredLower))
   const deliveredAny = deliveredUpper > 0 || deliveredLower > 0
   const finished = completedUpper >= totalUpper && completedLower >= totalLower
-  if (finished) return 'finalizado' as const
+  // Nao finaliza automaticamente o tratamento.
+  // A finalizacao deve ser confirmada manualmente pelo usuario.
+  if (finished) return 'em_tratamento' as const
   if (!payload.installedAt || !deliveredAny) return 'em_entrega' as const
 
   const nextDueDates: string[] = payload.nextDueDate ? [payload.nextDueDate] : []
@@ -590,9 +592,18 @@ export default function CaseDetailPage() {
     const saldoRestante = Math.max(0, totalContratado - entreguePaciente)
     return { totalContratado, entreguePaciente, saldoRestante, rework: 0, defeituosa: 0 }
   }, [currentCase, deliveredLower, deliveredUpper, totalLower, totalUpper])
+  const canConcludeTreatmentManually = useMemo(() => {
+    if (!currentCase || currentCase.status === 'finalizado') return false
+    const deliveredUpperCount = Math.max(0, Math.trunc(currentCase.installation?.deliveredUpper ?? 0))
+    const deliveredLowerCount = Math.max(0, Math.trunc(currentCase.installation?.deliveredLower ?? 0))
+    const upperDone = totalUpper <= 0 || deliveredUpperCount >= totalUpper
+    const lowerDone = totalLower <= 0 || deliveredLowerCount >= totalLower
+    return upperDone && lowerDone && (deliveredUpperCount > 0 || deliveredLowerCount > 0)
+  }, [currentCase, totalLower, totalUpper])
 
   useEffect(() => {
     if (!currentCase?.installation) return
+    if (currentCase.status === 'finalizado') return
     const nextStatus = deriveTreatmentStatus({
       installedAt: currentCase.installation.installedAt,
       changeEveryDays: currentCase.changeEveryDays,
@@ -606,7 +617,7 @@ export default function CaseDetailPage() {
       nextDueDate: nextReplacementDueDate,
     })
     if (nextStatus === currentCase.status) return
-    const nextPhase = nextStatus === 'finalizado' ? 'finalizado' : 'em_producao'
+    const nextPhase = 'em_producao'
     if (isSupabaseMode) {
       void (async () => {
         const result = await patchCaseDataSupabase(
@@ -620,6 +631,36 @@ export default function CaseDetailPage() {
     }
     updateCase(currentCase.id, { status: nextStatus, phase: nextPhase })
   }, [currentCase, isSupabaseMode, nextReplacementDueDate, patientProgressLower.delivered, patientProgressUpper.delivered, totalLower, totalUpper])
+
+  const concludeTreatmentManually = () => {
+    if (!canWrite || !currentCase) return
+    if (!canConcludeTreatmentManually) {
+      addToast({ type: 'error', title: 'Concluir tratamento', message: 'Ainda existem placas pendentes para entrega ao paciente.' })
+      return
+    }
+    if (isSupabaseMode) {
+      void (async () => {
+        const result = await patchCaseDataSupabase(
+          currentCase.id,
+          { status: 'finalizado', phase: 'finalizado' },
+          { status: 'finalizado', phase: 'finalizado' },
+        )
+        if (!result.ok) {
+          addToast({ type: 'error', title: 'Concluir tratamento', message: result.error })
+          return
+        }
+        setSupabaseRefreshKey((current) => current + 1)
+        addToast({ type: 'success', title: 'Tratamento concluido manualmente' })
+      })()
+      return
+    }
+    const updated = updateCase(currentCase.id, { status: 'finalizado', phase: 'finalizado' })
+    if (!updated) {
+      addToast({ type: 'error', title: 'Concluir tratamento', message: 'Nao foi possivel concluir o tratamento.' })
+      return
+    }
+    addToast({ type: 'success', title: 'Tratamento concluido manualmente' })
+  }
   const groupedScanFiles = useMemo(() => {
     const scanFiles = currentCase?.scanFiles ?? []
     const scan3d = {
@@ -1426,7 +1467,7 @@ export default function CaseDetailPage() {
         todayIso: new Date().toISOString().slice(0, 10),
         nextDueDate: nextDueAfterDelivery,
       })
-      const nextPhase = nextStatus === 'finalizado' ? 'finalizado' : 'em_producao'
+      const nextPhase = 'em_producao'
       void (async () => {
         const result = await patchCaseDataSupabase(
           currentCase.id,
@@ -1487,7 +1528,7 @@ export default function CaseDetailPage() {
     })
     updateCase(currentCase.id, {
       status: nextStatus,
-      phase: nextStatus === 'finalizado' ? 'finalizado' : 'em_producao',
+      phase: 'em_producao',
     })
     addToast({ type: 'success', title: 'Instalacao registrada' })
   }
@@ -1684,6 +1725,11 @@ export default function CaseDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {canConcludeTreatmentManually ? (
+            <Button type="button" onClick={concludeTreatmentManually}>
+              Concluir tratamento
+            </Button>
+          ) : null}
           <Button
             variant="secondary"
             onClick={printLabOrder}

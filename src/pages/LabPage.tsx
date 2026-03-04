@@ -1704,9 +1704,8 @@ export default function LabPage() {
                   }
                 }
               })
-              const allDelivered = nextTrays.length > 0 && nextTrays.every((item) => item.state === 'entregue')
-              const nextStatus = allDelivered ? 'finalizado' : 'em_entrega'
-              const nextPhase = allDelivered ? 'finalizado' : 'em_producao'
+              const nextStatus = 'em_entrega'
+              const nextPhase = 'em_producao'
               const nowIso = new Date().toISOString()
               const nextData = {
                 ...caseItem,

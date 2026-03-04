@@ -15,8 +15,7 @@ function trayStateFromLabStatus(status: LabItem['status']) {
 function deriveCaseLifecycle(trays: CaseTray[], hasInstallation: boolean) {
   const hasDelivery = trays.some((item) => item.state === 'entregue')
   const hasProduction = trays.some((item) => item.state === 'em_producao' || item.state === 'pronta' || item.state === 'rework')
-  const allDelivered = trays.length > 0 && trays.every((item) => item.state === 'entregue')
-  if (allDelivered) return { status: 'finalizado' as const, phase: 'finalizado' as const }
+  // Nao concluir automaticamente quando todas as placas estiverem entregues.
   if (hasDelivery || hasInstallation) return { status: 'em_entrega' as const, phase: 'em_producao' as const }
   if (hasProduction) return { status: 'em_producao' as const, phase: 'em_producao' as const }
   return null
