@@ -53,6 +53,12 @@ type PatientOption = {
   dentistName?: string
   clinicName?: string
 }
+type CasePrintFallback = {
+  clinicName?: string
+  dentistName?: string
+  requesterName?: string
+  patientBirthDate?: string
+}
 
 function isOverdue(item: LabItem) {
   if (item.status === 'prontas') {
@@ -251,6 +257,7 @@ export default function LabPage() {
   const [supabasePatientOptions, setSupabasePatientOptions] = useState<PatientOption[]>([])
   const [supabaseDentists, setSupabaseDentists] = useState<Array<{ id: string; name: string }>>([])
   const [supabaseClinics, setSupabaseClinics] = useState<Array<{ id: string; tradeName: string }>>([])
+  const [supabaseCasePrintFallbackByCaseId, setSupabaseCasePrintFallbackByCaseId] = useState<Record<string, CasePrintFallback>>({})
   const [supabaseRefreshKey, setSupabaseRefreshKey] = useState(0)
   const supabaseSyncTick = useSupabaseSyncTick()
   const [productionConfirm, setProductionConfirm] = useState<ProductionConfirmState>({
@@ -311,6 +318,7 @@ export default function LabPage() {
       setSupabasePatientOptions([])
       setSupabaseDentists([])
       setSupabaseClinics([])
+      setSupabaseCasePrintFallbackByCaseId({})
       return
     }
     let active = true
@@ -361,20 +369,35 @@ export default function LabPage() {
       }))
       setSupabasePatientOptions(patientOptions)
 
-      const serviceCodeByScanId = new Map(
-        ((scansRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
-          const data = asObject(row.data)
-          return [asText(row.id), normalizeOrthTreatmentCode(asText(data.serviceOrderCode)) || '']
-        }),
+      const scanDataById = new Map(
+        ((scansRes.data ?? []) as Array<Record<string, unknown>>).map((row) => [asText(row.id), asObject(row.data)]),
       )
+      const serviceCodeByScanId = new Map(
+        Array.from(scanDataById.entries()).map(([scanId, data]) => [scanId, normalizeOrthTreatmentCode(asText(data.serviceOrderCode)) || '']),
+      )
+      const nextCasePrintFallbackByCaseId: Record<string, CasePrintFallback> = {}
 
       const mappedCases = ((casesRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
         const data = asObject(row.data)
         const createdAt = new Date().toISOString()
         const sourceScanId = asText(data.sourceScanId)
         const treatmentCodeFromScan = sourceScanId ? (serviceCodeByScanId.get(sourceScanId) || '') : ''
+        const sourceScanData = sourceScanId ? scanDataById.get(sourceScanId) ?? {} : {}
+        const caseId = asText(row.id)
+        nextCasePrintFallbackByCaseId[caseId] = {
+          clinicName: asText(data.clinicName, asText(sourceScanData.clinicName)),
+          dentistName: asText(data.dentistName, asText(sourceScanData.dentistName)),
+          requesterName: asText(
+            data.requestedByDentistName,
+            asText(data.requesterName, asText(sourceScanData.requestedByDentistName, asText(sourceScanData.requesterName, asText(sourceScanData.dentistName)))),
+          ),
+          patientBirthDate: asText(
+            data.patientBirthDate,
+            asText(data.birthDate, asText(sourceScanData.patientBirthDate, asText(sourceScanData.birthDate))),
+          ),
+        }
         return {
-          id: asText(row.id),
+          id: caseId,
           shortId: asText(data.shortId) || undefined,
           productType: normalizeProductType(data.productType ?? data.productId),
           productId: normalizeProductType(data.productId ?? data.productType),
@@ -443,6 +466,7 @@ export default function LabPage() {
 
       setSupabaseCases(mappedCases)
       setSupabaseItems(mappedItems)
+      setSupabaseCasePrintFallbackByCaseId(nextCasePrintFallbackByCaseId)
     })()
     return () => {
       active = false
@@ -1399,6 +1423,7 @@ export default function LabPage() {
         : db.clinics.map((entry) => ({ id: entry.id, tradeName: entry.tradeName ?? '-' }))
       ).map((entry) => [entry.id, entry.tradeName]),
     )
+    const casePrintFallback = caseItem ? supabaseCasePrintFallbackByCaseId[caseItem.id] : undefined
     const hasUpperArch = (caseItem?.arch ?? item.arch ?? 'ambos') !== 'inferior'
     const hasLowerArch = (caseItem?.arch ?? item.arch ?? 'ambos') !== 'superior'
     const totalUpper = hasUpperArch ? toNonNegativeInt(caseItem?.totalTraysUpper ?? caseItem?.totalTrays) : 0
@@ -1416,16 +1441,24 @@ export default function LabPage() {
     const emittedByRaw = currentUser?.name || currentUser?.email || 'Sistema'
     const emittedBy = emittedByRaw.includes('@') ? emittedByRaw.split('@')[0] : emittedByRaw
     const clinicId = caseItem?.clinicId ?? patientOption?.clinicId ?? item.clinicId
-    const clinicName = clinicId ? clinicsById.get(clinicId) || patientOption?.clinicName || '-' : patientOption?.clinicName || '-'
+    const clinicName = clinicId
+      ? clinicsById.get(clinicId) || patientOption?.clinicName || casePrintFallback?.clinicName || '-'
+      : patientOption?.clinicName || casePrintFallback?.clinicName || '-'
     const dentistId = caseItem?.dentistId ?? patientOption?.dentistId ?? item.dentistId
     const requesterDentistId = caseItem?.requestedByDentistId ?? dentistId
-    const dentistNameRaw = dentistId ? dentistsById.get(dentistId) || patientOption?.dentistName || '-' : patientOption?.dentistName || '-'
-    const requesterNameRaw = requesterDentistId ? dentistsById.get(requesterDentistId) || dentistNameRaw : dentistNameRaw
+    const dentistNameRaw = dentistId
+      ? dentistsById.get(dentistId) || patientOption?.dentistName || casePrintFallback?.dentistName || '-'
+      : patientOption?.dentistName || casePrintFallback?.dentistName || '-'
+    const requesterNameRaw = requesterDentistId
+      ? dentistsById.get(requesterDentistId) || casePrintFallback?.requesterName || dentistNameRaw
+      : casePrintFallback?.requesterName || dentistNameRaw
     const withDrPrefix = (name: string) => (name && name !== '-' ? (name.toLowerCase().startsWith('dr.') ? name : `Dr. ${name}`) : '-')
     const dentistName = withDrPrefix(dentistNameRaw)
     const requesterName = withDrPrefix(requesterNameRaw)
     const patientBirthDateRaw =
-      patientOption?.birthDate || (patientId ? db.patients.find((entry) => entry.id === patientId)?.birthDate : undefined)
+      patientOption?.birthDate ||
+      casePrintFallback?.patientBirthDate ||
+      (patientId ? db.patients.find((entry) => entry.id === patientId)?.birthDate : undefined)
     const patientBirthDateLabel = patientBirthDateRaw ? new Date(`${patientBirthDateRaw}T00:00:00`).toLocaleDateString('pt-BR') : '-'
     const generationDate = item.createdAt ? new Date(item.createdAt) : issueDate
     const deliveryExpectedDate = new Date(generationDate)
