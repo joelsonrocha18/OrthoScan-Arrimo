@@ -1220,6 +1220,11 @@ export default function CaseDetailPage() {
         </tr>
       `
 
+    const issueDateLabel = new Date().toLocaleString('pt-BR')
+    const productLabel = PRODUCT_TYPE_LABEL[currentCase.productType ?? 'alinhador_12m']
+    const dentistLabel = dentist ? `${dentistPrefix} ${dentist.name}`.trim() : '-'
+    const requesterLabel = requester ? `${requesterPrefix} ${requester.name}`.trim() : dentistLabel
+
     const html = `
       <!doctype html>
       <html lang="pt-BR">
@@ -1229,36 +1234,60 @@ export default function CaseDetailPage() {
           <style>
             @page { size: A4; margin: 14mm; }
             body { font-family: Arial, sans-serif; color: #0f172a; font-size: 12px; margin: 0; }
-            .header { border-bottom: 2px solid #1d4ed8; padding-bottom: 8px; margin-bottom: 12px; }
-            .title { font-size: 20px; font-weight: 700; margin: 0; color: #0b1220; }
-            .subtitle { margin-top: 4px; color: #334155; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-            .card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; }
-            .label { font-size: 11px; color: #475569; margin-bottom: 2px; }
-            .value { font-weight: 600; color: #0f172a; }
-            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-            th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; }
+            .header { display: grid; grid-template-columns: 190px 1fr; gap: 12px; border: 1px solid #1e293b; padding: 10px; margin-bottom: 10px; }
+            .brand { border-right: 1px solid #cbd5e1; padding-right: 10px; }
+            .brand img { max-width: 170px; max-height: 52px; object-fit: contain; display: block; margin-bottom: 6px; }
+            .brand p { margin: 2px 0; font-size: 11px; color: #475569; }
+            .doc h1 { margin: 0; font-size: 18px; letter-spacing: 0.3px; }
+            .doc p { margin: 3px 0; color: #334155; font-size: 11px; }
+            .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+            .meta-box { border: 1px solid #94a3b8; border-radius: 4px; padding: 7px; }
+            .meta-label { font-size: 10px; text-transform: uppercase; color: #475569; margin-bottom: 2px; letter-spacing: .3px; }
+            .meta-value { font-weight: 700; color: #0f172a; }
+            .section-title { margin: 12px 0 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #0f172a; }
+            table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+            th, td { border: 1px solid #94a3b8; padding: 6px; text-align: left; font-size: 11px; }
             th { background: #e2e8f0; color: #0f172a; }
-            .footer { margin-top: 16px; font-size: 10px; color: #475569; }
+            .footer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+            .sign { border-top: 1px solid #64748b; padding-top: 6px; font-size: 11px; color: #334155; min-height: 28px; }
+            .tiny { margin-top: 12px; font-size: 10px; color: #64748b; text-align: center; }
           </style>
         </head>
         <body>
           <div class="header">
-            <h1 class="title">ORDEM DE SERVICO - LAB</h1>
-            <div class="subtitle">Emitido em ${new Date().toLocaleString('pt-BR')}</div>
+            <div class="brand">
+              <img src="${window.location.origin}/brand/orthoscan.png" alt="Orthoscan" />
+              <p>Odontologia Digital</p>
+              <p>www.orthoscan.com.br</p>
+            </div>
+            <div class="doc">
+              <h1>ORDEM DE SERVICO (O.S)</h1>
+              <p><strong>Data/Hora:</strong> ${escapeHtml(issueDateLabel)}</p>
+              <p><strong>Nº Caso:</strong> ${escapeHtml(caseLabel)}</p>
+              <p><strong>Status:</strong> ${escapeHtml(caseStatusLabelMap[currentCase.status])}</p>
+            </div>
           </div>
-          <div class="grid">
-            <div class="card"><div class="label">Paciente</div><div class="value">${escapeHtml(currentCase.patientName)}</div></div>
-            <div class="card"><div class="label">Caso / OS</div><div class="value">${escapeHtml(caseLabel)}</div></div>
-            <div class="card"><div class="label">Produto</div><div class="value">${escapeHtml(PRODUCT_TYPE_LABEL[currentCase.productType ?? 'alinhador_12m'])}</div></div>
-            <div class="card"><div class="label">Planejamento</div><div class="value">${escapeHtml(planLabel)}</div></div>
-            <div class="card"><div class="label">Troca</div><div class="value">${escapeHtml(String(currentCase.changeEveryDays))} dias</div></div>
-            <div class="card"><div class="label">Attachments</div><div class="value">${currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}</div></div>
+
+          <div class="meta">
+            <div class="meta-box"><div class="meta-label">Paciente</div><div class="meta-value">${escapeHtml(currentCase.patientName)}</div></div>
+            <div class="meta-box"><div class="meta-label">Clinica</div><div class="meta-value">${escapeHtml(clinicName ?? '-')}</div></div>
+            <div class="meta-box"><div class="meta-label">Dentista responsavel</div><div class="meta-value">${escapeHtml(dentistLabel)}</div></div>
+            <div class="meta-box"><div class="meta-label">Solicitante</div><div class="meta-value">${escapeHtml(requesterLabel)}</div></div>
+            <div class="meta-box"><div class="meta-label">Produto</div><div class="meta-value">${escapeHtml(productLabel)}</div></div>
+            <div class="meta-box"><div class="meta-label">Planejamento</div><div class="meta-value">${escapeHtml(planLabel)}</div></div>
+            <div class="meta-box"><div class="meta-label">Troca</div><div class="meta-value">${escapeHtml(String(currentCase.changeEveryDays))} dias</div></div>
+            <div class="meta-box"><div class="meta-label">Attachment</div><div class="meta-value">${currentCase.attachmentBondingTray ? 'Sim' : 'Nao'}</div></div>
           </div>
-          <div class="grid">
-            <div class="card"><div class="label">Resumo LAB</div><div class="value">Em producao/CQ: ${inProductionCount} | Prontas: ${readyCount}</div></div>
-            <div class="card"><div class="label">Entregue ao dentista</div><div class="value">Sup ${progressUpper.delivered} | Inf ${progressLower.delivered}</div></div>
+
+          <div class="section-title">Resumo operacional</div>
+          <div class="meta">
+            <div class="meta-box"><div class="meta-label">Producao / CQ</div><div class="meta-value">${inProductionCount}</div></div>
+            <div class="meta-box"><div class="meta-label">Prontas</div><div class="meta-value">${readyCount}</div></div>
+            <div class="meta-box"><div class="meta-label">Entregue ao profissional</div><div class="meta-value">Sup ${progressUpper.delivered} | Inf ${progressLower.delivered}</div></div>
+            <div class="meta-box"><div class="meta-label">Saldo em banco</div><div class="meta-value">Sup ${Math.max(0, totalUpper - progressUpper.delivered)} | Inf ${Math.max(0, totalLower - progressLower.delivered)}</div></div>
           </div>
+
+          <div class="section-title">Cronograma de placas</div>
           <table>
             <thead>
               <tr>
@@ -1271,7 +1300,12 @@ export default function CaseDetailPage() {
             </thead>
             <tbody>${scheduleRows}</tbody>
           </table>
-          <div class="footer">Documento gerado pelo OrthoScan. Uso interno do laboratorio.</div>
+
+          <div class="footer-grid">
+            <div class="sign">Responsavel Clinica: ______________________________________</div>
+            <div class="sign">Responsavel Laboratorio: ____________________________________</div>
+          </div>
+          <div class="tiny">Documento gerado pelo sistema OrthoScan para uso interno e rastreabilidade do tratamento.</div>
         </body>
       </html>
     `
