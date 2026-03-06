@@ -12,7 +12,6 @@ import { can } from '../auth/permissions'
 import { DATA_MODE } from '../data/dataMode'
 import {
   addScanAttachment,
-  approveScan,
   clearScanAttachmentError,
   createCaseFromScan,
   createScan,
@@ -107,6 +106,7 @@ export default function ScansPage() {
   const [purposeFilter, setPurposeFilter] = useState('todos')
   const [details, setDetails] = useState<Scan | null>(null)
   const [createCaseTarget, setCreateCaseTarget] = useState<Scan | null>(null)
+  const [approvalTarget, setApprovalTarget] = useState<Scan | null>(null)
   const [supabaseScans, setSupabaseScans] = useState<Scan[]>([])
   const [supabaseCases, setSupabaseCases] = useState<Array<{ id: string; shortId?: string; treatmentCode?: string }>>([])
   const [supabasePatients, setSupabasePatients] = useState<Array<{ id: string; shortId?: string; name: string; primaryDentistId?: string; clinicId?: string }>>([])
@@ -425,18 +425,6 @@ export default function ScansPage() {
     }
   }
 
-  const handleApprove = async (id: string) => {
-    if (isSupabaseMode) {
-      const result = await updateScanStatusSupabase(id, 'aprovado')
-      if (!result.ok) return addToast({ type: 'error', title: result.error })
-      setSupabaseRefreshKey((current) => current + 1)
-      addToast({ type: 'success', title: 'Scan aprovado' })
-      return
-    }
-    approveScan(id)
-    addToast({ type: 'success', title: 'Scan aprovado' })
-  }
-
   const handleReject = async (id: string) => {
     if (isSupabaseMode) {
       const result = await updateScanStatusSupabase(id, 'reprovado')
@@ -685,6 +673,65 @@ export default function ScansPage() {
     addToast({ type: 'success', title: 'Erro removido do anexo' })
   }
 
+  const finalizeAndApproveScan = async (targetScan: Scan, payload: Omit<Scan, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString()
+    if (isSupabaseMode && supabase) {
+      const nextData = {
+        patientName: payload.patientName,
+        serviceOrderCode: targetScan.serviceOrderCode,
+        purposeProductId: payload.purposeProductId,
+        purposeProductType: payload.purposeProductType,
+        purposeLabel: payload.purposeLabel,
+        scanDate: payload.scanDate,
+        arch: payload.arch,
+        complaint: payload.complaint,
+        dentistGuidance: payload.dentistGuidance,
+        notes: payload.notes,
+        planningDetectedUpperTrays: payload.planningDetectedUpperTrays,
+        planningDetectedLowerTrays: payload.planningDetectedLowerTrays,
+        planningDetectedAt: payload.planningDetectedAt,
+        planningDetectedSource: payload.planningDetectedSource,
+        attachments: payload.attachments,
+        status: 'aprovado' as Scan['status'],
+        linkedCaseId: targetScan.linkedCaseId,
+        createdAt: targetScan.createdAt,
+        updatedAt: now,
+      }
+      const { error } = await supabase
+        .from('scans')
+        .update({
+          clinic_id: payload.clinicId ?? null,
+          patient_id: payload.patientId ?? null,
+          dentist_id: payload.dentistId ?? null,
+          requested_by_dentist_id: payload.requestedByDentistId ?? null,
+          data: nextData,
+          updated_at: now,
+        })
+        .eq('id', targetScan.id)
+      if (error) {
+        addToast({ type: 'error', title: `Falha ao aprovar exame: ${error.message}` })
+        return false
+      }
+      setSupabaseRefreshKey((current) => current + 1)
+      addToast({ type: 'success', title: 'Exame finalizado e aprovado' })
+      return true
+    }
+
+    const saved = updateScan(targetScan.id, {
+      ...payload,
+      status: 'aprovado',
+      linkedCaseId: targetScan.linkedCaseId,
+      updatedAt: now,
+    })
+    if (!saved) {
+      addToast({ type: 'error', title: 'Falha ao aprovar exame' })
+      return false
+    }
+    setDetails((current) => (current && current.id === targetScan.id ? saved : current))
+    addToast({ type: 'success', title: 'Exame finalizado e aprovado' })
+    return true
+  }
+
   return (
     <AppShell breadcrumb={['Início', 'Exames']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -778,7 +825,7 @@ export default function ScansPage() {
                               </Button>
                               {canApprove ? (
                                 <>
-                                  <Button size="sm" onClick={() => handleApprove(scan.id)}>
+                                  <Button size="sm" onClick={() => setApprovalTarget(scan)}>
                                     Aprovar
                                   </Button>
                                   <Button size="sm" variant="secondary" onClick={() => handleReject(scan.id)}>
@@ -898,14 +945,42 @@ export default function ScansPage() {
         }}
       />
 
+      <ScanModal
+        open={Boolean(approvalTarget)}
+        mode="edit"
+        initialScan={approvalTarget}
+        patients={patientLookupSource}
+        dentists={dentists.map((item) => ({ id: item.id, name: item.name, gender: item.gender, clinicId: item.clinicId }))}
+        clinics={clinicsForModal}
+        onClose={() => setApprovalTarget(null)}
+        onSubmit={async (payload, options) => {
+          if (!canApprove || !canWrite) {
+            addToast({ type: 'error', title: 'Sem permissão para aprovar exames' })
+            return false
+          }
+          if (!approvalTarget) return false
+          const approved = await finalizeAndApproveScan(approvalTarget, payload)
+          if (!approved) return false
+          if (!isSupabaseMode && options?.setPrimaryDentist && payload.patientId && payload.dentistId) {
+            const patient = db.patients.find((item) => item.id === payload.patientId)
+            if (patient && !patient.primaryDentistId) {
+              updatePatient(patient.id, { primaryDentistId: payload.dentistId })
+            }
+          }
+          return true
+        }}
+      />
+
       <ScanDetailsModal
         open={Boolean(details)}
         scan={details}
         onClose={() => setDetails(null)}
         onApprove={(id) => {
           if (!canApprove) return
-          handleApprove(id)
-          setDetails((current) => (current ? { ...current, status: 'aprovado' } : current))
+          const target = scans.find((item) => item.id === id)
+          if (!target) return
+          setDetails(null)
+          setApprovalTarget(target)
         }}
         onReject={(id) => {
           if (!canApprove) return
