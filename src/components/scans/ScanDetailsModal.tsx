@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { buildPhotoSlotsFromItems, loadDevPhotoSlots, mergePhotoSlots } from '../../lib/photoSlots'
 import type { Scan, ScanAttachment } from '../../types/Scan'
@@ -252,7 +252,7 @@ export default function ScanDetailsModal({
               <h4 className="text-sm font-semibold text-slate-800">Dados clinicos</h4>
               <p className="mt-1 text-sm text-slate-600">Queixa: {scan.complaint || '-'}</p>
               <p className="mt-1 text-sm text-slate-600">Orientacao: {scan.dentistGuidance || '-'}</p>
-              <p className="mt-1 text-sm text-slate-600">Observacoes: {scan.notes || '-'}</p>
+              <p className="mt-1 text-sm text-slate-600">Observações: {scan.notes || '-'}</p>
             </div>
           </>
         ) : null}
@@ -369,7 +369,7 @@ export default function ScanDetailsModal({
         <div className="mt-6 flex flex-wrap gap-2">
           {scan.status === 'pendente' ? (
             <>
-              <Button onClick={() => onApprove(scan.id)}>Aprovar</Button>
+              <Button onClick={() => onApprove(scan.id)}>Aprovar / Finalizar Cadastro</Button>
               <Button variant="secondary" onClick={() => onReject(scan.id)}>
                 Reprovar
               </Button>
@@ -415,3 +415,4 @@ export default function ScanDetailsModal({
     </div>
   )
 }
+

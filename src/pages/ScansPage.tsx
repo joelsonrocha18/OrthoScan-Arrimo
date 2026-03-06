@@ -826,7 +826,7 @@ export default function ScansPage() {
                               {canApprove ? (
                                 <>
                                   <Button size="sm" onClick={() => setApprovalTarget(scan)}>
-                                    Aprovar
+                                    Aprovar / Finalizar Cadastro
                                   </Button>
                                   <Button size="sm" variant="secondary" onClick={() => handleReject(scan.id)}>
                                     Reprovar
