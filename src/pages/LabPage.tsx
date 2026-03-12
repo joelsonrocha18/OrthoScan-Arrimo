@@ -155,25 +155,8 @@ function revisionSuffix(code?: string) {
 
 function getDeliveredByArch(caseItem?: {
   installation?: { deliveredUpper?: number; deliveredLower?: number }
-  deliveryLots?: Array<{ arch: 'superior' | 'inferior' | 'ambos'; quantity: number }>
 }) {
   if (!caseItem) return { upper: 0, lower: 0 }
-  const fromDentistLots = (caseItem.deliveryLots ?? []).reduce(
-    (acc, lot) => {
-      const qty = toNonNegativeInt(lot.quantity)
-      if (lot.arch === 'superior') acc.upper += qty
-      if (lot.arch === 'inferior') acc.lower += qty
-      if (lot.arch === 'ambos') {
-        acc.upper += qty
-        acc.lower += qty
-      }
-      return acc
-    },
-    { upper: 0, lower: 0 },
-  )
-  if (fromDentistLots.upper > 0 || fromDentistLots.lower > 0) {
-    return fromDentistLots
-  }
   return {
     upper: toNonNegativeInt(caseItem.installation?.deliveredUpper),
     lower: toNonNegativeInt(caseItem.installation?.deliveredLower),
@@ -1170,9 +1153,6 @@ export default function LabPage() {
       const delivered = normalizeByTreatmentArch(
         getDeliveredByArch({
           installation: asObject(linkedCase.installation) as { deliveredUpper?: number; deliveredLower?: number },
-          deliveryLots: Array.isArray(linkedCase.deliveryLots)
-            ? (linkedCase.deliveryLots as Array<{ arch: 'superior' | 'inferior' | 'ambos'; quantity: number }>)
-            : undefined,
         }),
         treatmentArch,
       )
@@ -2007,8 +1987,8 @@ export default function LabPage() {
                       <th className="px-3 py-2 font-semibold">Paciente</th>
                       <th className="px-3 py-2 font-semibold">Produto</th>
                       <th className="px-3 py-2 font-semibold">Pedido (Inf/Sup)</th>
-                      <th className="px-3 py-2 font-semibold">Entregue (Inf/Sup)</th>
-                      <th className="px-3 py-2 font-semibold">Restante (Inf/Sup)</th>
+                      <th className="px-3 py-2 font-semibold">Entregue ao paciente (Inf/Sup)</th>
+                      <th className="px-3 py-2 font-semibold">Saldo restante (Inf/Sup)</th>
                       <th className="px-3 py-2 font-semibold">Data instalação</th>
                       <th className="px-3 py-2 font-semibold">Previsão reposição LAB</th>
                       <th className="px-3 py-2 font-semibold">Status do pedido</th>
