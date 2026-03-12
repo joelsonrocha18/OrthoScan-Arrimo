@@ -118,6 +118,12 @@ export default function ScanModal({
   const [setPrimaryDentist, setSetPrimaryDentist] = useState(false)
   const [draftId, setDraftId] = useState('')
   const [devPhotoSlots, setDevPhotoSlots] = useState<PhotoSlot[]>([])
+
+  const findPatientByName = (value: string) => {
+    const normalizedValue = value.trim().toLocaleLowerCase('pt-BR')
+    if (!normalizedValue) return undefined
+    return patients.find((item) => item.name.trim().toLocaleLowerCase('pt-BR') === normalizedValue)
+  }
   const nonAlignerPurposeOptions = useMemo(() => {
     const settings = loadSystemSettings()
     const active = (settings.priceCatalog ?? []).filter((item) => item.isActive !== false)
@@ -716,24 +722,37 @@ export default function ScanModal({
               value={form.patientName}
               onChange={(event) => {
                 const inputName = event.target.value
-                const matched = patients.find((item) => item.name === inputName)
+                const matched = findPatientByName(inputName)
+                const matchedPrimaryDentist = matched?.primaryDentistId
+                  ? dentists.find((item) => item.id === matched.primaryDentistId)
+                  : undefined
+                const patientClinicId = matched?.clinicId ?? matchedPrimaryDentist?.clinicId
+                const clinicDentists = patientClinicId
+                  ? dentists.filter((item) => item.clinicId === patientClinicId)
+                  : []
+                const resolvedDentistId =
+                  matchedPrimaryDentist?.id
+                  ?? (clinicDentists.length === 1 ? clinicDentists[0]?.id : undefined)
                 setForm((current) => {
                   const currentDentist = dentists.find((item) => item.id === current.dentistId)
-                  const patientClinicId = matched?.clinicId
                   const shouldOverrideClinic =
-                    patientClinicId &&
-                    (!current.clinicId || current.clinicId === currentDentist?.clinicId)
+                    Boolean(patientClinicId) &&
+                    (!current.clinicId || current.clinicId === currentDentist?.clinicId || current.clinicId === matched?.clinicId)
+                  const shouldOverrideDentist =
+                    Boolean(resolvedDentistId) &&
+                    (!current.dentistId || current.dentistId === currentDentist?.id || currentDentist?.clinicId === patientClinicId)
                   return {
                     ...current,
                     patientName: inputName,
                     patientId: matched?.id,
                     clinicId: shouldOverrideClinic ? patientClinicId : current.clinicId,
+                    dentistId: shouldOverrideDentist ? resolvedDentistId : current.dentistId,
                   }
                 })
-                if (matched && !matched.primaryDentistId && form.dentistId) {
-                  setSetPrimaryDentist(true)
-                } else if (matched && matched.primaryDentistId) {
+                if (matched?.primaryDentistId) {
                   setSetPrimaryDentist(false)
+                } else if (matched && (resolvedDentistId || form.dentistId)) {
+                  setSetPrimaryDentist(true)
                 }
               }}
             />
