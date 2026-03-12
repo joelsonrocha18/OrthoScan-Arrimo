@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabaseClient'
+﻿import { supabase } from '../lib/supabaseClient'
 import { getSupabaseAccessToken } from '../lib/auth'
 
 const BUCKET = 'orthoscan'
@@ -58,7 +58,7 @@ export async function uploadToStorage(path: string, file: File) {
   if (STORAGE_PROVIDER === 'microsoft_drive') {
     return uploadToMicrosoftDrive(path, file)
   }
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     upsert: false,
     contentType: file.type || undefined,
@@ -71,7 +71,7 @@ export async function createSignedUrl(path: string, expiresIn = 300) {
   if (STORAGE_PROVIDER === 'microsoft_drive') {
     return resolveMicrosoftDriveDownloadUrl(path)
   }
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, expiresIn)
   if (error || !data?.signedUrl) return { ok: false as const, error: error?.message ?? 'Falha ao gerar URL assinada.' }
   return { ok: true as const, url: data.signedUrl }
@@ -86,7 +86,7 @@ export async function downloadBlob(path: string) {
     const blob = await response.blob()
     return { ok: true as const, blob }
   }
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const { data, error } = await supabase.storage.from(BUCKET).download(path)
   if (error || !data) return { ok: false as const, error: error?.message ?? 'Falha ao baixar arquivo.' }
   return { ok: true as const, blob: data }
@@ -96,7 +96,7 @@ export async function deleteFromStorage(path: string) {
   if (STORAGE_PROVIDER === 'microsoft_drive') {
     return deleteFromMicrosoftDrive(path)
   }
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const { error } = await supabase.storage.from(BUCKET).remove([path])
   if (error) return { ok: false as const, error: error.message }
   return { ok: true as const }
@@ -116,7 +116,7 @@ function validateFile(file: File, allowedExt: string[], allowedMimePrefixes: str
   const extOk = allowedExt.length === 0 || allowedExt.includes(ext)
   const mimeOk = allowedMimePrefixes.length === 0 || allowedMimePrefixes.some((prefix) => mime.startsWith(prefix))
   if (!extOk && !mimeOk) {
-    return { ok: false as const, error: 'Tipo de arquivo nao permitido.' }
+    return { ok: false as const, error: 'Tipo de arquivo não permitido.' }
   }
   return { ok: true as const }
 }
@@ -231,3 +231,4 @@ async function deleteFromMicrosoftDrive(path: string) {
   if (!response.ok) return { ok: false as const, error: response.error ?? 'Falha ao remover arquivo no Microsoft Drive.' }
   return { ok: true as const }
 }
+

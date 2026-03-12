@@ -1,4 +1,4 @@
-import { loadDb, saveDb } from '../data/db'
+﻿import { loadDb, saveDb } from '../data/db'
 import type { Clinic } from '../types/Clinic'
 import { formatCnpj, isValidCnpj } from '../lib/cnpj'
 
@@ -68,7 +68,7 @@ export function createClinic(payload: Omit<Clinic, 'id' | 'createdAt' | 'updated
 export function updateClinic(id: string, patch: Partial<Clinic>) {
   const db = loadDb()
   const current = db.clinics.find((clinic) => clinic.id === id)
-  if (!current) return { ok: false as const, error: 'Clinica nao encontrada.' }
+  if (!current) return { ok: false as const, error: 'Clínica não encontrada.' }
   if (patch.cnpj && !isValidCnpj(patch.cnpj)) {
     return { ok: false as const, error: 'CNPJ invalido.' }
   }
@@ -94,7 +94,7 @@ export function updateClinic(id: string, patch: Partial<Clinic>) {
 export function softDeleteClinic(id: string) {
   const db = loadDb()
   const current = db.clinics.find((clinic) => clinic.id === id)
-  if (!current) return { ok: false as const, error: 'Clinica nao encontrada.' }
+  if (!current) return { ok: false as const, error: 'Clínica não encontrada.' }
   db.clinics = db.clinics.map((clinic) =>
     clinic.id === id ? { ...clinic, deletedAt: nowIso(), isActive: false, updatedAt: nowIso() } : clinic,
   )
@@ -105,10 +105,11 @@ export function softDeleteClinic(id: string) {
 export function restoreClinic(id: string) {
   const db = loadDb()
   const current = db.clinics.find((clinic) => clinic.id === id)
-  if (!current) return { ok: false as const, error: 'Clinica nao encontrada.' }
+  if (!current) return { ok: false as const, error: 'Clínica não encontrada.' }
   db.clinics = db.clinics.map((clinic) =>
     clinic.id === id ? { ...clinic, deletedAt: undefined, isActive: true, updatedAt: nowIso() } : clinic,
   )
   saveDb(db)
   return { ok: true as const }
 }
+

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
@@ -29,6 +29,7 @@ type ClinicForm = {
     cep: string
     street: string
     number: string
+    complement: string
     district: string
     city: string
     state: string
@@ -48,6 +49,7 @@ const emptyForm: ClinicForm = {
     cep: '',
     street: '',
     number: '',
+    complement: '',
     district: '',
     city: '',
     state: '',
@@ -68,6 +70,7 @@ function mapToForm(item: Clinic): ClinicForm {
       cep: item.address?.cep ?? '',
       street: item.address?.street ?? '',
       number: item.address?.number ?? '',
+      complement: item.address?.complement ?? '',
       district: item.address?.district ?? '',
       city: item.address?.city ?? '',
       state: item.address?.state ?? '',
@@ -193,7 +196,7 @@ export default function ClinicDetailPage() {
       .catch((err: Error) => {
         if (!active) return
         setCepStatus('')
-        setCepError(err.message || 'CEP nao encontrado.')
+        setCepError(err.message || 'CEP não encontrado.')
       })
 
     return () => {
@@ -203,7 +206,7 @@ export default function ClinicDetailPage() {
 
   if (!isNew && loadingSupabase) {
     return (
-      <AppShell breadcrumb={['Inicio', 'Clinicas']}>
+      <AppShell breadcrumb={['Início', 'Clínicas']}>
         <Card>
           <h1 className="text-xl font-semibold text-slate-900">Carregando...</h1>
         </Card>
@@ -213,9 +216,9 @@ export default function ClinicDetailPage() {
 
   if (!isNew && !existing) {
     return (
-      <AppShell breadcrumb={['Inicio', 'Clinicas']}>
+      <AppShell breadcrumb={['Início', 'Clínicas']}>
         <Card>
-          <h1 className="text-xl font-semibold text-slate-900">Registro nao encontrado</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Registro não encontrado</h1>
           <Link to="/app/clinics" className="mt-3 inline-flex text-sm font-semibold text-brand-700">
             Voltar para clinicas
           </Link>
@@ -226,7 +229,7 @@ export default function ClinicDetailPage() {
 
   const handleSave = async () => {
     if (!canWrite) {
-      setError('Sem permissao para editar clinicas.')
+      setError('Sem permissão para editar clinicas.')
       return
     }
     if (!form.tradeName.trim()) {
@@ -257,6 +260,7 @@ export default function ClinicDetailPage() {
         cep: form.address.cep.trim() || undefined,
         street: form.address.street.trim() || undefined,
         number: form.address.number.trim() || undefined,
+        complement: form.address.complement.trim() || undefined,
         district: form.address.district.trim() || undefined,
         city: form.address.city.trim() || undefined,
         state: form.address.state.trim() || undefined,
@@ -267,7 +271,7 @@ export default function ClinicDetailPage() {
 
     if (isNew && isSupabaseMode) {
       if (!supabase) {
-        setError('Supabase nao configurado.')
+        setError('Supabase não configurado.')
         return
       }
       const { data, error: insertError } = await supabase
@@ -306,7 +310,7 @@ export default function ClinicDetailPage() {
     if (!existing) return
     if (isSupabaseMode) {
       if (!supabase) {
-        setError('Supabase nao configurado.')
+        setError('Supabase não configurado.')
         return
       }
       const { error: updateError } = await supabase
@@ -347,7 +351,7 @@ export default function ClinicDetailPage() {
     if (!confirmed) return
     if (isSupabaseMode) {
       if (!supabase) {
-        setError('Supabase nao configurado.')
+        setError('Supabase não configurado.')
         return
       }
       const now = new Date().toISOString()
@@ -377,7 +381,7 @@ export default function ClinicDetailPage() {
     if (!canDelete) return
     if (isSupabaseMode) {
       if (!supabase) {
-        setError('Supabase nao configurado.')
+        setError('Supabase não configurado.')
         return
       }
       const now = new Date().toISOString()
@@ -403,7 +407,7 @@ export default function ClinicDetailPage() {
   }
 
   return (
-    <AppShell breadcrumb={['Inicio', 'Clinicas', isNew ? 'Novo' : existing?.tradeName ?? 'Detalhe']}>
+    <AppShell breadcrumb={['Início', 'Clínicas', isNew ? 'Novo' : existing?.tradeName ?? 'Detalhe']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
@@ -411,7 +415,7 @@ export default function ClinicDetailPage() {
           </h1>
           {!isNew && existing ? <p className="mt-1 text-xs font-semibold text-slate-500">{clinicCode(existing.id, existing.shortId)}</p> : null}
           <p className="mt-2 text-sm text-slate-500">
-            Clinica {existing?.deletedAt ? '(Excluida)' : ''}
+            Clínica {existing?.deletedAt ? '(Excluida)' : ''}
           </p>
         </div>
         <Link
@@ -505,6 +509,15 @@ export default function ClinicDetailPage() {
               />
             </div>
             <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Complemento</label>
+              <Input
+                value={form.address.complement}
+                onChange={(event) =>
+                  patchForm((current) => ({ ...current, address: { ...current.address, complement: event.target.value } }))
+                }
+              />
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Bairro</label>
               <Input
                 value={form.address.district}
@@ -535,7 +548,7 @@ export default function ClinicDetailPage() {
         </Card>
 
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Observacoes</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Observações</h2>
           <textarea
             rows={4}
             value={form.notes}
@@ -563,3 +576,4 @@ export default function ClinicDetailPage() {
     </AppShell>
   )
 }
+

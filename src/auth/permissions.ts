@@ -1,4 +1,4 @@
-import type { Role, User } from '../types/User'
+﻿import type { Role, User } from '../types/User'
 
 export type Permission =
   | 'dashboard.read'
@@ -37,12 +37,12 @@ export type PermissionModule =
   | 'Pacientes'
   | 'Scans'
   | 'Alinhadores'
-  | 'Laboratorio'
+  | 'Laboratório'
   | 'Usuarios'
-  | 'Configuracoes'
+  | 'Configurações'
   | 'Documentos'
   | 'Dentistas'
-  | 'Clinicas'
+  | 'Clínicas'
   | 'IA'
 
 const allPermissions: Permission[] = [
@@ -96,8 +96,8 @@ const profileLabels: Record<Role, string> = {
   master_admin: 'Master Admin',
   dentist_admin: 'Dentista Admin',
   dentist_client: 'Dentista Cliente',
-  clinic_client: 'Clinica Cliente',
-  lab_tech: 'Tecnico de Laboratorio',
+  clinic_client: 'Clínica Cliente',
+  lab_tech: 'Tecnico de Laboratório',
   receptionist: 'Recepcao',
 }
 
@@ -151,9 +151,9 @@ const permissionModules: Record<Permission, PermissionModule> = {
   'dentists.read': 'Dentistas',
   'dentists.write': 'Dentistas',
   'dentists.delete': 'Dentistas',
-  'clinics.read': 'Clinicas',
-  'clinics.write': 'Clinicas',
-  'clinics.delete': 'Clinicas',
+  'clinics.read': 'Clínicas',
+  'clinics.write': 'Clínicas',
+  'clinics.delete': 'Clínicas',
   'patients.read': 'Pacientes',
   'patients.write': 'Pacientes',
   'patients.delete': 'Pacientes',
@@ -164,12 +164,12 @@ const permissionModules: Record<Permission, PermissionModule> = {
   'cases.read': 'Alinhadores',
   'cases.write': 'Alinhadores',
   'cases.delete': 'Alinhadores',
-  'lab.read': 'Laboratorio',
-  'lab.write': 'Laboratorio',
+  'lab.read': 'Laboratório',
+  'lab.write': 'Laboratório',
   'docs.read': 'Documentos',
   'docs.write': 'Documentos',
-  'settings.read': 'Configuracoes',
-  'settings.write': 'Configuracoes',
+  'settings.read': 'Configurações',
+  'settings.write': 'Configurações',
   'ai.clinica': 'IA',
   'ai.lab': 'IA',
   'ai.gestao': 'IA',
@@ -199,7 +199,7 @@ export function permissionLabel(permission: Permission) {
 }
 
 export function permissionModule(permission: Permission) {
-  return permissionModules[permission] ?? 'Configuracoes'
+  return permissionModules[permission] ?? 'Configurações'
 }
 
 export function groupedPermissionsForRole(role: Role) {
@@ -210,3 +210,4 @@ export function groupedPermissionsForRole(role: Role) {
     return acc
   }, {} as Record<PermissionModule, Permission[]>)
 }
+

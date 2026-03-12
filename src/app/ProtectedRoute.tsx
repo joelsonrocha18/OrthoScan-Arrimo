@@ -1,4 +1,4 @@
-import { Link, Navigate, Outlet } from 'react-router-dom'
+﻿import { Link, Navigate, Outlet } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { can } from '../auth/permissions'
 import type { Permission } from '../auth/permissions'
@@ -68,7 +68,7 @@ export default function ProtectedRoute({ permission, roles }: ProtectedRouteProp
       <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
         <Card className="w-full max-w-lg text-center">
           <h1 className="text-xl font-semibold text-slate-900">Sem acesso</h1>
-          <p className="mt-2 text-sm text-slate-600">Seu perfil nao tem permissao para acessar esta area.</p>
+          <p className="mt-2 text-sm text-slate-600">Seu perfil não tem permissão para acessar esta área.</p>
           <Link to="/app/dashboard" className="mt-4 inline-flex text-sm font-semibold text-brand-700">
             Voltar
           </Link>
@@ -79,3 +79,4 @@ export default function ProtectedRoute({ permission, roles }: ProtectedRouteProp
 
   return <Outlet />
 }
+

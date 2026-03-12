@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
@@ -18,7 +18,10 @@ import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
 import { dentistCode } from '../lib/entityCode'
 
 type DentistForm = {
-  name: string
+  firstName: string
+  lastName: string
+  cpf: string
+  birthDate: string
   cro: string
   gender: 'masculino' | 'feminino'
   clinicId: string
@@ -29,6 +32,7 @@ type DentistForm = {
     cep: string
     street: string
     number: string
+    complement: string
     district: string
     city: string
     state: string
@@ -38,7 +42,10 @@ type DentistForm = {
 }
 
 const emptyForm: DentistForm = {
-  name: '',
+  firstName: '',
+  lastName: '',
+  cpf: '',
+  birthDate: '',
   cro: '',
   gender: 'masculino',
   clinicId: '',
@@ -49,6 +56,7 @@ const emptyForm: DentistForm = {
     cep: '',
     street: '',
     number: '',
+    complement: '',
     district: '',
     city: '',
     state: '',
@@ -58,8 +66,15 @@ const emptyForm: DentistForm = {
 }
 
 function mapToForm(item: DentistClinic): DentistForm {
+  const rawName = item.name?.trim() ?? ''
+  const inferredParts = rawName ? rawName.split(/\s+/).filter(Boolean) : []
+  const inferredFirst = inferredParts.length ? inferredParts[0] : ''
+  const inferredLast = inferredParts.length > 1 ? inferredParts.slice(1).join(' ') : ''
   return {
-    name: item.name,
+    firstName: item.firstName ?? inferredFirst,
+    lastName: item.lastName ?? inferredLast,
+    cpf: item.cpf ?? '',
+    birthDate: item.birthDate ?? '',
     cro: item.cro ?? '',
     gender: item.gender ?? 'masculino',
     clinicId: item.clinicId ?? '',
@@ -70,6 +85,7 @@ function mapToForm(item: DentistClinic): DentistForm {
       cep: item.address?.cep ?? '',
       street: item.address?.street ?? '',
       number: item.address?.number ?? '',
+      complement: item.address?.complement ?? '',
       district: item.address?.district ?? '',
       city: item.address?.city ?? '',
       state: item.address?.state ?? '',
@@ -137,7 +153,7 @@ export default function DentistDetailPage() {
     void (async () => {
       const { data, error } = await supabase
         .from('dentists')
-        .select('id, short_id, name, cro, gender, clinic_id, phone, whatsapp, email, notes, is_active, deleted_at, created_at, updated_at')
+        .select('id, short_id, name, first_name, last_name, cpf, birth_date, address, cro, gender, clinic_id, phone, whatsapp, email, notes, is_active, deleted_at, created_at, updated_at')
         .eq('id', params.id)
         .maybeSingle()
       if (!active) return
@@ -151,12 +167,17 @@ export default function DentistDetailPage() {
         shortId: (data.short_id as string | null) ?? undefined,
         type: 'dentista',
         name: String(data.name ?? ''),
+        firstName: (data.first_name as string | null) ?? undefined,
+        lastName: (data.last_name as string | null) ?? undefined,
+        cpf: (data.cpf as string | null) ?? undefined,
+        birthDate: (data.birth_date as string | null) ?? undefined,
         cro: (data.cro as string | null) ?? undefined,
         gender: data.gender === 'feminino' ? 'feminino' : 'masculino',
         clinicId: (data.clinic_id as string | null) ?? undefined,
         phone: (data.phone as string | null) ?? undefined,
         whatsapp: (data.whatsapp as string | null) ?? undefined,
         email: (data.email as string | null) ?? undefined,
+        address: (data.address as DentistClinic['address'] | null) ?? undefined,
         notes: (data.notes as string | null) ?? undefined,
         isActive: (data.is_active as boolean | null) ?? true,
         createdAt: (data.created_at as string | undefined) ?? new Date().toISOString(),
@@ -206,7 +227,7 @@ export default function DentistDetailPage() {
       .catch((err: Error) => {
         if (!active) return
         setCepStatus('')
-        setCepError(err.message || 'CEP nao encontrado.')
+        setCepError(err.message || 'CEP não encontrado.')
       })
 
     return () => {
@@ -215,11 +236,12 @@ export default function DentistDetailPage() {
   }, [form.address.cep])
 
   const namePrefix = form.gender === 'feminino' ? 'Dra.' : 'Dr.'
-  const headerName = form.name.trim() ? `${namePrefix} ${form.name.trim()}` : ''
+  const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim()
+  const headerName = fullName ? `${namePrefix} ${fullName}` : ''
 
   if (!isNew && loadingExisting) {
     return (
-      <AppShell breadcrumb={['Inicio', 'Dentistas']}>
+      <AppShell breadcrumb={['Início', 'Dentistas']}>
         <Card>
           <h1 className="text-xl font-semibold text-slate-900">Carregando registro...</h1>
         </Card>
@@ -229,9 +251,9 @@ export default function DentistDetailPage() {
 
   if (!isNew && !existing && !loadingExisting) {
     return (
-      <AppShell breadcrumb={['Inicio', 'Dentistas']}>
+      <AppShell breadcrumb={['Início', 'Dentistas']}>
         <Card>
-          <h1 className="text-xl font-semibold text-slate-900">Registro nao encontrado</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Registro não encontrado</h1>
           <Link to="/app/dentists" className="mt-3 inline-flex text-sm font-semibold text-brand-700">
             Voltar para dentistas
           </Link>
@@ -242,11 +264,11 @@ export default function DentistDetailPage() {
 
   const handleSave = async () => {
     if (!canWrite) {
-      setError('Sem permissao para editar dentistas.')
+      setError('Sem permissão para editar dentistas.')
       return
     }
-    if (!form.name.trim()) {
-      setError('Nome e obrigatorio.')
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setError('Nome e sobrenome são obrigatórios.')
       return
     }
     if (form.phone.trim() && !isValidFixedPhone(form.phone)) {
@@ -259,10 +281,14 @@ export default function DentistDetailPage() {
     }
     const payload = {
       type: 'dentista' as const,
-      name: form.name.trim(),
+      name: fullName,
+      firstName: form.firstName.trim() || undefined,
+      lastName: form.lastName.trim() || undefined,
       cnpj: undefined,
       cro: form.cro.trim() || undefined,
       gender: form.gender,
+      cpf: form.cpf.trim() || undefined,
+      birthDate: form.birthDate || undefined,
       clinicId: form.clinicId ? form.clinicId : undefined,
       phone: form.phone.trim() || undefined,
       whatsapp: form.whatsapp.trim() || undefined,
@@ -271,6 +297,7 @@ export default function DentistDetailPage() {
         cep: form.address.cep.trim() || undefined,
         street: form.address.street.trim() || undefined,
         number: form.address.number.trim() || undefined,
+        complement: form.address.complement.trim() || undefined,
         district: form.address.district.trim() || undefined,
         city: form.address.city.trim() || undefined,
         state: form.address.state.trim() || undefined,
@@ -282,6 +309,11 @@ export default function DentistDetailPage() {
     if (isSupabaseMode && supabase) {
       const supabasePayload = {
         name: payload.name,
+        first_name: payload.firstName ?? null,
+        last_name: payload.lastName ?? null,
+        cpf: payload.cpf ?? null,
+        birth_date: payload.birthDate ?? null,
+        address: payload.address ?? null,
         cro: payload.cro ?? null,
         gender: payload.gender,
         clinic_id: payload.clinicId ?? null,
@@ -390,7 +422,7 @@ export default function DentistDetailPage() {
   }
 
   return (
-    <AppShell breadcrumb={['Inicio', 'Dentistas', isNew ? 'Novo' : existing?.name ?? 'Detalhe']}>
+    <AppShell breadcrumb={['Início', 'Dentistas', isNew ? 'Novo' : existing?.name ?? 'Detalhe']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
@@ -415,7 +447,11 @@ export default function DentistDetailPage() {
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Nome</label>
-              <Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
+              <Input value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Sobrenome</label>
+              <Input value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Sexo</label>
@@ -437,8 +473,16 @@ export default function DentistDetailPage() {
               <label className="mb-1 block text-sm font-medium text-slate-700">CRO</label>
               <Input value={form.cro} onChange={(event) => setForm((current) => ({ ...current, cro: event.target.value }))} />
             </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">CPF</label>
+              <Input value={form.cpf} onChange={(event) => setForm((current) => ({ ...current, cpf: event.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Data de nascimento</label>
+              <Input type="date" value={form.birthDate} onChange={(event) => setForm((current) => ({ ...current, birthDate: event.target.value }))} />
+            </div>
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Clínica vinculada</label>
               <select
                 value={form.clinicId}
                 onChange={(event) => setForm((current) => ({ ...current, clinicId: event.target.value }))}
@@ -519,6 +563,15 @@ export default function DentistDetailPage() {
               />
             </div>
             <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Complemento</label>
+              <Input
+                value={form.address.complement}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, address: { ...current.address, complement: event.target.value } }))
+                }
+              />
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Bairro</label>
               <Input
                 value={form.address.district}
@@ -549,7 +602,7 @@ export default function DentistDetailPage() {
         </Card>
 
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Observacoes</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Observações</h2>
           <textarea
             rows={4}
             value={form.notes}
@@ -589,3 +642,4 @@ export default function DentistDetailPage() {
     </AppShell>
   )
 }
+

@@ -1,4 +1,4 @@
-import type { AuthProvider, SessionUser } from './session'
+﻿import type { AuthProvider, SessionUser } from './session'
 import { supabase } from '../lib/supabaseClient'
 import { setSessionProfile, clearSession, setSupabaseAccessToken } from '../lib/auth'
 import { getProfileByUserId } from '../repo/profileRepo'
@@ -24,7 +24,7 @@ export const authSupabase: AuthProvider = {
     return session
   },
   async signIn(email: string, password: string) {
-    if (!supabase) throw new Error('Supabase nao configurado.')
+    if (!supabase) throw new Error('Supabase não configurado.')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
     if (data.session?.access_token) {
@@ -37,3 +37,4 @@ export const authSupabase: AuthProvider = {
     clearSession()
   },
 }
+

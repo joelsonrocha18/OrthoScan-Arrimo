@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
@@ -126,7 +126,7 @@ export default function DentistsPage() {
     addToast({ type: 'success', title: 'Link de cadastro gerado' })
     try {
       await navigator.clipboard.writeText(result.inviteLink)
-      addToast({ type: 'success', title: 'Link copiado para a area de transferencia' })
+      addToast({ type: 'success', title: 'Link copiado para a área de transferencia' })
     } catch {
       // no-op
     }
@@ -236,7 +236,7 @@ export default function DentistsPage() {
   }
 
   return (
-    <AppShell breadcrumb={['Inicio', 'Dentistas']}>
+    <AppShell breadcrumb={['Início', 'Dentistas']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Dentistas</h1>
@@ -352,7 +352,7 @@ export default function DentistsPage() {
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone fixo</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -396,3 +396,4 @@ export default function DentistsPage() {
     </AppShell>
   )
 }
+

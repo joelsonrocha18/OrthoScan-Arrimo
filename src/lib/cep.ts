@@ -1,4 +1,4 @@
-export function normalizeCep(value: string) {
+﻿export function normalizeCep(value: string) {
   return value.replace(/\D/g, '').slice(0, 8)
 }
 
@@ -14,7 +14,7 @@ export async function fetchCep(cep: string) {
 
   const response = await fetch(`https://viacep.com.br/ws/${normalized}/json/`)
   if (!response.ok) {
-    throw new Error('Nao foi possivel consultar o CEP.')
+    throw new Error('Não foi possível consultar o CEP.')
   }
 
   const data = (await response.json()) as {
@@ -26,7 +26,7 @@ export async function fetchCep(cep: string) {
   }
 
   if (data.erro) {
-    throw new Error('CEP nao encontrado.')
+    throw new Error('CEP não encontrado.')
   }
 
   return {
@@ -36,3 +36,4 @@ export async function fetchCep(cep: string) {
     state: data.uf ?? '',
   }
 }
+

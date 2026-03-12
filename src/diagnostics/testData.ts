@@ -1,4 +1,4 @@
-import { loadDb, saveDb } from '../data/db'
+﻿import { loadDb, saveDb } from '../data/db'
 import type { Clinic } from '../types/Clinic'
 import type { DentistClinic } from '../types/DentistClinic'
 import type { Patient } from '../types/Patient'
@@ -25,8 +25,8 @@ export function createDiagnosticsTestData() {
   const clinics: Clinic[] = [
     {
       id: diagId('clinic_c1'),
-      tradeName: 'Clinica Teste C1',
-      legalName: 'Clinica Teste C1 LTDA',
+      tradeName: 'Clínica Teste C1',
+      legalName: 'Clínica Teste C1 LTDA',
       cnpj: '',
       phone: '(11) 90000-0001',
       whatsapp: '(11) 90000-0001',
@@ -38,8 +38,8 @@ export function createDiagnosticsTestData() {
     },
     {
       id: diagId('clinic_c2'),
-      tradeName: 'Clinica Teste C2',
-      legalName: 'Clinica Teste C2 LTDA',
+      tradeName: 'Clínica Teste C2',
+      legalName: 'Clínica Teste C2 LTDA',
       cnpj: '',
       phone: '(11) 90000-0002',
       whatsapp: '(11) 90000-0002',
@@ -295,3 +295,4 @@ export function clearDiagnosticsTestData() {
 
   saveDb(db)
 }
+

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
@@ -84,15 +84,15 @@ export default function ClinicsPage() {
   }, [db.clinics, isSupabaseMode, query, showDeleted, supabaseClinics])
 
   return (
-    <AppShell breadcrumb={['Inicio', 'Clinicas']}>
+    <AppShell breadcrumb={['Início', 'Clínicas']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Clinicas</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Clínicas</h1>
           <p className="mt-2 text-sm text-slate-500">Cadastro e vinculo de clinicas parceiras.</p>
         </div>
         {canWrite ? (
           <Link to="/app/clinics/new">
-            <Button>Nova Clinica</Button>
+            <Button>Nova Clínica</Button>
           </Link>
         ) : null}
       </section>
@@ -120,7 +120,7 @@ export default function ClinicsPage() {
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone fixo</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ativo</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -164,3 +164,4 @@ export default function ClinicsPage() {
     </AppShell>
   )
 }
+

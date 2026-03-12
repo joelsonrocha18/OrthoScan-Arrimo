@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabaseClient'
+﻿import { supabase } from '../lib/supabaseClient'
 import type { SystemSettings } from '../lib/systemSettings'
 
 const SETTINGS_KEY = 'global'
@@ -22,7 +22,7 @@ export async function loadSystemSettingsSupabase(): Promise<SystemSettings | nul
 }
 
 export async function saveSystemSettingsSupabase(settings: SystemSettings) {
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const now = new Date().toISOString()
   const { error } = await supabase
     .from('app_settings')
@@ -34,4 +34,5 @@ export async function saveSystemSettingsSupabase(settings: SystemSettings) {
   if (error) return { ok: false as const, error: error.message }
   return { ok: true as const }
 }
+
 

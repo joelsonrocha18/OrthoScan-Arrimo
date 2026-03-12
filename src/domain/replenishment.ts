@@ -1,4 +1,4 @@
-import type { Case } from '../types/Case'
+﻿import type { Case } from '../types/Case'
 
 export type ReplenishmentAlert = {
   id: string
@@ -79,7 +79,7 @@ export function getReplenishmentAlerts(caseItem: Case, nowIso = new Date().toISO
         id: `${caseItem.id}_15d_${dueDate}`,
         type: 'warning_15d',
         severity: 'medium',
-        title: 'Reposicao em 15 dias',
+        title: 'Reposição em 15 dias',
         message: `Caso ${caseItem.patientName} precisa de novo lote em aproximadamente ${daysLeft} dia(s).`,
         dueDate,
         daysLeft,
@@ -92,8 +92,8 @@ export function getReplenishmentAlerts(caseItem: Case, nowIso = new Date().toISO
         id: `${caseItem.id}_10d_${dueDate}`,
         type: 'warning_10d',
         severity: 'high',
-        title: 'Reposicao em 10 dias',
-        message: `Caso ${caseItem.patientName} precisa de reposicao em ${daysLeft} dia(s).`,
+        title: 'Reposição em 10 dias',
+        message: `Caso ${caseItem.patientName} precisa de reposição em ${daysLeft} dia(s).`,
         dueDate,
         daysLeft,
       },
@@ -105,8 +105,8 @@ export function getReplenishmentAlerts(caseItem: Case, nowIso = new Date().toISO
         id: `${caseItem.id}_late_${dueDate}`,
         type: 'overdue',
         severity: 'urgent',
-        title: 'Reposicao atrasada',
-        message: `Caso ${caseItem.patientName} esta atrasado para reposicao ha ${Math.abs(daysLeft)} dia(s).`,
+        title: 'Reposição atrasada',
+        message: `Caso ${caseItem.patientName} esta atrasado para reposição ha ${Math.abs(daysLeft)} dia(s).`,
         dueDate,
         daysLeft,
       },
@@ -124,3 +124,4 @@ export function getCaseSupplySummary(caseItem: Case) {
   const nextDueDate = getNextDeliveryDueDate(caseItem)
   return { total, delivered, remaining, nextTray, nextDueDate }
 }
+

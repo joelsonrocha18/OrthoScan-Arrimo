@@ -1,4 +1,4 @@
-import { DB_KEY, loadDb } from '../data/db'
+﻿import { DB_KEY, loadDb } from '../data/db'
 import { DATA_MODE } from '../data/dataMode'
 import { permissionsForRole, can } from '../auth/permissions'
 import type { Role, User } from '../types/User'
@@ -127,7 +127,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
     id: 'env_db_key',
     title: 'DB Key',
     status: hasDbKey ? 'pass' : 'warn',
-    message: hasDbKey ? 'Chave do DB encontrada no localStorage.' : 'DB ainda nao inicializado no localStorage.',
+    message: hasDbKey ? 'Chave do DB encontrada no localStorage.' : 'DB ainda não inicializado no localStorage.',
     fixHint: hasDbKey ? undefined : 'Abra a aplicacao e salve algum dado para inicializar o DB.',
   })
   const viaCepOk = await pingViaCep()
@@ -214,7 +214,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
     id: 'rbac_rules',
     title: 'Permissoes (Regras)',
     status: permIssues.length === 0 ? 'pass' : 'fail',
-    message: permIssues.length === 0 ? 'Regras de permissao OK.' : `Falhas: ${permIssues.join('; ')}`,
+    message: permIssues.length === 0 ? 'Regras de permissão OK.' : `Falhas: ${permIssues.join('; ')}`,
     fixHint: permIssues.length === 0 ? undefined : 'Revisar rolePermissions em permissions.ts.',
   })
 
@@ -228,9 +228,9 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
   if (!hasDiagData) {
     items.push({
       id: 'scope_check',
-      title: 'Escopo (Dentista/Clinica)',
+      title: 'Escopo (Dentista/Clínica)',
       status: 'warn',
-      message: 'Dados de teste nao encontrados.',
+      message: 'Dados de teste não encontrados.',
       fixHint: 'Clique em "Criar dados de teste" e rode novamente.',
     })
   } else {
@@ -247,7 +247,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
       casesClinic.every((item) => item.id === 'diag_case_k1')
     items.push({
       id: 'scope_check',
-      title: 'Escopo (Dentista/Clinica)',
+      title: 'Escopo (Dentista/Clínica)',
       status: ok ? 'pass' : 'fail',
       message: ok ? 'Escopo aplicado corretamente.' : 'Escopo com vazamento ou retorno incorreto.',
       details: `Dentist_client pacientes: ${patientsDent.map((item) => item.id).join(', ') || '-'} | Clinic_client pacientes: ${patientsClinic.map((item) => item.id).join(', ') || '-'} | Scans: ${scansDent.map((item) => item.id).join(', ') || '-'} | Cases: ${casesClinic.map((item) => item.id).join(', ') || '-'}`,
@@ -291,7 +291,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
         id: 'supabase_profile',
         title: 'Supabase profile',
         status: 'warn',
-        message: 'Supabase nao configurado.',
+        message: 'Supabase não configurado.',
         fixHint: 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.',
       })
     } else {
@@ -302,8 +302,8 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
         id: 'supabase_profile',
         title: 'Supabase profile',
         status: profile ? 'pass' : 'warn',
-        message: profile ? 'Profile carregado com sucesso.' : 'Nao foi possivel carregar o profile.',
-        fixHint: profile ? undefined : 'Crie profile para o usuario atual.',
+        message: profile ? 'Profile carregado com sucesso.' : 'Não foi possível carregar o profile.',
+        fixHint: profile ? undefined : 'Crie profile para o usuário atual.',
       })
 
       if (profile?.clinic_id) {
@@ -319,7 +319,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
           message:
             mismatch.length === 0
               ? 'RLS aparente ok (patients).'
-              : `RLS possivel vazamento: clinic_id divergente (${mismatch.length}).`,
+              : `RLS possível vazamento: clinic_id divergente (${mismatch.length}).`,
           fixHint: mismatch.length === 0 ? undefined : 'Revisar policies de patients/scans/cases.',
         })
       } else {
@@ -340,7 +340,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
         id: 'supabase_migration_tools',
         title: 'Migration tools available',
         status: 'warn',
-        message: 'Supabase nao configurado.',
+        message: 'Supabase não configurado.',
         fixHint: 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.',
       })
     } else {
@@ -349,8 +349,8 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
         id: 'supabase_migration_tools',
         title: 'Migration tools available',
         status: result.error ? 'warn' : 'pass',
-        message: result.error ? 'Sem permissao ou function indisponivel.' : 'Export function respondeu.',
-        fixHint: result.error ? 'Verifique deploy das functions e permissao do usuario.' : undefined,
+        message: result.error ? 'Sem permissão ou function indisponivel.' : 'Export function respondeu.',
+        fixHint: result.error ? 'Verifique deploy das functions e permissão do usuário.' : undefined,
       })
     }
   }
@@ -359,3 +359,4 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
   const durationMs = new Date(finishedAt).getTime() - new Date(startedAt).getTime()
   return { startedAt, finishedAt, durationMs, items }
 }
+

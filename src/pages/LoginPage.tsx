@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Button from '../components/Button'
@@ -25,7 +25,7 @@ export default function LoginPage() {
     const nextErrors: LoginErrors = {}
 
     if (!email.trim()) {
-      nextErrors.email = 'Usuario ou email obrigatorio'
+      nextErrors.email = 'Usuário ou email obrigatorio'
     }
 
     if (!password.trim()) {
@@ -72,12 +72,12 @@ export default function LoginPage() {
           <form className="mt-2 space-y-3" onSubmit={handleSubmit} noValidate>
             <div>
               <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-200">
-                Usuario (email)
+                Usuário (email)
               </label>
               <Input
                 id="email"
                 type="text"
-                placeholder="usuario ou seu@email.com"
+                placeholder="usuário ou seu@email.com"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -135,3 +135,4 @@ export default function LoginPage() {
     </div>
   )
 }
+

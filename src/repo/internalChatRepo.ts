@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabaseClient'
+﻿import { supabase } from '../lib/supabaseClient'
 import { uploadToStorage } from './storageRepo'
 
 export type InternalChatMessage = {
@@ -56,7 +56,7 @@ async function archiveChatMessage(message: InternalChatMessage) {
 }
 
 export async function listInternalChatContacts(payload: { userId: string; clinicId?: string }) {
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.', data: [] as InternalChatContact[] }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.', data: [] as InternalChatContact[] }
   const { data, error } = await supabase
     .from('profiles')
     .select('user_id, full_name, login_email, role, clinic_id, is_active, deleted_at')
@@ -83,7 +83,7 @@ export async function listInternalChatContacts(payload: { userId: string; clinic
     data: scoped
       .map((row) => ({
         userId: row.user_id,
-        name: (row.full_name ?? '').trim() || (row.login_email ?? '').trim() || 'Usuario',
+        name: (row.full_name ?? '').trim() || (row.login_email ?? '').trim() || 'Usuário',
         email: (row.login_email ?? '').trim() || undefined,
         role: row.role,
         clinicId: row.clinic_id ?? undefined,
@@ -93,7 +93,7 @@ export async function listInternalChatContacts(payload: { userId: string; clinic
 }
 
 export async function ensureInternalDirectRoom(payload: { me: string; other: string }) {
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.', roomKey: '' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.', roomKey: '' }
   if (!payload.me || !payload.other || payload.me === payload.other) {
     return { ok: false as const, error: 'Participantes invalidos.', roomKey: '' }
   }
@@ -112,7 +112,7 @@ export async function ensureInternalDirectRoom(payload: { me: string; other: str
 }
 
 export async function listInternalChatMessages(roomKey: string, limit = 80) {
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.', data: [] as InternalChatMessage[] }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.', data: [] as InternalChatMessage[] }
   const { data, error } = await supabase
     .from('internal_chat_messages')
     .select('id, sender_user_id, sender_name, sender_role, body, room_key, room_label, created_at')
@@ -124,7 +124,7 @@ export async function listInternalChatMessages(roomKey: string, limit = 80) {
 }
 
 export async function sendInternalChatMessage(payload: { senderUserId: string; senderName: string; senderRole: string; body: string; roomKey: string; roomLabel: string }) {
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const insertPayload = {
     sender_user_id: payload.senderUserId,
     sender_name: payload.senderName,
@@ -147,7 +147,7 @@ export async function sendInternalChatMessage(payload: { senderUserId: string; s
 }
 
 export async function markInternalChatRoomRead(payload: { userId: string; roomKey: string; readAt?: string }) {
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const timestamp = payload.readAt ?? new Date().toISOString()
   const { error } = await supabase.from('internal_chat_reads').upsert({
     user_id: payload.userId,
@@ -161,7 +161,7 @@ export async function markInternalChatRoomRead(payload: { userId: string; roomKe
 
 export async function listInternalChatUnreadCounts(payload: { userId: string; roomKeys: string[] }) {
   const sb = supabase
-  if (!sb) return { ok: false as const, error: 'Supabase nao configurado.', data: {} as Record<string, number> }
+  if (!sb) return { ok: false as const, error: 'Supabase não configurado.', data: {} as Record<string, number> }
   const uniqueKeys = Array.from(new Set(payload.roomKeys.filter(Boolean)))
   if (uniqueKeys.length === 0) return { ok: true as const, data: {} as Record<string, number> }
 
@@ -190,3 +190,4 @@ export async function listInternalChatUnreadCounts(payload: { userId: string; ro
 
   return { ok: true as const, data: counts }
 }
+

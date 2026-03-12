@@ -1,4 +1,4 @@
-import { ensureMasterUserInDb, loadDb } from '../data/db'
+﻿import { ensureMasterUserInDb, loadDb } from '../data/db'
 import { getSessionUserId, setSessionUserId, clearSession, setSessionProfile } from '../lib/auth'
 import type { AuthProvider, SessionUser } from './session'
 
@@ -38,10 +38,10 @@ export const authLocal: AuthProvider = {
       })
     }
     if (!user) {
-      throw new Error('Usuario nao encontrado.')
+      throw new Error('Usuário não encontrado.')
     }
     if (!user.password) {
-      throw new Error('Senha nao configurada para este usuario.')
+      throw new Error('Senha não configurada para este usuário.')
     }
     const validPassword = password === user.password
     if (!validPassword) {
@@ -60,3 +60,4 @@ export const authLocal: AuthProvider = {
     clearSession()
   },
 }
+

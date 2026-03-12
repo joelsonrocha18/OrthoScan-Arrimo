@@ -275,7 +275,7 @@ export default function DashboardPage() {
             ? 'em_producao'
             : 'planejamento'
       const phase: CasePhase =
-        phaseRaw === 'orcamento' ||
+        phaseRaw === 'orçamento' ||
         phaseRaw === 'contrato_pendente' ||
         phaseRaw === 'contrato_aprovado' ||
         phaseRaw === 'em_producao' ||
@@ -387,7 +387,7 @@ export default function DashboardPage() {
   const planningPending = planningPendingItems.length
   const plansDone = Math.max(0, scansRecent - planningPending)
 
-  const budgetsOpenItems = visibleCases.filter((caseItem) => caseItem.phase === 'orcamento')
+  const budgetsOpenItems = visibleCases.filter((caseItem) => caseItem.phase === 'orçamento')
   const contractsToCloseItems = visibleCases.filter((caseItem) => caseItem.phase === 'contrato_pendente')
 
   const caseById = new Map(visibleCases.map((caseItem) => [caseItem.id, caseItem]))
@@ -533,7 +533,7 @@ export default function DashboardPage() {
   const runGestaoAi = async (endpoint: '/gestao/insights-dre' | '/gestao/anomalias', title: string) => {
     if (!canAiGestao) return
     if (!aiClinicId) {
-      addToast({ type: 'error', title: 'IA Dashboard', message: 'Clinica obrigatoria para executar IA.' })
+      addToast({ type: 'error', title: 'IA Dashboard', message: 'Clínica obrigatoria para executar IA.' })
       return
     }
     const payload = {
@@ -555,7 +555,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <AppShell breadcrumb={['Inicio', 'Dashboard']}>
+    <AppShell breadcrumb={['Início', 'Dashboard']}>
       <div className="rounded-2xl border border-slate-200 bg-slate-950 px-4 py-3 shadow-sm sm:px-5">
         <section>
           <h1 className="text-xl font-semibold tracking-tight text-slate-50">Painel Operacional</h1>
@@ -770,4 +770,5 @@ export default function DashboardPage() {
     </AppShell>
   )
 }
+
 

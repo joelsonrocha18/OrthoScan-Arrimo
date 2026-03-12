@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
@@ -51,7 +51,7 @@ export default function ResetPasswordPage() {
       return
     }
     if (password !== confirm) {
-      setError('As senhas nao conferem.')
+      setError('As senhas não conferem.')
       return
     }
     if (DATA_MODE !== 'supabase') {
@@ -109,3 +109,4 @@ export default function ResetPasswordPage() {
     </div>
   )
 }
+

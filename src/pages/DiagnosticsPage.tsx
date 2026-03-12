@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
 import AppShell from '../layouts/AppShell'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -19,7 +19,7 @@ const sections: Section[] = [
   { id: 'routes', title: 'Rotas', match: (item) => item.id.startsWith('routes_') },
   { id: 'modules', title: 'Modulos', match: (item) => item.id.startsWith('modules_') },
   { id: 'rbac', title: 'Permissoes (RBAC)', match: (item) => item.id.startsWith('rbac_') },
-  { id: 'scope', title: 'Escopo (Dentista/Clinica)', match: (item) => item.id.startsWith('scope_') },
+  { id: 'scope', title: 'Escopo (Dentista/Clínica)', match: (item) => item.id.startsWith('scope_') },
   { id: 'docs', title: 'Anexos/Docs', match: (item) => item.id.startsWith('docs_') },
   { id: 'lab', title: 'LAB', match: (item) => item.id.startsWith('lab_') },
 ]
@@ -89,11 +89,11 @@ export default function DiagnosticsPage() {
   }
 
   return (
-    <AppShell breadcrumb={['Inicio', 'Configuracoes', 'Diagnostico']}>
+    <AppShell breadcrumb={['Início', 'Configurações', 'Diagnóstico']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Diagnostico do Sistema</h1>
-          <p className="mt-2 text-sm text-slate-500">Checklist automatico de recursos, RBAC e dados.</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Diagnóstico do Sistema</h1>
+          <p className="mt-2 text-sm text-slate-500">Checklist automático de recursos, RBAC e dados.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={handleCreateData}>
@@ -118,7 +118,7 @@ export default function DiagnosticsPage() {
                 {new Date(report.finishedAt).toLocaleString('pt-BR')}
               </p>
             ) : (
-              <p className="mt-1 text-xs text-slate-500">Ainda nao executado.</p>
+              <p className="mt-1 text-xs text-slate-500">Ainda não executado.</p>
             )}
           </div>
           {summary ? (
@@ -185,3 +185,4 @@ export default function DiagnosticsPage() {
     </AppShell>
   )
 }
+

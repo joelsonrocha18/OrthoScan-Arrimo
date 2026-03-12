@@ -1,4 +1,4 @@
-import { loadDb, saveDb } from './db'
+﻿import { loadDb, saveDb } from './db'
 import { pushAudit } from './audit'
 import { handleRework as handleReplacementRework, markReplacementBankDeliveredByLot } from './replacementBankRepo'
 import type { Case, CaseAttachment, CaseTray, TrayState } from '../types/Case'
@@ -60,7 +60,7 @@ function removeTrayFromDeliveryLots(
 function deriveCaseLifecycle(caseItem: Case, nextTrays: CaseTray[]): Pick<Case, 'status' | 'phase'> {
   const hasDelivery = nextTrays.some((item) => item.state === 'entregue')
   const hasProduction = nextTrays.some((item) => item.state === 'em_producao' || item.state === 'pronta' || item.state === 'rework')
-  // Entrega total das placas nao finaliza automaticamente.
+  // Entrega total das placas não finaliza automaticamente.
   // A finalizacao do tratamento e manual.
   if (hasDelivery || !!caseItem.installation?.installedAt) {
     return { status: 'em_entrega', phase: 'em_producao' }
@@ -112,7 +112,7 @@ export function deleteCase(id: string): RepoResult<null> {
   const db = loadDb()
   const target = db.cases.find((item) => item.id === id)
   if (!target) {
-    return { ok: false, error: 'Caso nao encontrado.' }
+    return { ok: false, error: 'Caso não encontrado.' }
   }
 
   db.cases = db.cases.filter((item) => item.id !== id)
@@ -145,12 +145,12 @@ export function deleteCase(id: string): RepoResult<null> {
 export function setTrayState(caseId: string, trayNumber: number, newState: TrayState): RepoResult<Case> {
   const targetCase = getCase(caseId)
   if (!targetCase) {
-    return { ok: false, error: 'Caso nao encontrado.' }
+    return { ok: false, error: 'Caso não encontrado.' }
   }
 
   const tray = targetCase.trays.find((item) => item.trayNumber === trayNumber)
   if (!tray) {
-    return { ok: false, error: 'Placa nao encontrada.' }
+    return { ok: false, error: 'Placa não encontrada.' }
   }
 
   const allowed = trayTransitionMap[tray.state]
@@ -158,7 +158,7 @@ export function setTrayState(caseId: string, trayNumber: number, newState: TrayS
     return { ok: false, error: 'Transicao de estado invalida para esta placa.' }
   }
   if (tray.state === 'entregue' && newState !== 'entregue' && newState !== 'rework') {
-    return { ok: false, error: 'Nao e permitido regredir uma placa ja entregue ao dentista.' }
+    return { ok: false, error: 'Não e permitido regredir uma placa ja entregue ao dentista.' }
   }
 
   const nextTrays: CaseTray[] = targetCase.trays.map((item) => {
@@ -175,7 +175,7 @@ export function setTrayState(caseId: string, trayNumber: number, newState: TrayS
   const lifecycle = deriveCaseLifecycle(targetCase, nextTrays)
   const updated = updateCase(caseId, { trays: nextTrays, ...lifecycle })
   if (!updated) {
-    return { ok: false, error: 'Nao foi possivel atualizar a placa.' }
+    return { ok: false, error: 'Não foi possível atualizar a placa.' }
   }
   const db = loadDb()
   pushAudit(db, {
@@ -195,7 +195,7 @@ export function addAttachment(
 ): RepoResult<Case> {
   const targetCase = getCase(caseId)
   if (!targetCase) {
-    return { ok: false, error: 'Caso nao encontrado.' }
+    return { ok: false, error: 'Caso não encontrado.' }
   }
 
   const nextAttachment: CaseAttachment = {
@@ -206,7 +206,7 @@ export function addAttachment(
 
   const updated = updateCase(caseId, { attachments: [nextAttachment, ...targetCase.attachments] })
   if (!updated) {
-    return { ok: false, error: 'Nao foi possivel adicionar o anexo.' }
+    return { ok: false, error: 'Não foi possível adicionar o anexo.' }
   }
 
   return { ok: true, data: updated }
@@ -220,7 +220,7 @@ export function createDeliveryBatch(
 ): RepoResult<Case> {
   const targetCase = getCase(caseId)
   if (!targetCase) {
-    return { ok: false, error: 'Caso nao encontrado.' }
+    return { ok: false, error: 'Caso não encontrado.' }
   }
 
   if (fromTray > toTray) {
@@ -234,7 +234,7 @@ export function createDeliveryBatch(
 
   const invalid = range.find((item) => item.state !== 'pronta')
   if (invalid) {
-    return { ok: false, error: `A placa #${invalid.trayNumber} nao esta pronta para entrega.` }
+    return { ok: false, error: `A placa #${invalid.trayNumber} não esta pronta para entrega.` }
   }
 
   const nextTrays = targetCase.trays.map((item) =>
@@ -246,7 +246,7 @@ export function createDeliveryBatch(
   const lifecycle = deriveCaseLifecycle(targetCase, nextTrays)
   const updated = updateCase(caseId, { trays: nextTrays, ...lifecycle })
   if (!updated) {
-    return { ok: false, error: 'Nao foi possivel registrar a entrega por lote.' }
+    return { ok: false, error: 'Não foi possível registrar a entrega por lote.' }
   }
 
   return { ok: true, data: updated }
@@ -255,7 +255,7 @@ export function createDeliveryBatch(
 export function markCaseScanFileError(caseId: string, scanFileId: string, reason: string): RepoResult<Case> {
   const targetCase = getCase(caseId)
   if (!targetCase) {
-    return { ok: false, error: 'Caso nao encontrado.' }
+    return { ok: false, error: 'Caso não encontrado.' }
   }
   const trimmed = reason.trim()
   if (!trimmed) {
@@ -270,7 +270,7 @@ export function markCaseScanFileError(caseId: string, scanFileId: string, reason
 
   const updated = updateCase(caseId, { scanFiles: nextScanFiles })
   if (!updated) {
-    return { ok: false, error: 'Nao foi possivel atualizar o anexo.' }
+    return { ok: false, error: 'Não foi possível atualizar o anexo.' }
   }
   return { ok: true, data: updated }
 }
@@ -278,7 +278,7 @@ export function markCaseScanFileError(caseId: string, scanFileId: string, reason
 export function clearCaseScanFileError(caseId: string, scanFileId: string): RepoResult<Case> {
   const targetCase = getCase(caseId)
   if (!targetCase) {
-    return { ok: false, error: 'Caso nao encontrado.' }
+    return { ok: false, error: 'Caso não encontrado.' }
   }
 
   const nextScanFiles = (targetCase.scanFiles ?? []).map((item) =>
@@ -289,7 +289,7 @@ export function clearCaseScanFileError(caseId: string, scanFileId: string): Repo
 
   const updated = updateCase(caseId, { scanFiles: nextScanFiles })
   if (!updated) {
-    return { ok: false, error: 'Nao foi possivel atualizar o anexo.' }
+    return { ok: false, error: 'Não foi possível atualizar o anexo.' }
   }
   return { ok: true, data: updated }
 }
@@ -301,11 +301,11 @@ export function registerCaseInstallation(
   const db = loadDb()
   const targetCase = db.cases.find((item) => item.id === caseId) ?? null
   if (!targetCase) {
-    return { ok: false, error: 'Caso nao encontrado.' }
+    return { ok: false, error: 'Caso não encontrado.' }
   }
   const hasProductionOrder = db.labItems.some((item) => item.caseId === caseId && (item.requestKind ?? 'producao') === 'producao')
   if (!hasProductionOrder) {
-    return { ok: false, error: 'Ordem de servico do LAB ainda nao foi gerada para este caso.' }
+    return { ok: false, error: 'Ordem de serviço do LAB ainda não foi gerada para este caso.' }
   }
   const deliveryLots = targetCase.deliveryLots ?? []
   if (deliveryLots.length === 0) {
@@ -314,7 +314,7 @@ export function registerCaseInstallation(
   const currentInstallation = targetCase.installation
   const isFirstInstallation = !currentInstallation?.installedAt
   if (isFirstInstallation && !payload.installedAt) {
-    return { ok: false, error: 'Data de instalacao e obrigatoria.' }
+    return { ok: false, error: 'Data de instalação e obrigatoria.' }
   }
   const upperTotal = targetCase.totalTraysUpper ?? targetCase.totalTrays
   const lowerTotal = targetCase.totalTraysLower ?? targetCase.totalTrays
@@ -323,7 +323,7 @@ export function registerCaseInstallation(
   const inputUpper = payload.deliveredUpper ?? 0
   const inputLower = payload.deliveredLower ?? 0
   if (isFirstInstallation && Math.trunc(inputUpper + inputLower) <= 0) {
-    return { ok: false, error: 'Na primeira instalacao, informe ao menos 1 alinhador entregue ao paciente.' }
+    return { ok: false, error: 'Na primeira instalação, informe ao menos 1 alinhador entregue ao paciente.' }
   }
   if (!Number.isFinite(inputUpper) || inputUpper < 0) {
     return { ok: false, error: `Quantidade superior invalida. Informe entre 0 e ${upperTotal}.` }
@@ -399,7 +399,7 @@ export function registerCaseInstallation(
     phase: targetCase.phase === 'finalizado' ? 'finalizado' : 'em_producao',
   })
   if (!updated) {
-    return { ok: false, error: 'Nao foi possivel registrar a instalacao.' }
+    return { ok: false, error: 'Não foi possível registrar a instalação.' }
   }
   return { ok: true, data: updated }
 }
@@ -417,14 +417,14 @@ export function registerCaseDeliveryLot(
   const db = loadDb()
   const targetCase = db.cases.find((item) => item.id === caseId) ?? null
   if (!targetCase) {
-    return { ok: false, error: 'Caso nao encontrado.' }
+    return { ok: false, error: 'Caso não encontrado.' }
   }
   if (targetCase.contract?.status !== 'aprovado') {
-    return { ok: false, error: 'Contrato nao aprovado para registrar entrega ao dentista.' }
+    return { ok: false, error: 'Contrato não aprovado para registrar entrega ao dentista.' }
   }
   const hasProductionOrder = db.labItems.some((item) => item.caseId === caseId && (item.requestKind ?? 'producao') === 'producao')
   if (!hasProductionOrder) {
-    return { ok: false, error: 'Ordem de servico do LAB ainda nao foi gerada para este caso.' }
+    return { ok: false, error: 'Ordem de serviço do LAB ainda não foi gerada para este caso.' }
   }
 
   const total = targetCase.totalTrays
@@ -457,7 +457,7 @@ export function registerCaseDeliveryLot(
   }
   const notReady = inRange.find((item) => item.state !== 'pronta' && item.state !== 'entregue' && item.state !== 'rework')
   if (notReady) {
-    return { ok: false, error: `A placa #${notReady.trayNumber} nao esta pronta para entrega.` }
+    return { ok: false, error: `A placa #${notReady.trayNumber} não esta pronta para entrega.` }
   }
   const nextTrays = targetCase.trays.map((item) =>
     item.trayNumber >= payload.fromTray && item.trayNumber <= payload.toTray
@@ -483,7 +483,7 @@ export function registerCaseDeliveryLot(
     phase: 'em_producao',
   })
   if (!updated) {
-    return { ok: false, error: 'Nao foi possivel registrar o lote.' }
+    return { ok: false, error: 'Não foi possível registrar o lote.' }
   }
   markReplacementBankDeliveredByLot({ id: caseId }, payload)
   return { ok: true, data: updated }
@@ -498,10 +498,10 @@ export function handleRework(
   },
 ): RepoResult<Case> {
   const targetCase = getCase(caseId)
-  if (!targetCase) return { ok: false, error: 'Caso nao encontrado.' }
+  if (!targetCase) return { ok: false, error: 'Caso não encontrado.' }
 
   const tray = targetCase.trays.find((item) => item.trayNumber === payload.trayNumber)
-  if (!tray) return { ok: false, error: 'Placa nao encontrada no caso.' }
+  if (!tray) return { ok: false, error: 'Placa não encontrada no caso.' }
 
   const nextLots = removeTrayFromDeliveryLots(targetCase.deliveryLots ?? [], payload.trayNumber, payload.arch)
   let nextInstallation = targetCase.installation
@@ -521,8 +521,9 @@ export function handleRework(
     deliveryLots: nextLots,
     installation: nextInstallation,
   })
-  if (!updated) return { ok: false, error: 'Nao foi possivel ajustar dados do rework.' }
+  if (!updated) return { ok: false, error: 'Não foi possível ajustar dados do rework.' }
 
   handleReplacementRework(caseId, payload.trayNumber, payload.arch, payload.sourceLabItemId)
   return { ok: true, data: updated }
 }
+

@@ -1,4 +1,4 @@
-import { getSupabaseAccessToken } from '../lib/auth'
+﻿import { getSupabaseAccessToken } from '../lib/auth'
 import { supabase } from '../lib/supabaseClient'
 import type { AiEndpoint, AiRequestPayload } from '../ai/types'
 import { validateAiPayload } from '../ai/validation'
@@ -41,7 +41,7 @@ export async function runAiEndpoint(endpoint: AiEndpoint, payload: AiRequestPayl
       costEstimated: 0,
     }
   }
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const validation = validateAiPayload(payload)
   if (validation) return { ok: false as const, error: validation }
 
@@ -109,3 +109,4 @@ function resolveModule(endpoint: AiEndpoint): 'clinica' | 'lab' | 'gestao' | 'co
   if (endpoint.startsWith('/gestao/')) return 'gestao'
   return 'comercial'
 }
+

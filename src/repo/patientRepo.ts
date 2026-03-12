@@ -1,4 +1,4 @@
-import { loadDb, saveDb } from '../data/db'
+﻿import { loadDb, saveDb } from '../data/db'
 import type { Patient } from '../types/Patient'
 
 function nowIso() {
@@ -45,6 +45,8 @@ export function createPatient(payload: Omit<Patient, 'id' | 'createdAt' | 'updat
   const next: Patient = {
     id: `pat_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     name,
+    firstName: payload.firstName,
+    lastName: payload.lastName,
     cpf: payload.cpf,
     gender: payload.gender,
     phone: payload.phone,
@@ -67,7 +69,7 @@ export function createPatient(payload: Omit<Patient, 'id' | 'createdAt' | 'updat
 export function updatePatient(id: string, patch: Partial<Patient>) {
   const db = loadDb()
   const current = db.patients.find((item) => item.id === id)
-  if (!current) return { ok: false as const, error: 'Paciente nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Paciente não encontrado.' }
   const nextBirthDate = patch.birthDate ?? current.birthDate
   if (!nextBirthDate) return { ok: false as const, error: 'Data de nascimento e obrigatoria.' }
 
@@ -75,6 +77,8 @@ export function updatePatient(id: string, patch: Partial<Patient>) {
     ...current,
     ...patch,
     name: patch.name ? normalizeName(patch.name) : current.name,
+    firstName: patch.firstName !== undefined ? patch.firstName?.trim() || undefined : current.firstName,
+    lastName: patch.lastName !== undefined ? patch.lastName?.trim() || undefined : current.lastName,
     updatedAt: nowIso(),
   }
 
@@ -86,7 +90,7 @@ export function updatePatient(id: string, patch: Partial<Patient>) {
 export function softDeletePatient(id: string) {
   const db = loadDb()
   const current = db.patients.find((item) => item.id === id)
-  if (!current) return { ok: false as const, error: 'Paciente nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Paciente não encontrado.' }
 
   db.patients = db.patients.map((item) =>
     item.id === id ? { ...item, deletedAt: nowIso(), updatedAt: nowIso() } : item,
@@ -98,7 +102,7 @@ export function softDeletePatient(id: string) {
 export function restorePatient(id: string) {
   const db = loadDb()
   const current = db.patients.find((item) => item.id === id)
-  if (!current) return { ok: false as const, error: 'Paciente nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Paciente não encontrado.' }
 
   db.patients = db.patients.map((item) =>
     item.id === id ? { ...item, deletedAt: undefined, updatedAt: nowIso() } : item,
@@ -106,3 +110,4 @@ export function restorePatient(id: string) {
   saveDb(db)
   return { ok: true as const }
 }
+

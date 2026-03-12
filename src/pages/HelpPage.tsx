@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 import Card from '../components/Card'
 import AppShell from '../layouts/AppShell'
 
@@ -18,18 +18,18 @@ const HELP: HelpSection[] = [
       },
       {
         title: '2) Criar um exame (Scan)',
-        steps: ['Menu Exames.', 'Clique em "Novo Exame".', 'Anexe STL superior/inferior, fotos e RX conforme protocolo.', 'Envie para aprovacao, se aplicavel.'],
+        steps: ['Menu Exames.', 'Clique em "Novo Exame".', 'Anexe STL superior/inferior, fotos e RX conforme protocolo.', 'Envie para aprovação, se aplicavel.'],
         links: [{ label: 'Exames', to: '/app/scans' }],
       },
       {
         title: '3) Converter exame em tratamento (Caso)',
-        steps: ['Abra um exame aprovado.', 'Clique em "Criar Caso".', 'Defina arcada, quantidade de placas e troca.', 'Avance fase/orcamento/contrato conforme combinado.'],
+        steps: ['Abra um exame aprovado.', 'Clique em "Criar Caso".', 'Defina arcada, quantidade de placas e troca.', 'Avance fase/orçamento/contrato conforme combinado.'],
         links: [{ label: 'Alinhadores Invisiveis', to: '/app/cases' }],
       },
     ],
   },
   {
-    title: 'Operacao do Laboratorio',
+    title: 'Operacao do Laboratório',
     items: [
       {
         title: 'Entregas em lotes (parcial)',
@@ -42,7 +42,7 @@ const HELP: HelpSection[] = [
       {
         title: 'Reposicoes (saldo de placas)',
         steps: [
-          'Reposicao aqui significa placas restantes para completar o tratamento contratado.',
+          'Reposição aqui significa placas restantes para completar o tratamento contratado.',
           'O Dashboard pode mostrar o saldo total e quais tratamentos estao com saldo.',
         ],
       },
@@ -50,7 +50,7 @@ const HELP: HelpSection[] = [
         title: 'Refinamentos',
         steps: [
           'Refinamento e um novo scan + novo planejamento apos finalizar o tratamento, quando necessario.',
-          'Defina se havera novo contrato/orcamento conforme politica comercial.',
+          'Defina se havera novo contrato/orçamento conforme politica comercial.',
         ],
       },
     ],
@@ -61,8 +61,8 @@ const HELP: HelpSection[] = [
       {
         title: 'Boas praticas',
         steps: [
-          'Nao compartilhe usuario/senha.',
-          'Use perfis com permissao minima necessaria.',
+          'Não compartilhe usuário/senha.',
+          'Use perfis com permissão minima necessaria.',
           'Evite exportar dados fora do sistema sem justificativa.',
         ],
         links: [
@@ -77,7 +77,7 @@ const HELP: HelpSection[] = [
 
 export default function HelpPage() {
   return (
-    <AppShell breadcrumb={['Inicio', 'Ajuda']}>
+    <AppShell breadcrumb={['Início', 'Ajuda']}>
       <section>
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Ajuda</h1>
         <p className="mt-2 text-sm text-slate-500">Tutoriais curtos para operacao do OrthoScan.</p>
@@ -114,4 +114,5 @@ export default function HelpPage() {
     </AppShell>
   )
 }
+
 

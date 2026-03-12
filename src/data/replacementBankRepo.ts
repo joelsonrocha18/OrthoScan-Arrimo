@@ -1,4 +1,4 @@
-import type { AppDb } from './db'
+﻿import type { AppDb } from './db'
 import { loadDb, saveDb } from './db'
 import type { Case } from '../types/Case'
 import type { LabItem } from '../types/Lab'
@@ -76,7 +76,7 @@ export function ensureReplacementBankForCase(
 ) {
   const db = dbInput ?? loadDb()
   const caseItem = db.cases.find((item) => item.id === caseId)
-  if (!caseItem) return { ok: false as const, error: 'Caso nao encontrado.' }
+  if (!caseItem) return { ok: false as const, error: 'Caso não encontrado.' }
 
   const totalUpper = caseItem.totalTraysUpper ?? (caseItem.arch === 'inferior' ? 0 : caseItem.totalTrays)
   const totalLower = caseItem.totalTraysLower ?? (caseItem.arch === 'superior' ? 0 : caseItem.totalTrays)
@@ -122,7 +122,7 @@ export function debitReplacementBankForLabStart(
   if (!labItem.caseId) return { ok: true as const, consumedUpper: 0, consumedLower: 0 }
   const db = dbInput ?? loadDb()
   const caseItem = db.cases.find((item) => item.id === labItem.caseId)
-  if (!caseItem) return { ok: false as const, error: 'Caso vinculado nao encontrado.' }
+  if (!caseItem) return { ok: false as const, error: 'Caso vinculado não encontrado.' }
 
   const productType = normalizeProductType(labItem.productId ?? labItem.productType ?? caseItem.productId ?? caseItem.productType)
   if (!isAlignerProductType(productType)) {
@@ -251,3 +251,4 @@ export function getReplacementBankSummary(
     defeituosa,
   }
 }
+

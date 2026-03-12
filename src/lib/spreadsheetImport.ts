@@ -1,4 +1,4 @@
-import { loadExcelJS } from './loadExcelJS'
+﻿import { loadExcelJS } from './loadExcelJS'
 
 type ParseResult<T> = {
   rows: T[]
@@ -75,7 +75,7 @@ function rowsToDelimitedText(rows: string[][]) {
 export async function readSpreadsheetFileText(file: File) {
   const fileName = file.name.toLowerCase()
   if (fileName.endsWith('.xls')) {
-    throw new Error('Formato .xls nao suportado. Salve a planilha como .xlsx, .csv ou .txt.')
+    throw new Error('Formato .xls não suportado. Salve a planilha como .xlsx, .csv ou .txt.')
   }
   if (fileName.endsWith('.xlsx')) {
     const buffer = await file.arrayBuffer()
@@ -177,3 +177,4 @@ export function parseDentistsSpreadsheet(raw: string): ParseResult<ImportedDenti
   }
   return { rows, errors }
 }
+

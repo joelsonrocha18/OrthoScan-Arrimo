@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
@@ -81,7 +81,7 @@ export default function OnboardingInvitePage() {
       return
     }
     if (password !== confirmPassword) {
-      setError('As senhas nao conferem.')
+      setError('As senhas não conferem.')
       return
     }
     setLoading(true)
@@ -172,7 +172,7 @@ export default function OnboardingInvitePage() {
                     <Input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-slate-200">Observacoes</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-200">Observações</label>
                     <Input value={notes} onChange={(event) => setNotes(event.target.value)} />
                   </div>
                 </div>
@@ -198,3 +198,4 @@ export default function OnboardingInvitePage() {
     </div>
   )
 }
+

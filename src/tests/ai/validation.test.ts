@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import { validateAiPayload } from '../../ai/validation'
 
 describe('ai validation', () => {
@@ -12,6 +12,7 @@ describe('ai validation', () => {
       inputText: 'ok',
       metadata: { raw: 'data:image/png;base64,abc' },
     })
-    expect(error).toContain('Nao envie imagem ou PDF bruto')
+    expect(error).toContain('Não envie imagem ou PDF bruto')
   })
 })
+

@@ -1,4 +1,4 @@
-import type { AppDb } from './db'
+﻿import type { AppDb } from './db'
 import { loadDb, saveDb } from './db'
 import type { LabItem } from '../types/Lab'
 import type { CaseTray } from '../types/Case'
@@ -15,7 +15,7 @@ function trayStateFromLabStatus(status: LabItem['status']) {
 function deriveCaseLifecycle(trays: CaseTray[], hasInstallation: boolean) {
   const hasDelivery = trays.some((item) => item.state === 'entregue')
   const hasProduction = trays.some((item) => item.state === 'em_producao' || item.state === 'pronta' || item.state === 'rework')
-  // Nao concluir automaticamente quando todas as placas estiverem entregues.
+  // Não concluir automaticamente quando todas as placas estiverem entregues.
   if (hasDelivery || hasInstallation) return { status: 'em_entrega' as const, phase: 'em_producao' as const }
   if (hasProduction) return { status: 'em_producao' as const, phase: 'em_producao' as const }
   return null
@@ -98,7 +98,7 @@ export function syncLabItemToCaseTray(
 
   const db = dbInput ?? loadDb()
   const caseItem = db.cases.find((item) => item.id === labItem.caseId)
-  if (!caseItem) return { ok: false, message: 'Caso vinculado nao encontrado.' }
+  if (!caseItem) return { ok: false, message: 'Caso vinculado não encontrado.' }
 
   if (!shouldSyncAlignerBatch(labItem, caseItem.productId ?? caseItem.productType)) {
     return { ok: true }
@@ -124,7 +124,7 @@ export function syncLabItemToCaseTray(
     })
   } else {
     const targetTray = caseItem.trays.find((item) => item.trayNumber === labItem.trayNumber)
-    if (!targetTray) return { ok: false, message: 'Placa nao encontrada no caso.' }
+    if (!targetTray) return { ok: false, message: 'Placa não encontrada no caso.' }
     if (targetTray.state !== 'entregue') {
       if (!(mappedState === 'pendente' && targetTray.state !== 'pendente') && !(mappedState === 'em_producao' && targetTray.state === 'pronta')) {
         targetTray.state = mappedState
@@ -142,3 +142,4 @@ export function syncLabItemToCaseTray(
   if (!dbInput) saveDb(db)
   return { ok: true }
 }
+

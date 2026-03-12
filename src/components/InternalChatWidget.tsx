@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, Send } from 'lucide-react'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
@@ -42,7 +42,7 @@ export default function InternalChatWidget() {
   const listRef = useRef<HTMLDivElement | null>(null)
 
   const isSupabaseMode = DATA_MODE === 'supabase' && Boolean(supabase)
-  const displayName = (currentUser?.name ?? currentUser?.email ?? '').trim() || 'Usuario'
+  const displayName = (currentUser?.name ?? currentUser?.email ?? '').trim() || 'Usuário'
   const myUserId = currentUser?.id ?? ''
   const selectedContact = useMemo(
     () => contacts.find((item) => item.userId === selectedContactId) ?? null,
@@ -243,3 +243,4 @@ export default function InternalChatWidget() {
     </>
   )
 }
+

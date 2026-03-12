@@ -1,4 +1,4 @@
-import { loadDb, saveDb } from '../data/db'
+﻿import { loadDb, saveDb } from '../data/db'
 import type { Role, User } from '../types/User'
 
 function nowIso() {
@@ -67,7 +67,7 @@ export function createUser(payload: {
 export function updateUser(id: string, patch: Partial<User>) {
   const db = loadDb()
   const current = db.users.find((user) => user.id === id)
-  if (!current) return { ok: false as const, error: 'Usuario nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Usuário não encontrado.' }
 
   const next: User = {
     ...current,
@@ -96,15 +96,15 @@ export function resetUserPassword(id: string, password: string) {
 
 export function setUserActive(id: string, isActive: boolean) {
   const current = getUser(id)
-  if (current?.role === 'master_admin') return { ok: false as const, error: 'Nao e permitido desativar o master admin.' }
+  if (current?.role === 'master_admin') return { ok: false as const, error: 'Não e permitido desativar o master admin.' }
   return updateUser(id, { isActive })
 }
 
 export function softDeleteUser(id: string) {
   const db = loadDb()
   const current = db.users.find((user) => user.id === id)
-  if (!current) return { ok: false as const, error: 'Usuario nao encontrado.' }
-  if (current.role === 'master_admin') return { ok: false as const, error: 'Nao e permitido excluir o master admin.' }
+  if (!current) return { ok: false as const, error: 'Usuário não encontrado.' }
+  if (current.role === 'master_admin') return { ok: false as const, error: 'Não e permitido excluir o master admin.' }
 
   db.users = db.users.map((user) =>
     user.id === id ? { ...user, deletedAt: nowIso(), isActive: false, updatedAt: nowIso() } : user,
@@ -116,7 +116,7 @@ export function softDeleteUser(id: string) {
 export function restoreUser(id: string) {
   const db = loadDb()
   const current = db.users.find((user) => user.id === id)
-  if (!current) return { ok: false as const, error: 'Usuario nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Usuário não encontrado.' }
 
   db.users = db.users.map((user) =>
     user.id === id ? { ...user, deletedAt: undefined, isActive: true, updatedAt: nowIso() } : user,
@@ -124,3 +124,4 @@ export function restoreUser(id: string) {
   saveDb(db)
   return { ok: true as const }
 }
+

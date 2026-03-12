@@ -1,4 +1,4 @@
-import { loadDb, resetDb, saveDb, type AppDb } from '../data/db'
+﻿import { loadDb, resetDb, saveDb, type AppDb } from '../data/db'
 import type { Case } from '../types/Case'
 import type { Clinic } from '../types/Clinic'
 import type { DentistClinic } from '../types/DentistClinic'
@@ -74,8 +74,8 @@ export function seedQaData() {
   const clinics: Clinic[] = [
     {
       id: 'qa_clinic_1',
-      tradeName: 'Clinica Norte',
-      legalName: 'Clinica Norte LTDA',
+      tradeName: 'Clínica Norte',
+      legalName: 'Clínica Norte LTDA',
       cnpj: '11222333000110',
       isActive: true,
       createdAt: ts,
@@ -83,8 +83,8 @@ export function seedQaData() {
     },
     {
       id: 'qa_clinic_2',
-      tradeName: 'Clinica Sul',
-      legalName: 'Clinica Sul LTDA',
+      tradeName: 'Clínica Sul',
+      legalName: 'Clínica Sul LTDA',
       cnpj: '55444333000110',
       isActive: true,
       createdAt: ts,
@@ -144,7 +144,7 @@ export function seedQaData() {
     { id: 'qa_user_master', name: 'Master QA', email: 'master.qa@local', password: 'qa@123', role: 'master_admin', isActive: true, createdAt: ts, updatedAt: ts },
     { id: 'qa_user_admin', name: 'Admin QA', email: 'admin.qa@local', password: 'qa@123', role: 'dentist_admin', isActive: true, createdAt: ts, updatedAt: ts },
     { id: 'qa_user_dentist_client', name: 'Dentista Cliente QA', email: 'dentist.client.qa@local', password: 'qa@123', role: 'dentist_client', linkedDentistId: 'qa_dent_1', isActive: true, createdAt: ts, updatedAt: ts },
-    { id: 'qa_user_clinic_client', name: 'Clinica Cliente QA', email: 'clinic.client.qa@local', password: 'qa@123', role: 'clinic_client', linkedClinicId: 'qa_clinic_1', isActive: true, createdAt: ts, updatedAt: ts },
+    { id: 'qa_user_clinic_client', name: 'Clínica Cliente QA', email: 'clinic.client.qa@local', password: 'qa@123', role: 'clinic_client', linkedClinicId: 'qa_clinic_1', isActive: true, createdAt: ts, updatedAt: ts },
     { id: 'qa_user_lab', name: 'Lab QA', email: 'lab.qa@local', password: 'qa@123', role: 'lab_tech', isActive: true, createdAt: ts, updatedAt: ts },
     { id: 'qa_user_reception', name: 'Recepcao QA', email: 'reception.qa@local', password: 'qa@123', role: 'receptionist', isActive: true, createdAt: ts, updatedAt: ts },
   ]
@@ -328,3 +328,4 @@ export const QA_IDS = {
   scanApproved: 'qa_scan_1',
   scanPending: 'qa_scan_2',
 }
+

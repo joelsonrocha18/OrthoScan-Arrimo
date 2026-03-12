@@ -32,6 +32,8 @@ with check (
 
 drop policy if exists "internal_chat_select_authenticated" on public.internal_chat_messages;
 drop policy if exists "internal_chat_insert_own_user" on public.internal_chat_messages;
+drop policy if exists "internal_chat_select_room_participant" on public.internal_chat_messages;
+drop policy if exists "internal_chat_insert_room_participant" on public.internal_chat_messages;
 
 create policy "internal_chat_select_room_participant"
 on public.internal_chat_messages

@@ -1,4 +1,4 @@
-import { DATA_MODE } from '../data/dataMode'
+﻿import { DATA_MODE } from '../data/dataMode'
 import { loadDb, saveDb } from '../data/db'
 import { getSessionProfile } from '../lib/auth'
 import { supabase } from '../lib/supabaseClient'
@@ -81,7 +81,7 @@ export async function addPatientDoc(payload: {
   file?: File
 }) {
   if (DATA_MODE === 'supabase') {
-    if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+    if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
     const profile = getSessionProfile()
     if (!profile?.id) return { ok: false as const, error: 'Sessao invalida. Faca login novamente.' }
     const clinicId = profile?.clinicId ?? payload.clinicId
@@ -156,7 +156,7 @@ export async function addPatientDoc(payload: {
 
 export async function updatePatientDoc(id: string, patch: Partial<Pick<PatientDocument, 'title' | 'category' | 'note' | 'createdAt'>>) {
   if (DATA_MODE === 'supabase') {
-    if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+    if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
     const { data, error } = await supabase
       .from('documents')
       .update({
@@ -168,13 +168,13 @@ export async function updatePatientDoc(id: string, patch: Partial<Pick<PatientDo
       .eq('id', id)
       .select('id, patient_id, category, title, file_path, file_name, mime_type, status, note, error_note, created_at')
       .single()
-    if (error || !data) return { ok: false as const, error: error?.message ?? 'Documento nao encontrado.' }
+    if (error || !data) return { ok: false as const, error: error?.message ?? 'Documento não encontrado.' }
     return { ok: true as const, doc: mapSupabaseDoc(data as Record<string, unknown>) }
   }
 
   const db = loadDb()
   const current = db.patientDocuments.find((doc) => doc.id === id)
-  if (!current) return { ok: false as const, error: 'Documento nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Documento não encontrado.' }
 
   const next: PatientDocument = {
     ...current,
@@ -192,9 +192,9 @@ export async function updatePatientDoc(id: string, patch: Partial<Pick<PatientDo
 
 export async function deletePatientDoc(id: string) {
   if (DATA_MODE === 'supabase') {
-    if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+    if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
     const existing = await getPatientDoc(id)
-    if (!existing) return { ok: false as const, error: 'Documento nao encontrado.' }
+    if (!existing) return { ok: false as const, error: 'Documento não encontrado.' }
     const { error } = await supabase
       .from('documents')
       .update({ deleted_at: nowIso() })
@@ -208,7 +208,7 @@ export async function deletePatientDoc(id: string) {
 
   const db = loadDb()
   const current = db.patientDocuments.find((doc) => doc.id === id)
-  if (!current) return { ok: false as const, error: 'Documento nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Documento não encontrado.' }
 
   db.patientDocuments = db.patientDocuments.filter((doc) => doc.id !== id)
   saveDb(db)
@@ -217,7 +217,7 @@ export async function deletePatientDoc(id: string) {
 
 export async function markPatientDocAsError(id: string, errorNote: string) {
   if (DATA_MODE === 'supabase') {
-    if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+    if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
     const { error } = await supabase
       .from('documents')
       .update({ status: 'erro', error_note: errorNote.trim() })
@@ -228,7 +228,7 @@ export async function markPatientDocAsError(id: string, errorNote: string) {
 
   const db = loadDb()
   const target = db.patientDocuments.find((doc) => doc.id === id)
-  if (!target) return { ok: false as const, error: 'Documento nao encontrado.' }
+  if (!target) return { ok: false as const, error: 'Documento não encontrado.' }
 
   db.patientDocuments = db.patientDocuments.map((doc) =>
     doc.id === id ? { ...doc, status: 'erro', errorNote: errorNote.trim() } : doc,
@@ -239,7 +239,7 @@ export async function markPatientDocAsError(id: string, errorNote: string) {
 
 export async function restoreDocStatus(id: string) {
   if (DATA_MODE === 'supabase') {
-    if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+    if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
     const { error } = await supabase
       .from('documents')
       .update({ status: 'ok', error_note: null })
@@ -250,7 +250,7 @@ export async function restoreDocStatus(id: string) {
 
   const db = loadDb()
   const target = db.patientDocuments.find((doc) => doc.id === id)
-  if (!target) return { ok: false as const, error: 'Documento nao encontrado.' }
+  if (!target) return { ok: false as const, error: 'Documento não encontrado.' }
 
   db.patientDocuments = db.patientDocuments.map((doc) =>
     doc.id === id ? { ...doc, status: 'ok', errorNote: undefined } : doc,
@@ -258,3 +258,4 @@ export async function restoreDocStatus(id: string) {
   saveDb(db)
   return { ok: true as const }
 }
+

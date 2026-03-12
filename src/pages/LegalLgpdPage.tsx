@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 import Card from '../components/Card'
 
 function Section(props: { title: string; children: React.ReactNode }) {
@@ -51,7 +51,7 @@ export default function LegalLgpdPage() {
             </p>
           </Section>
 
-          <Section title="Observacoes Importantes">
+          <Section title="Observações Importantes">
             <ul className="list-disc pl-5">
               <li>Nem toda solicitacao resulta em eliminacao imediata (ex: obrigacoes legais e regulatoria).</li>
               <li>Dados de saude exigem cautela e controles reforcados.</li>
@@ -76,4 +76,5 @@ export default function LegalLgpdPage() {
     </div>
   )
 }
+
 

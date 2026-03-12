@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import type { Scan, ScanAttachment } from '../../types/Scan'
 import { isAlignerProductType, normalizeProductType } from '../../types/Product'
 import Button from '../Button'
@@ -165,7 +165,7 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
             ? scan.arch === 'ambos'
               ? 'Planejamento inicial de placas para superior/inferior.'
               : `Planejamento inicial de placas para arcada ${scan.arch}.`
-            : 'Produto sem fluxo de placas. O caso seguira com registro de instalacao.'}
+            : 'Produto sem fluxo de placas. O caso seguira com registro de instalação.'}
         </p>
         {isAlignerFlow && scan.arch === 'ambos' ? (
           <p className="mt-1 text-xs text-slate-500">Superior e inferior podem ter quantidades diferentes.</p>
@@ -227,7 +227,7 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
             </div>
           ) : (
             <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              Este produto vai direto para o fluxo de pedido/instalacao, sem esteira de placas de alinhadores.
+              Este produto vai direto para o fluxo de pedido/instalação, sem esteira de placas de alinhadores.
             </p>
           )}
 
@@ -238,7 +238,7 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
                 checked={attachmentBondingTray}
                 onChange={(event) => setAttachmentBondingTray(event.target.checked)}
               />
-              Incluir placa para colar attachments antes do inicio
+              Incluir placa para colar attachments antes do início
             </label>
           ) : null}
 
@@ -265,3 +265,4 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
     </div>
   )
 }
+

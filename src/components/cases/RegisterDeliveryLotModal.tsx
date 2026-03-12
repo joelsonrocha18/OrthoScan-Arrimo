@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import Button from '../Button'
 import Card from '../Card'
 import Input from '../Input'
@@ -73,7 +73,7 @@ export default function RegisterDeliveryLotModal({
           <div className="grid grid-cols-2 gap-3">
             {isSelectedRework ? (
               <div className="col-span-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                Rework selecionado: a entrega sera registrada automaticamente pela placa solicitada.
+                Rework selecionado: a entrega será registrada automaticamente pela placa solicitada.
               </div>
             ) : null}
             <div>
@@ -123,3 +123,4 @@ export default function RegisterDeliveryLotModal({
     </div>
   )
 }
+

@@ -1,4 +1,4 @@
-import { loadDb, saveDb } from './db'
+﻿import { loadDb, saveDb } from './db'
 import type { DentistClinic } from '../types/DentistClinic'
 import { formatCnpj, isValidCnpj } from '../lib/cnpj'
 
@@ -59,10 +59,14 @@ export function createDentist(payload: Omit<DentistClinic, 'id' | 'createdAt' | 
   const next: DentistClinic = {
     id: `dent_${Date.now()}_${Math.random().toString(16).slice(2)}`,
     name,
+    firstName: normalizeText(payload.firstName),
+    lastName: normalizeText(payload.lastName),
     type,
     cnpj: cnpj ? formatCnpj(cnpj) : undefined,
     cro: normalizeText(payload.cro),
     gender: payload.gender ?? 'masculino',
+    cpf: normalizeText(payload.cpf),
+    birthDate: normalizeText(payload.birthDate),
     clinicId: payload.clinicId,
     phone: normalizeText(payload.phone),
     whatsapp: normalizeText(payload.whatsapp),
@@ -82,7 +86,7 @@ export function createDentist(payload: Omit<DentistClinic, 'id' | 'createdAt' | 
 export function updateDentist(id: string, patch: Partial<DentistClinic>) {
   const db = loadDb()
   const current = db.dentists.find((item) => item.id === id)
-  if (!current) return { ok: false as const, error: 'Registro nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Registro não encontrado.' }
 
   const nextType = patch.type ?? current.type
   const cnpjValue = patch.cnpj ?? current.cnpj
@@ -95,9 +99,13 @@ export function updateDentist(id: string, patch: Partial<DentistClinic>) {
     ...current,
     ...patch,
     name: patch.name ? patch.name.trim() : current.name,
+    firstName: patch.firstName !== undefined ? normalizeText(patch.firstName) : current.firstName,
+    lastName: patch.lastName !== undefined ? normalizeText(patch.lastName) : current.lastName,
     cnpj: cnpjValue ? formatCnpj(cnpjValue) : undefined,
     cro: patch.cro !== undefined ? normalizeText(patch.cro) : current.cro,
     gender: patch.gender ?? current.gender ?? 'masculino',
+    cpf: patch.cpf !== undefined ? normalizeText(patch.cpf) : current.cpf,
+    birthDate: patch.birthDate !== undefined ? normalizeText(patch.birthDate) : current.birthDate,
     clinicId: patch.clinicId ?? current.clinicId,
     phone: patch.phone !== undefined ? normalizeText(patch.phone) : current.phone,
     whatsapp: patch.whatsapp !== undefined ? normalizeText(patch.whatsapp) : current.whatsapp,
@@ -114,7 +122,7 @@ export function updateDentist(id: string, patch: Partial<DentistClinic>) {
 export function softDeleteDentist(id: string) {
   const db = loadDb()
   const current = db.dentists.find((item) => item.id === id)
-  if (!current) return { ok: false as const, error: 'Registro nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Registro não encontrado.' }
 
   db.dentists = db.dentists.map((item) =>
     item.id === id
@@ -128,7 +136,7 @@ export function softDeleteDentist(id: string) {
 export function restoreDentist(id: string) {
   const db = loadDb()
   const current = db.dentists.find((item) => item.id === id)
-  if (!current) return { ok: false as const, error: 'Registro nao encontrado.' }
+  if (!current) return { ok: false as const, error: 'Registro não encontrado.' }
 
   db.dentists = db.dentists.map((item) =>
     item.id === id
@@ -138,3 +146,4 @@ export function restoreDentist(id: string) {
   saveDb(db)
   return { ok: true as const }
 }
+

@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabaseClient'
+﻿import { supabase } from '../lib/supabaseClient'
 import type { Role } from '../types/User'
 import { getSupabaseAccessToken } from '../lib/auth'
 import { getAuthProvider } from '../auth/authProvider'
@@ -25,7 +25,7 @@ export async function createOnboardingInvite(payload: {
   clinicId: string
   dentistId?: string
 }) {
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
 
   // In production, Edge Functions that change data require the user's JWT (not the anon key).
   let accessToken = ''
@@ -79,7 +79,7 @@ export async function createOnboardingInvite(payload: {
 }
 
 export async function validateOnboardingInvite(token: string) {
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
   const { data, error } = await supabase.functions.invoke('validate-onboarding-invite', {
@@ -117,7 +117,7 @@ export async function completeOnboardingInvite(payload: {
     notes?: string
   }
 }) {
-  if (!supabase) return { ok: false as const, error: 'Supabase nao configurado.' }
+  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
   const { data, error } = await supabase.functions.invoke('complete-onboarding-invite', {
@@ -130,4 +130,5 @@ export async function completeOnboardingInvite(payload: {
   }
   return { ok: true as const }
 }
+
 

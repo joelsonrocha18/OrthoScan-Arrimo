@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Eye, EyeOff, LockKeyhole, Mail, Pause, PenLine, Play, Trash2, UserRound, WandSparkles } from 'lucide-react'
 import { getAuthProvider } from '../auth/authProvider'
@@ -44,15 +44,15 @@ type PasswordMode = 'auto' | 'manual'
 type ReportDatasetKey = 'patients' | 'dentists' | 'clinics' | 'users' | 'scans' | 'cases' | 'labItems'
 type ReportFieldOption = { key: string; label: string }
 const ROLE_LIST: Role[] = ['master_admin', 'dentist_admin', 'dentist_client', 'clinic_client', 'lab_tech', 'receptionist']
-const MODULE_ORDER: PermissionModule[] = ['Dashboard', 'Pacientes', 'Scans', 'Alinhadores', 'Laboratorio', 'Usuarios', 'Configuracoes']
+const MODULE_ORDER: PermissionModule[] = ['Dashboard', 'Pacientes', 'Scans', 'Alinhadores', 'Laboratório', 'Usuarios', 'Configurações']
 const REPORT_DATASETS: Array<{ key: ReportDatasetKey; label: string }> = [
   { key: 'patients', label: 'Pacientes' },
   { key: 'dentists', label: 'Dentistas' },
-  { key: 'clinics', label: 'Clinicas' },
+  { key: 'clinics', label: 'Clínicas' },
   { key: 'users', label: 'Usuarios' },
   { key: 'scans', label: 'Scans' },
   { key: 'cases', label: 'Alinhadores' },
-  { key: 'labItems', label: 'Laboratorio' },
+  { key: 'labItems', label: 'Laboratório' },
 ]
 const TOOTH_OPTIONS = [
   '18', '17', '16', '15', '14', '13', '12', '11',
@@ -210,7 +210,7 @@ function isValidEmail(value?: string | null) {
 function normalizeUserCreationError(error: string) {
   const text = (error ?? '').toLowerCase()
   if (text.includes('idx_profiles_short_id_unique')) {
-    return 'Conflito interno ao gerar identificador do usuario. Tente novamente.'
+    return 'Conflito interno ao gerar identificador do usuário. Tente novamente.'
   }
   return error
 }
@@ -430,7 +430,7 @@ export default function SettingsPage() {
       }))
       setCepStatus('CEP localizado.')
     } catch (errorFetch) {
-      const message = errorFetch instanceof Error ? errorFetch.message : 'Nao foi possivel localizar o CEP.'
+      const message = errorFetch instanceof Error ? errorFetch.message : 'Não foi possível localizar o CEP.'
       setCepError(message)
     }
   }
@@ -443,7 +443,7 @@ export default function SettingsPage() {
     try {
       let submitAccessToken = ''
       if (isSupabaseMode) {
-        if (!supabase) return setError('Supabase nao configurado.')
+        if (!supabase) return setError('Supabase não configurado.')
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) {
           setError('Sessao expirada. Saia e entre novamente.')
@@ -470,13 +470,13 @@ export default function SettingsPage() {
         if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
         if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
         if (!INVITE_ROLE_LIST.includes(form.role)) {
-          return setError('Perfil nao permitido para criacao neste modo.')
+          return setError('Perfil não permitido para criação neste modo.')
         }
         if (ROLE_REQUIRES_CLINIC.includes(form.role) && !form.linkedClinicId.trim()) {
-          return setError('Clinica vinculada e obrigatoria para este perfil.')
+          return setError('Clínica vinculada e obrigatoria para este perfil.')
         }
         if (form.role === 'dentist_client' && !form.linkedDentistId.trim()) {
-          return setError('Dentista responsavel e obrigatorio para perfil Dentista Cliente.')
+          return setError('Dentista responsável e obrigatorio para perfil Dentista Cliente.')
         }
         const result = await inviteUser({
           email: form.email.trim(),
@@ -491,13 +491,13 @@ export default function SettingsPage() {
         })
         if (!result.ok) {
           if (result.code === 'unauthorized') return setError('Sessao expirada. Saia e entre novamente.')
-          if (result.code === 'forbidden') return setError('Sem permissao para criar usuarios.')
+          if (result.code === 'forbidden') return setError('Sem permissão para criar usuarios.')
           if (result.code === 'network_error') return setError(result.error)
           return setError(normalizeUserCreationError(result.error))
         }
         await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
         setModalOpen(false)
-        addToast({ type: 'success', title: 'Usuario criado', message: 'Acesso liberado com email e senha cadastrados.' })
+        addToast({ type: 'success', title: 'Usuário criado', message: 'Acesso liberado com email e senha cadastrados.' })
         return
       }
 
@@ -519,12 +519,12 @@ export default function SettingsPage() {
         if (currentUser?.id === editingUser.id) {
           await getAuthProvider().getCurrentUser()
         }
-        addToast({ type: 'success', title: 'Usuario atualizado' })
+        addToast({ type: 'success', title: 'Usuário atualizado' })
         return
       }
 
       if (!form.name.trim() || !form.email.trim()) return setError('Nome e email sao obrigatorios.')
-      if (!editingUser && !form.password.trim()) return setError('Senha e obrigatoria para novo usuario.')
+      if (!editingUser && !form.password.trim()) return setError('Senha e obrigatoria para novo usuário.')
       if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
       if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
       const basePayload = {
@@ -553,7 +553,7 @@ export default function SettingsPage() {
         : createUser({ ...basePayload, password: form.password.trim() })
       if (!result.ok) return setError(result.error)
       setModalOpen(false)
-      addToast({ type: 'success', title: editingUser ? 'Usuario atualizado' : 'Usuario criado' })
+      addToast({ type: 'success', title: editingUser ? 'Usuário atualizado' : 'Usuário criado' })
     } finally {
       setSubmittingUser(false)
     }
@@ -562,7 +562,7 @@ export default function SettingsPage() {
   const linkage = (user: User) => {
     if (user.role === 'dentist_client') return dentistOptions.find((item) => item.id === user.linkedDentistId)?.name ?? '-'
     if (user.role === 'clinic_client') return clinicOptions.find((item) => item.id === user.linkedClinicId)?.tradeName ?? '-'
-    if (user.role === 'lab_tech') return 'Laboratorio'
+    if (user.role === 'lab_tech') return 'Laboratório'
     return '-'
   }
 
@@ -640,7 +640,7 @@ export default function SettingsPage() {
     )
     void persistSettings(next)
     setSettingsState(next)
-    addToast({ type: 'success', title: 'Configuracoes de IA salvas' })
+    addToast({ type: 'success', title: 'Configurações de IA salvas' })
   }
 
   const addPriceProduct = () => {
@@ -892,9 +892,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppShell breadcrumb={['Inicio', 'Configuracoes']}>
+    <AppShell breadcrumb={['Início', 'Configurações']}>
       <section>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Configuracoes</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Configurações</h1>
         <p className="mt-2 text-sm text-slate-500">Gestao de cadastro, usuarios, atualizacao e diagnostico do sistema.</p>
       </section>
       <section className="mt-6">
@@ -904,7 +904,7 @@ export default function SettingsPage() {
             { id: 'users', label: 'Usuarios' },
             { id: 'pricing', label: 'Politica de preco' },
             { id: 'system_update', label: 'Atualizacao do sistema' },
-            { id: 'system_diagnostics', label: 'Diagnostico do sistema' },
+            { id: 'system_diagnostics', label: 'Diagnóstico do sistema' },
           ].map((item) => (
             <button key={item.id} type="button" onClick={() => setMainTab(item.id as MainTab)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mainTab === item.id ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{item.label}</button>
           ))}
@@ -918,17 +918,17 @@ export default function SettingsPage() {
               <h2 className="text-lg font-semibold text-slate-900">Usuarios</h2>
               <p className="text-sm text-slate-500">Tabela limpa com Perfil, status e vinculo.</p>
             </div>
-            {canManageUsers ? <Button onClick={openNew}>+ Novo usuario</Button> : null}
+            {canManageUsers ? <Button onClick={openNew}>+ Novo usuário</Button> : null}
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Usuario</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Usuário</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Perfil</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Vinculo</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -947,7 +947,7 @@ export default function SettingsPage() {
                     {canManageUsers ? <Button size="sm" variant="ghost" onClick={async () => {
                       if (DATA_MODE === 'supabase') {
                         if (user.role === 'master_admin' && user.isActive && currentUser?.id !== user.id) {
-                          return addToast({ type: 'error', title: 'Nao e permitido desativar outro master admin.' })
+                          return addToast({ type: 'error', title: 'Não e permitido desativar outro master admin.' })
                         }
                         const result = await setProfileActive(user.id, !user.isActive)
                         if (!result.ok) return addToast({ type: 'error', title: result.error })
@@ -977,7 +977,7 @@ export default function SettingsPage() {
                     }} title="Enviar acesso por email"><Mail className="h-4 w-4" /></Button> : null}
                     {canDeleteUsers ? <Button size="sm" variant="ghost" className="text-red-600" onClick={async () => {
                       if (DATA_MODE === 'supabase') {
-                        if (user.role === 'master_admin') return addToast({ type: 'error', title: 'Nao e permitido excluir o master admin.' })
+                        if (user.role === 'master_admin') return addToast({ type: 'error', title: 'Não e permitido excluir o master admin.' })
                         const result = await softDeleteProfile(user.id)
                         if (!result.ok) return addToast({ type: 'error', title: result.error })
                         await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
@@ -1032,7 +1032,7 @@ export default function SettingsPage() {
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Automacao de guias</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Define quando o sistema gera automaticamente as guias/OS de reposicao com base na data prevista de troca.
+            Define quando o sistema gera automaticamente as guias/OS de reposição com base na data prevista de troca.
           </p>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex items-center gap-2 text-sm text-slate-700">
@@ -1078,7 +1078,7 @@ export default function SettingsPage() {
         </Card>
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">AI Gateway</h2>
-          <p className="mt-1 text-sm text-slate-500">Configure provedor de IA e chaves de ativacao por modulo.</p>
+          <p className="mt-1 text-sm text-slate-500">Configure provedor de IA e chaves de ativacao por módulo.</p>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -1130,7 +1130,7 @@ export default function SettingsPage() {
                   }))
                 }
               />
-              Modulo Clinica
+              Módulo Clínica
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -1146,7 +1146,7 @@ export default function SettingsPage() {
                   }))
                 }
               />
-              Modulo Laboratorio
+              Módulo Laboratório
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -1162,7 +1162,7 @@ export default function SettingsPage() {
                   }))
                 }
               />
-              Modulo Gestao
+              Módulo Gestao
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -1178,7 +1178,7 @@ export default function SettingsPage() {
                   }))
                 }
               />
-              Modulo Comercial
+              Módulo Comercial
             </label>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Model</label>
@@ -1228,7 +1228,7 @@ export default function SettingsPage() {
                   }))
                 }
               />
-              <p className="mt-1 text-xs text-slate-500">No modo local, a IA usa mock e nao envia chamadas externas.</p>
+              <p className="mt-1 text-xs text-slate-500">No modo local, a IA usa mock e não envia chamadas externas.</p>
             </div>
           </div>
           <div className="mt-4">
@@ -1372,7 +1372,7 @@ export default function SettingsPage() {
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Modo</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Preco</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acoes</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -1424,10 +1424,10 @@ export default function SettingsPage() {
 
       {mainTab === 'system_update' ? <section className="mt-4 space-y-4">
         <Card><h2 className="text-lg font-semibold text-slate-900">Backup</h2><div className="mt-3"><Button onClick={exportBackup}>Gerar backup</Button></div></Card>
-        <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Relatorios</h2><p className="mt-1 text-sm text-slate-500">Exporte os dados com selecao de campos e periodo de criacao.</p></div><Button onClick={() => setReportModalOpen(true)}>Abrir gerador de relatorio</Button></Card>
+        <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Relatorios</h2><p className="mt-1 text-sm text-slate-500">Exporte os dados com selecao de campos e periodo de criação.</p></div><Button onClick={() => setReportModalOpen(true)}>Abrir gerador de relatorio</Button></Card>
       </section> : null}
 
-      {mainTab === 'system_diagnostics' ? <section className="mt-4"><Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Diagnostico do sistema</h2><p className="mt-1 text-sm text-slate-500">Checklist automatico de recursos e dados.</p></div><Link to="/app/settings/diagnostics" className="inline-flex"><Button>Abrir diagnostico</Button></Link></Card></section> : null}
+      {mainTab === 'system_diagnostics' ? <section className="mt-4"><Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Diagnóstico do sistema</h2><p className="mt-1 text-sm text-slate-500">Checklist automático de recursos e dados.</p></div><Link to="/app/settings/diagnostics" className="inline-flex"><Button>Abrir diagnostico</Button></Link></Card></section> : null}
 
       {reportModalOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 px-3 sm:px-4">
         <Card className="w-full max-w-5xl overflow-hidden p-0">
@@ -1438,8 +1438,8 @@ export default function SettingsPage() {
           <div className="space-y-4 p-5">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
               <div><label className="mb-1 block text-sm font-medium text-slate-700">Base de dados</label><select value={reportDataset} onChange={(event) => setReportDataset(event.target.value as ReportDatasetKey)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{REPORT_DATASETS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</select></div>
-              <div><label className="mb-1 block text-sm font-medium text-slate-700">Data inicial (criacao)</label><Input type="date" value={reportStartDate} onChange={(event) => setReportStartDate(event.target.value)} /></div>
-              <div><label className="mb-1 block text-sm font-medium text-slate-700">Data final (criacao)</label><Input type="date" value={reportEndDate} onChange={(event) => setReportEndDate(event.target.value)} /></div>
+              <div><label className="mb-1 block text-sm font-medium text-slate-700">Data inicial (criação)</label><Input type="date" value={reportStartDate} onChange={(event) => setReportStartDate(event.target.value)} /></div>
+              <div><label className="mb-1 block text-sm font-medium text-slate-700">Data final (criação)</label><Input type="date" value={reportEndDate} onChange={(event) => setReportEndDate(event.target.value)} /></div>
               <div><label className="mb-1 block text-sm font-medium text-slate-700">Tipo de produto</label><select value={reportProductType} onChange={(event) => setReportProductType(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Todos</option>{reportProductTypeOptions.map((value) => <option key={value} value={value}>{PRODUCT_TYPE_LABEL[value as keyof typeof PRODUCT_TYPE_LABEL] ?? value}</option>)}</select></div>
               <div><label className="mb-1 block text-sm font-medium text-slate-700">Status de produção</label><select value={reportProductionStatus} onChange={(event) => setReportProductionStatus(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Todos</option>{reportStatusOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
             </div>
@@ -1472,11 +1472,11 @@ export default function SettingsPage() {
       {modalOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
         <Card className="w-full max-w-3xl">
           <h2 className="text-xl font-semibold text-slate-900">
-            {editingUser ? 'Editar usuario' : 'Novo usuario'}
+            {editingUser ? 'Editar usuário' : 'Novo usuário'}
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {(isSupabaseMode
-              ? [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (usuario e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, ...(showLinkTab ? [{ id: 'link', label: 'Vinculo' }] : [])]
+              ? [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (usuário e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, ...(showLinkTab ? [{ id: 'link', label: 'Vinculo' }] : [])]
               : [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (login e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, { id: 'link', label: 'Vinculo' }]
             ).map((tab) => <button key={tab.id} type="button" onClick={() => setModalTab(tab.id as ModalTab)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${modalTab === tab.id ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{tab.label}</button>)}
           </div>
@@ -1507,7 +1507,7 @@ export default function SettingsPage() {
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Estado</label><Input value={form.state} onChange={(event) => setForm((c) => ({ ...c, state: event.target.value.toUpperCase().slice(0, 2) }))} /></div>
           </div> : null}
           {modalTab === 'access' ? <div className="mt-4 space-y-4">
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Usuario</label><Input aria-label="Usuario" value={form.username} placeholder="nome.sobrenome" onChange={(event) => setForm((c) => ({ ...c, username: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Usuário</label><Input aria-label="Usuário" value={form.username} placeholder="nome.sobrenome" onChange={(event) => setForm((c) => ({ ...c, username: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Email (login)</label><Input aria-label="Email (login)" type="email" value={form.email} onChange={(event) => setForm((c) => ({ ...c, email: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Senha</label><div className="flex items-center gap-2"><div className="relative flex-1"><Input aria-label="Senha" type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm((c) => ({ ...c, password: event.target.value }))} className="pr-12" /><button type="button" onClick={() => setShowPassword((current) => !current)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div><Button variant={passwordMode === 'manual' ? 'secondary' : 'ghost'} size="sm" onClick={() => setPasswordMode('manual')}>Manual</Button><Button variant={passwordMode === 'auto' ? 'secondary' : 'ghost'} size="sm" onClick={() => { setPasswordMode('auto'); setForm((c) => ({ ...c, password: generatePassword() })) }}>Auto</Button></div></div>
             <div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={() => setForm((c) => ({ ...c, password: generatePassword() }))}><WandSparkles className="mr-2 h-4 w-4" />Gerar senha automatica</Button><Button variant="ghost" size="sm" onClick={async () => {
@@ -1524,8 +1524,8 @@ export default function SettingsPage() {
           {modalTab === 'profile' ? <div className="mt-4 space-y-4"><div><label className="mb-1 block text-sm font-medium text-slate-700">Perfil</label><select value={form.role} onChange={(event) => {
             const nextRole = event.target.value as Role
             setForm((c) => ({ ...c, role: nextRole, linkedDentistId: nextRole === 'dentist_client' ? c.linkedDentistId : '' }))
-          }} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{availableRoleList.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select>{isSupabaseMode ? <p className="mt-1 text-xs text-slate-500">Usuarios criados diretamente por admin com email e senha.</p> : null}{isSupabaseMode && form.role === 'dentist_admin' ? <div className="mt-3"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div> : null}</div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
-          {modalTab === 'link' && showLinkTab ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Clinica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value, linkedDentistId: '' }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div>{form.role === 'dentist_client' ? <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsavel</label><select value={form.linkedDentistId} onChange={(event) => setForm((c) => ({ ...c, linkedDentistId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{dentistsForSelect.map((dentist) => <option key={dentist.id} value={dentist.id}>{dentist.name}</option>)}</select></div> : null}</div> : null}
+          }} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{availableRoleList.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select>{isSupabaseMode ? <p className="mt-1 text-xs text-slate-500">Usuarios criados diretamente por admin com email e senha.</p> : null}{isSupabaseMode && form.role === 'dentist_admin' ? <div className="mt-3"><label className="mb-1 block text-sm font-medium text-slate-700">Clínica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div> : null}</div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
+          {modalTab === 'link' && showLinkTab ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Clínica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value, linkedDentistId: '' }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div>{form.role === 'dentist_client' ? <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsável</label><select value={form.linkedDentistId} onChange={(event) => setForm((c) => ({ ...c, linkedDentistId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{dentistsForSelect.map((dentist) => <option key={dentist.id} value={dentist.id}>{dentist.name}</option>)}</select></div> : null}</div> : null}
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>
@@ -1536,3 +1536,4 @@ export default function SettingsPage() {
     </AppShell>
   )
 }
+

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
 import AppShell from '../layouts/AppShell'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -68,11 +68,11 @@ export default function MigrationPage() {
 
   const importToSupabase = async () => {
     if (DATA_MODE !== 'supabase') {
-      setError('Modo supabase nao habilitado.')
+      setError('Modo supabase não habilitado.')
       return
     }
     if (!supabase) {
-      setError('Supabase nao configurado.')
+      setError('Supabase não configurado.')
       return
     }
     if (!importFile) {
@@ -98,7 +98,7 @@ export default function MigrationPage() {
 
   const exportSupabase = async () => {
     if (DATA_MODE !== 'supabase' || !supabase) {
-      setError('Supabase nao configurado.')
+      setError('Supabase não configurado.')
       return
     }
     const result = await supabase.functions.invoke('export-db', { body: {} })
@@ -120,9 +120,9 @@ export default function MigrationPage() {
   }
 
   return (
-    <AppShell breadcrumb={['Inicio', 'Configuracoes', 'Migracao']}>
+    <AppShell breadcrumb={['Início', 'Configurações', 'Migração']}>
       <section>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Migracao</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Migração</h1>
         <p className="mt-2 text-sm text-slate-500">Exportar DB local e importar para Supabase.</p>
       </section>
 
@@ -130,13 +130,13 @@ export default function MigrationPage() {
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Exportar (Local)</h2>
           <p className="mt-2 text-sm text-slate-500">
-            Clinicas: {localCounts.clinics} | Dentistas: {localCounts.dentists} | Pacientes: {localCounts.patients}
+            Clínicas: {localCounts.clinics} | Dentistas: {localCounts.dentists} | Pacientes: {localCounts.patients}
           </p>
           <p className="mt-1 text-sm text-slate-500">
             Scans: {localCounts.scans} | Cases: {localCounts.cases} | Lab: {localCounts.labItems}
           </p>
           <p className="mt-1 text-xs text-amber-700">
-            Arquivos locais nao sao migrados. Reenvie anexos para Storage.
+            Arquivos locais não sao migrados. Reenvie anexos para Storage.
           </p>
           <Button className="mt-4" onClick={exportLocal}>
             Exportar DB local
@@ -152,7 +152,7 @@ export default function MigrationPage() {
               <input type="file" accept="application/json" onChange={(event) => setImportFile(event.target.files?.[0] ?? null)} />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Clinica destino</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Clínica destino</label>
               <input
                 value={clinicName}
                 onChange={(event) => setClinicName(event.target.value)}
@@ -177,7 +177,7 @@ export default function MigrationPage() {
 
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Exportar (Supabase)</h2>
-          <p className="mt-2 text-sm text-slate-500">Exporta dados da clinica do usuario logado.</p>
+          <p className="mt-2 text-sm text-slate-500">Exporta dados da clinica do usuário logado.</p>
           <Button className="mt-4" onClick={exportSupabase}>
             Exportar dados da clinica
           </Button>
@@ -189,3 +189,4 @@ export default function MigrationPage() {
     </AppShell>
   )
 }
+

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+﻿import { Link } from 'react-router-dom'
 import Card from '../components/Card'
 
 function Section(props: { title: string; children: React.ReactNode }) {
@@ -31,8 +31,8 @@ export default function LegalTermsPage() {
 
           <Section title="2. Contas e Acesso">
             <ul className="list-disc pl-5">
-              <li>O usuario e responsavel por manter suas credenciais seguras e nao compartilhar acesso.</li>
-              <li>Perfis e permissoes limitam as acoes conforme funcao (RBAC).</li>
+              <li>O usuário e responsável por manter suas credenciais seguras e não compartilhar acesso.</li>
+              <li>Perfis e permissoes limitam as ações conforme funcao (RBAC).</li>
               <li>Recomendado habilitar 2FA para perfis administrativos quando disponivel.</li>
             </ul>
           </Section>
@@ -40,13 +40,13 @@ export default function LegalTermsPage() {
           <Section title="3. Uso Adequado">
             <ul className="list-disc pl-5">
               <li>Proibido inserir conteudo ilicito, ofensivo, ou violar direitos de terceiros.</li>
-              <li>Proibido tentar explorar vulnerabilidades, burlar permissao ou acessar dados sem autorizacao.</li>
+              <li>Proibido tentar explorar vulnerabilidades, burlar permissão ou acessar dados sem autorizacao.</li>
             </ul>
           </Section>
 
           <Section title="4. Dados e Documentos">
             <p>
-              O usuario declara possuir base legal e autorizacao para inserir dados de pacientes e arquivos (incluindo dados
+              O usuário declara possuir base legal e autorizacao para inserir dados de pacientes e arquivos (incluindo dados
               sensiveis), e deve respeitar as politicas internas e a LGPD.
             </p>
           </Section>
@@ -87,4 +87,5 @@ export default function LegalTermsPage() {
     </div>
   )
 }
+
 
