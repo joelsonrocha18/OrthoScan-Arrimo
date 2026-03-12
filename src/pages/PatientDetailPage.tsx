@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Button from '../components/Button'
 import Card from '../components/Card'
@@ -39,7 +39,8 @@ import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 import { useAiModuleEnabled } from '../lib/useAiModuleEnabled'
 
 type PatientForm = {
-  name: string
+  firstName: string
+  lastName: string
   cpf: string
   birthDate: string
   gender: 'masculino' | 'feminino' | 'outro'
@@ -50,6 +51,7 @@ type PatientForm = {
     cep: string
     street: string
     number: string
+    complement: string
     district: string
     city: string
     state: string
@@ -68,7 +70,8 @@ type DocumentForm = {
 }
 
 const emptyForm: PatientForm = {
-  name: '',
+  firstName: '',
+  lastName: '',
   cpf: '',
   birthDate: '',
   gender: 'outro',
@@ -79,6 +82,7 @@ const emptyForm: PatientForm = {
     cep: '',
     street: '',
     number: '',
+    complement: '',
     district: '',
     city: '',
     state: '',
@@ -157,6 +161,17 @@ function safeText(value: unknown) {
 
 function asTextOrUndefined(value: unknown) {
   return typeof value === 'string' ? value : undefined
+}
+
+function splitFullName(fullName: string, firstName?: string, lastName?: string) {
+  const first = (firstName ?? '').trim()
+  const last = (lastName ?? '').trim()
+  if (first || last) return { firstName: first, lastName: last }
+  const raw = fullName.trim()
+  if (!raw) return { firstName: '', lastName: '' }
+  const parts = raw.split(/\s+/).filter(Boolean)
+  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
+  return { firstName: parts[0], lastName: parts.slice(1).join(' ') }
 }
 
 export default function PatientDetailPage() {
@@ -262,7 +277,7 @@ export default function PatientDetailPage() {
     void (async () => {
       const { data, error } = await supabase
         .from('patients')
-        .select('id, short_id, name, cpf, phone, whatsapp, clinic_id, primary_dentist_id, birth_date, gender, email, address, notes, deleted_at, created_at, updated_at')
+        .select('id, short_id, name, first_name, last_name, cpf, phone, whatsapp, clinic_id, primary_dentist_id, birth_date, gender, email, address, notes, deleted_at, created_at, updated_at')
         .eq('id', params.id)
         .maybeSingle()
       if (!active) return
@@ -278,6 +293,8 @@ export default function PatientDetailPage() {
         id: String(data.id),
         shortId: asTextOrUndefined(data.short_id),
         name: safeText(data.name),
+        firstName: asTextOrUndefined((data as Record<string, unknown>).first_name),
+        lastName: asTextOrUndefined((data as Record<string, unknown>).last_name),
         cpf: asTextOrUndefined(data.cpf),
         phone: asTextOrUndefined(data.phone),
         whatsapp: asTextOrUndefined(data.whatsapp),
@@ -290,6 +307,7 @@ export default function PatientDetailPage() {
           cep: asTextOrUndefined(address.cep),
           street: asTextOrUndefined(address.street),
           number: asTextOrUndefined(address.number),
+          complement: asTextOrUndefined(address.complement),
           district: asTextOrUndefined(address.district),
           city: asTextOrUndefined(address.city),
           state: asTextOrUndefined(address.state),
@@ -403,8 +421,10 @@ export default function PatientDetailPage() {
       setForm(emptyForm)
       return
     }
+    const nameParts = splitFullName(safeText(existing.name), safeText(existing.firstName), safeText(existing.lastName))
     setForm({
-      name: safeText(existing.name),
+      firstName: nameParts.firstName,
+      lastName: nameParts.lastName,
       cpf: safeText(existing.cpf),
       birthDate: safeText(existing.birthDate),
       gender: existing.gender ?? 'outro',
@@ -415,6 +435,7 @@ export default function PatientDetailPage() {
         cep: safeText(existing.address?.cep),
         street: safeText(existing.address?.street),
         number: safeText(existing.address?.number),
+        complement: safeText(existing.address?.complement),
         district: safeText(existing.address?.district),
         city: safeText(existing.address?.city),
         state: safeText(existing.address?.state),
@@ -661,10 +682,10 @@ export default function PatientDetailPage() {
 
   if (!isSupabaseMode && !isNew && existing && !scopedPatients.some((item) => item.id === existing.id)) {
     return (
-      <AppShell breadcrumb={['Inicio', 'Pacientes']}>
+      <AppShell breadcrumb={['Início', 'Pacientes']}>
         <Card>
           <h1 className="text-xl font-semibold text-slate-900">Sem acesso</h1>
-          <p className="mt-2 text-sm text-slate-500">Seu perfil nao permite visualizar este paciente.</p>
+          <p className="mt-2 text-sm text-slate-500">Seu perfil não permite visualizar este paciente.</p>
           <Link to="/app/patients" className="mt-3 inline-flex text-sm font-semibold text-brand-700">
             Voltar para pacientes
           </Link>
@@ -675,7 +696,7 @@ export default function PatientDetailPage() {
 
   if (!isNew && loadingExisting) {
     return (
-      <AppShell breadcrumb={['Inicio', 'Pacientes']}>
+      <AppShell breadcrumb={['Início', 'Pacientes']}>
         <Card>
           <h1 className="text-xl font-semibold text-slate-900">Carregando paciente...</h1>
         </Card>
@@ -685,7 +706,7 @@ export default function PatientDetailPage() {
 
   if (!isNew && !existing && !loadingExisting) {
     return (
-      <AppShell breadcrumb={['Inicio', 'Pacientes']}>
+      <AppShell breadcrumb={['Início', 'Pacientes']}>
         <Card>
           <h1 className="text-xl font-semibold text-slate-900">Paciente não encontrado</h1>
           <Link to="/app/patients" className="mt-3 inline-flex text-sm font-semibold text-brand-700">
@@ -703,11 +724,11 @@ export default function PatientDetailPage() {
 
   const savePatient = async () => {
     if (!canWrite) {
-      setError('Sem permissao para editar pacientes.')
+      setError('Sem permissão para editar pacientes.')
       return
     }
-    if (!form.name.trim()) {
-      setError('Nome e obrigatorio.')
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setError('Nome e sobrenome são obrigatórios.')
       return
     }
     if (!form.birthDate) {
@@ -723,8 +744,11 @@ export default function PatientDetailPage() {
       return
     }
 
+    const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim()
     const payload: Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> = {
-      name: form.name.trim(),
+      name: fullName,
+      firstName: form.firstName.trim() || undefined,
+      lastName: form.lastName.trim() || undefined,
       cpf: form.cpf.trim() || undefined,
       birthDate: form.birthDate,
       gender: form.gender,
@@ -735,6 +759,7 @@ export default function PatientDetailPage() {
         cep: form.address.cep.trim() || undefined,
         street: form.address.street.trim() || undefined,
         number: form.address.number.trim() || undefined,
+        complement: form.address.complement.trim() || undefined,
         district: form.address.district.trim() || undefined,
         city: form.address.city.trim() || undefined,
         state: form.address.state.trim() || undefined,
@@ -763,6 +788,8 @@ export default function PatientDetailPage() {
     if (isSupabaseMode && supabase) {
       const supabasePayload = {
         name: payload.name,
+        first_name: payload.firstName ?? null,
+        last_name: payload.lastName ?? null,
         cpf: payload.cpf ?? null,
         phone: payload.phone ?? null,
         whatsapp: payload.whatsapp ?? null,
@@ -784,7 +811,8 @@ export default function PatientDetailPage() {
           setError(createError?.message ?? 'Falha ao criar paciente.')
           return
         }
-        navigate(`/app/patients/${data.id as string}`, { replace: true })
+        setError('')
+        navigate('/app/patients', { replace: true })
         return
       }
       if (!existing) return
@@ -797,6 +825,7 @@ export default function PatientDetailPage() {
         return
       }
       setError('')
+      navigate('/app/patients', { replace: true })
       return
     }
 
@@ -806,7 +835,8 @@ export default function PatientDetailPage() {
         setError(result.error)
         return
       }
-      navigate(`/app/patients/${result.patient.id}`, { replace: true })
+      setError('')
+      navigate('/app/patients', { replace: true })
       return
     }
 
@@ -817,6 +847,7 @@ export default function PatientDetailPage() {
       return
     }
     setError('')
+    navigate('/app/patients', { replace: true })
   }
 
   const handleDelete = async () => {
@@ -906,7 +937,7 @@ export default function PatientDetailPage() {
   const submitDoc = async () => {
     if (!existing) return
     if (!canDocsWrite) {
-      setError('Sem permissao para anexar documentos.')
+      setError('Sem permissão para anexar documentos.')
       return
     }
     if (!docForm.title.trim()) {
@@ -989,7 +1020,7 @@ export default function PatientDetailPage() {
   const submitDocEdit = async () => {
     if (!docEditId) return
     if (!canDocsAdmin) {
-      setError('Sem permissao para editar documentos.')
+      setError('Sem permissão para editar documentos.')
       return
     }
     if (!docForm.title.trim()) {
@@ -1019,7 +1050,7 @@ export default function PatientDetailPage() {
 
   const deleteDoc = async (doc: PatientDocument) => {
     if (!canDocsAdmin) return
-    const ok = window.confirm(`Excluir o documento "${doc.title}"? Essa acao nao pode ser desfeita.`)
+    const ok = window.confirm(`Excluir o documento "${doc.title}"? Essa ação não pode ser desfeita.`)
     if (!ok) return
     const result = await deletePatientDoc(doc.id)
     if (!result.ok) setError(result.error)
@@ -1034,7 +1065,7 @@ export default function PatientDetailPage() {
     const inputText = [
       `Paciente: ${existing.name}`,
       `Nascimento: ${existing.birthDate ?? '-'}`,
-      `Observacoes: ${form.notes || '-'}`,
+      `Observações: ${form.notes || '-'}`,
       `Scans vinculados: ${scans.length}`,
       `Casos vinculados: ${cases.length}`,
     ].join('\n')
@@ -1061,7 +1092,7 @@ export default function PatientDetailPage() {
   }
 
   return (
-    <AppShell breadcrumb={['Inicio', 'Pacientes', isNew ? 'Novo' : existing?.name ?? 'Detalhe']}>
+    <AppShell breadcrumb={['Início', 'Pacientes', isNew ? 'Novo' : existing?.name ?? 'Detalhe']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
@@ -1082,9 +1113,13 @@ export default function PatientDetailPage() {
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Cadastro</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
+            <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Nome *</label>
-              <Input value={form.name} onChange={(event) => setForm((c) => ({ ...c, name: event.target.value }))} />
+              <Input value={form.firstName} onChange={(event) => setForm((c) => ({ ...c, firstName: event.target.value }))} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Sobrenome *</label>
+              <Input value={form.lastName} onChange={(event) => setForm((c) => ({ ...c, lastName: event.target.value }))} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">CPF</label>
@@ -1139,6 +1174,10 @@ export default function PatientDetailPage() {
               <Input value={form.address.number} onChange={(event) => setForm((c) => ({ ...c, address: { ...c.address, number: event.target.value } }))} />
             </div>
             <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Complemento</label>
+              <Input value={form.address.complement} onChange={(event) => setForm((c) => ({ ...c, address: { ...c.address, complement: event.target.value } }))} />
+            </div>
+            <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Bairro</label>
               <Input value={form.address.district} onChange={(event) => setForm((c) => ({ ...c, address: { ...c.address, district: event.target.value } }))} />
             </div>
@@ -1151,7 +1190,7 @@ export default function PatientDetailPage() {
               <Input value={form.address.state} onChange={(event) => setForm((c) => ({ ...c, address: { ...c.address, state: event.target.value.toUpperCase().slice(0, 2) } }))} />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-slate-700">Observacoes</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Observações</label>
               <textarea
                 rows={3}
                 value={form.notes}
@@ -1163,10 +1202,10 @@ export default function PatientDetailPage() {
         </Card>
 
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Vinculos</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Vínculos</h2>
           <div className="mt-4 space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Clinica</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Clínica</label>
               <select
                 value={form.clinicId}
                 onChange={(event) => setForm((c) => ({ ...c, clinicId: event.target.value }))}
@@ -1188,14 +1227,14 @@ export default function PatientDetailPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsavel</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsável</label>
               <select
                 value={form.primaryDentistId}
                 onChange={(event) => setForm((c) => ({ ...c, primaryDentistId: event.target.value }))}
                 disabled={isExternalUser}
                 className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
               >
-                <option value="">Nao definido</option>
+                <option value="">Não definido</option>
                 {dentists.map((dentist) => (
                   <option key={dentist.id} value={dentist.id}>
                     {dentist.gender === 'feminino' ? 'Dra.' : 'Dr.'} {dentist.name}
@@ -1205,7 +1244,7 @@ export default function PatientDetailPage() {
               {selectedDentist ? (
                 <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                   <p>
-                    Responsavel: {dentistPrefix} {selectedDentist.name}
+                    Responsável: {dentistPrefix} {selectedDentist.name}
                   </p>
                   {dentistWhatsappValid ? <WhatsappLink value={selectedDentist?.whatsapp} className="text-xs font-semibold" /> : null}
                 </div>
@@ -1556,7 +1595,7 @@ export default function PatientDetailPage() {
                   onChange={(event) => setDocForm((c) => ({ ...c, note: event.target.value }))}
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
-                <p className="mt-2 text-xs text-slate-500">Troca de arquivo ainda nao suportada neste modo.</p>
+                <p className="mt-2 text-xs text-slate-500">Troca de arquivo ainda não suportada neste modo.</p>
               </div>
             </div>
 
@@ -1593,3 +1632,4 @@ export default function PatientDetailPage() {
     </AppShell>
   )
 }
+
