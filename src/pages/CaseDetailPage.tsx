@@ -304,6 +304,7 @@ function mapSupabaseCaseRowToCase(
     id: string
     product_type?: string
     product_id?: string
+    scan_id?: string | null
     clinic_id?: string | null
     patient_id?: string | null
     dentist_id?: string | null
@@ -342,7 +343,7 @@ function mapSupabaseCaseRowToCase(
     installation: data.installation as Case['installation'] | undefined,
     trays: (data.trays as CaseTray[] | undefined) ?? [],
     attachments: (data.attachments as Case['attachments']) ?? [],
-    sourceScanId: data.sourceScanId as string | undefined,
+    sourceScanId: (data.sourceScanId as string | undefined) ?? row.scan_id ?? undefined,
     arch: data.arch as Case['arch'] | undefined,
     complaint: data.complaint as string | undefined,
     dentistGuidance: data.dentistGuidance as string | undefined,
@@ -406,7 +407,7 @@ export default function CaseDetailPage() {
     void (async () => {
       const { data } = await supabase
         .from('cases')
-        .select('id, product_type, product_id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, data, deleted_at')
+        .select('id, product_type, product_id, scan_id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, data, deleted_at')
         .eq('id', params.id)
         .is('deleted_at', null)
         .maybeSingle()
@@ -421,6 +422,7 @@ export default function CaseDetailPage() {
             id: string
             product_type?: string
             product_id?: string
+            scan_id?: string | null
             clinic_id?: string | null
             patient_id?: string | null
             dentist_id?: string | null

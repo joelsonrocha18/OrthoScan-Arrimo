@@ -381,7 +381,7 @@ export default function LabPage() {
       const [casesRes, labRes, patientsRes, dentistsRes, clinicsRes, scansRes] = await Promise.all([
         supabase
           .from('cases')
-          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, status, data, deleted_at')
+          .select('id, clinic_id, patient_id, dentist_id, requested_by_dentist_id, scan_id, status, data, deleted_at')
           .is('deleted_at', null),
         supabase
           .from('lab_items')
@@ -436,7 +436,7 @@ export default function LabPage() {
       const mappedCases = ((casesRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
         const data = asObject(row.data)
         const createdAt = new Date().toISOString()
-        const sourceScanId = asText(data.sourceScanId)
+        const sourceScanId = asText(data.sourceScanId, asText(row.scan_id))
         const treatmentCodeFromScan = sourceScanId ? (serviceCodeByScanId.get(sourceScanId) || '') : ''
         const sourceScanData = sourceScanId ? scanDataById.get(sourceScanId) ?? {} : {}
         const caseId = asText(row.id)
@@ -480,7 +480,7 @@ export default function LabPage() {
           installation: data.installation as typeof db.cases[number]['installation'],
           trays: (data.trays as typeof db.cases[number]['trays']) ?? [],
           attachments: [],
-          sourceScanId: asText(data.sourceScanId) || undefined,
+          sourceScanId: sourceScanId || undefined,
           arch: (asText(data.arch, 'ambos') as 'superior' | 'inferior' | 'ambos'),
           complaint: asText(data.complaint) || undefined,
           dentistGuidance: asText(data.dentistGuidance) || undefined,
