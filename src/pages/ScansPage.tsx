@@ -31,6 +31,7 @@ import { buildScanAttachmentPath, createSignedUrl, uploadToStorage, validateScan
 import { supabase } from '../lib/supabaseClient'
 import { parsePlanningTrayCounts } from '../lib/archformParser'
 import { useSupabaseSyncTick } from '../lib/useSupabaseSyncTick'
+import { resolveTreatmentOrigin } from '../lib/treatmentOrigin'
 
 function archTone(arch: Scan['arch']) {
   if (arch === 'ambos') return 'info' as const
@@ -104,6 +105,7 @@ export default function ScansPage() {
   const [statusFilter, setStatusFilter] = useState<'todos' | Scan['status']>('todos')
   const [archFilter, setArchFilter] = useState<'todos' | Scan['arch']>('todos')
   const [purposeFilter, setPurposeFilter] = useState('todos')
+  const [originFilter, setOriginFilter] = useState<'todos' | 'interno' | 'externo'>('todos')
   const [details, setDetails] = useState<Scan | null>(null)
   const [createCaseTarget, setCreateCaseTarget] = useState<Scan | null>(null)
   const [approvalTarget, setApprovalTarget] = useState<Scan | null>(null)
@@ -249,11 +251,24 @@ export default function ScansPage() {
     () => new Map(patientLookupSource.map((item) => [item.id, item.name])),
     [patientLookupSource],
   )
+  const patientLookupById = useMemo(
+    () => new Map(patientLookupSource.map((item) => [item.id, item])),
+    [patientLookupSource],
+  )
+  const clinicLookupById = useMemo(
+    () =>
+      new Map(
+        (isSupabaseMode ? supabaseClinics : db.clinics.filter((item) => !item.deletedAt))
+          .map((item) => [item.id, { tradeName: item.tradeName }]),
+      ),
+    [isSupabaseMode, supabaseClinics, db.clinics],
+  )
   const filteredScans = useMemo(() => {
     const query = search.trim().toLowerCase()
     return scans.filter((scan) => {
       const patientName = (scan.patientId ? patientsById.get(scan.patientId) ?? scan.patientName : scan.patientName).toLowerCase()
-      const patientShortId = scan.patientId ? (patientLookupSource.find((item) => item.id === scan.patientId)?.shortId ?? '') : ''
+      const patientLookup = scan.patientId ? patientLookupById.get(scan.patientId) : undefined
+      const patientShortId = patientLookup?.shortId ?? ''
       const caseShortId = scan.linkedCaseId ? (caseShortById.get(scan.linkedCaseId) ?? '') : ''
       const serviceOrder = (scan.serviceOrderCode ?? '').toLowerCase()
       const purposeLabel = (scan.purposeLabel ?? scan.purposeProductType ?? 'Alinhador').toLowerCase()
@@ -270,9 +285,21 @@ export default function ScansPage() {
       const matchesPurpose =
         purposeFilter === 'todos' ||
         (scan.purposeLabel?.trim() || (scan.purposeProductType ? scan.purposeProductType : 'Alinhador')) === purposeFilter
-      return matchesQuery && matchesStatus && matchesArch && matchesPurpose
+      const matchesOrigin =
+        originFilter === 'todos'
+        || resolveTreatmentOrigin(
+          {
+            clinicId: scan.clinicId,
+            patientId: scan.patientId,
+          },
+          {
+            patientsById: patientLookupById,
+            clinicsById: clinicLookupById,
+          },
+        ) === originFilter
+      return matchesQuery && matchesStatus && matchesArch && matchesPurpose && matchesOrigin
     })
-  }, [archFilter, caseShortById, patientLookupSource, patientsById, scans, search, statusFilter, purposeFilter])
+  }, [archFilter, caseShortById, clinicLookupById, originFilter, patientLookupById, patientsById, scans, search, statusFilter, purposeFilter])
   const dentists = useMemo(
     () => (isSupabaseMode ? supabaseDentists : db.dentists.filter((item) => item.type === 'dentista' && !item.deletedAt)),
     [isSupabaseMode, supabaseDentists, db.dentists],
@@ -745,7 +772,7 @@ export default function ScansPage() {
       <section className="mt-6">
         <Card className="overflow-hidden p-0">
           <div className="border-b border-slate-200 p-4">
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
               <div className="relative lg:col-span-2">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
@@ -761,6 +788,11 @@ export default function ScansPage() {
                 <option value="aprovado">Aprovado</option>
                 <option value="reprovado">Reprovado</option>
                 <option value="convertido">Convertido</option>
+              </select>
+              <select value={originFilter} onChange={(event) => setOriginFilter(event.target.value as 'todos' | 'interno' | 'externo')} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                <option value="todos">Origem: Todas</option>
+                <option value="interno">Interno</option>
+                <option value="externo">Externo</option>
               </select>
               <div className="grid grid-cols-2 gap-3">
                 <select value={archFilter} onChange={(event) => setArchFilter(event.target.value as 'todos' | Scan['arch'])} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">

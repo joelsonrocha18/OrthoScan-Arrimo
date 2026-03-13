@@ -9,11 +9,13 @@ type LabFiltersProps = {
   overdueOnly: boolean
   alertsOnly?: boolean
   status: 'todos' | LabStatus
+  origin: 'todos' | 'interno' | 'externo'
   onSearchChange: (value: string) => void
   onPriorityChange: (value: 'todos' | Lowercase<LabPriority>) => void
   onOverdueOnlyChange: (value: boolean) => void
   onAlertsOnlyChange?: (value: boolean) => void
   onStatusChange: (value: 'todos' | LabStatus) => void
+  onOriginChange: (value: 'todos' | 'interno' | 'externo') => void
 }
 
 export default function LabFilters({
@@ -22,11 +24,13 @@ export default function LabFilters({
   overdueOnly,
   alertsOnly = false,
   status,
+  origin,
   onSearchChange,
   onPriorityChange,
   onOverdueOnlyChange,
   onAlertsOnlyChange,
   onStatusChange,
+  onOriginChange,
 }: LabFiltersProps) {
   const [searchInput, setSearchInput] = useState(search)
   const debouncedSearch = useDebouncedValue(searchInput, 250)
@@ -41,7 +45,7 @@ export default function LabFilters({
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
         <Input
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
@@ -69,6 +73,16 @@ export default function LabFilters({
           <option value="em_producao">Em Produção</option>
           <option value="controle_qualidade">Controle de qualidade</option>
           <option value="prontas">Prontas</option>
+        </select>
+
+        <select
+          value={origin}
+          onChange={(event) => onOriginChange(event.target.value as 'todos' | 'interno' | 'externo')}
+          className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+        >
+          <option value="todos">Origem: Todas</option>
+          <option value="interno">Interno</option>
+          <option value="externo">Externo</option>
         </select>
 
         <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700">

@@ -31,6 +31,7 @@ import { useAiModuleEnabled } from '../lib/useAiModuleEnabled'
 import { deleteLabItemSupabase } from '../repo/profileRepo'
 import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 import { normalizeOrthTreatmentCode } from '../lib/treatmentCode'
+import { resolveTreatmentOrigin } from '../lib/treatmentOrigin'
 
 type ModalState =
   | { open: false; mode: 'create' | 'edit'; item: null }
@@ -265,6 +266,7 @@ export default function LabPage() {
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [alertsOnly, setAlertsOnly] = useState(false)
   const [status, setStatus] = useState<'todos' | LabStatus>('todos')
+  const [originFilter, setOriginFilter] = useState<'todos' | 'interno' | 'externo'>('todos')
   const [boardTab, setBoardTab] = useState<'esteira' | 'reconfeccao' | 'banco_restante'>('esteira')
   const [modal, setModal] = useState<ModalState>({ open: false, mode: 'create', item: null })
   const [deliveryOpen, setDeliveryOpen] = useState(false)
@@ -666,6 +668,14 @@ export default function LabPage() {
     () => new Map(patientOptions.map((item) => [item.id, item])),
     [patientOptions],
   )
+  const clinicLookupById = useMemo(
+    () =>
+      new Map(
+        (isSupabaseMode ? supabaseClinics : db.clinics)
+          .map((item) => [item.id, { tradeName: item.tradeName }]),
+      ),
+    [isSupabaseMode, supabaseClinics, db.clinics],
+  )
   const readyDeliveryItems = useMemo(
     () =>
       items.filter(
@@ -725,6 +735,7 @@ export default function LabPage() {
   const filteredItems = useMemo(() => {
     const query = search.trim().toLowerCase()
     return items.filter((item) => {
+      const caseItem = item.caseId ? caseById.get(item.caseId) : undefined
       const matchSearch =
         query.length === 0 ||
         item.patientName.toLowerCase().includes(query) ||
@@ -738,9 +749,22 @@ export default function LabPage() {
       const matchStatus = status === 'todos' || item.status === status
       const matchOverdue = !overdueOnly || isOverdue(item)
       const matchAlerts = !alertsOnly || (item.caseId ? casesWithAlerts.has(item.caseId) : false)
-      return matchSearch && matchPriority && matchStatus && matchOverdue && matchAlerts
+      const matchOrigin =
+        originFilter === 'todos'
+        || resolveTreatmentOrigin(
+          {
+            treatmentOrigin: caseItem?.treatmentOrigin,
+            clinicId: caseItem?.clinicId ?? item.clinicId,
+            patientId: caseItem?.patientId ?? item.patientId,
+          },
+          {
+            patientsById: patientOptionById,
+            clinicsById: clinicLookupById,
+          },
+        ) === originFilter
+      return matchSearch && matchPriority && matchStatus && matchOverdue && matchAlerts && matchOrigin
     })
-  }, [alertsOnly, caseById, casesWithAlerts, items, overdueOnly, patientOptionById, priority, search, status])
+  }, [alertsOnly, caseById, casesWithAlerts, clinicLookupById, items, originFilter, overdueOnly, patientOptionById, priority, search, status])
   const isDeliveredToProfessional = useCallback((item: LabItem) => {
     return isDeliveredToProfessionalItem(item, caseById)
   }, [caseById])
@@ -1893,11 +1917,13 @@ export default function LabPage() {
           overdueOnly={overdueOnly}
           alertsOnly={alertsOnly}
           status={status}
+          origin={originFilter}
           onSearchChange={setSearch}
           onPriorityChange={setPriority}
           onOverdueOnlyChange={setOverdueOnly}
           onAlertsOnlyChange={setAlertsOnly}
           onStatusChange={setStatus}
+          onOriginChange={setOriginFilter}
         />
       </section>
 
