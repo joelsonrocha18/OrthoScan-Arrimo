@@ -39,6 +39,16 @@ const phaseToneMap: Record<CasePhase, 'neutral' | 'info' | 'success'> = {
 
 type LiveLabStatus = 'aguardando_iniciar' | 'em_producao' | 'controle_qualidade' | 'prontas' | null
 
+type PatientLookup = {
+  name: string
+  shortId?: string
+  clinicId?: string
+}
+
+type ClinicLookup = {
+  tradeName?: string
+}
+
 type CaseListItem = {
   id: string
   shortId?: string
@@ -71,7 +81,7 @@ function isInProductionFlow(item: CaseListItem) {
 
 function inferTreatmentOrigin(
   item: Pick<CaseListItem, 'treatmentOrigin' | 'clinicId'>,
-  clinicsById?: Map<string, { tradeName?: string }>,
+  clinicsById?: Map<string, ClinicLookup>,
 ) {
   if (item.treatmentOrigin === 'interno' || item.treatmentOrigin === 'externo') return item.treatmentOrigin
   if (!item.clinicId) return 'externo' as const
@@ -79,6 +89,21 @@ function inferTreatmentOrigin(
   if (normalizedClinicId === 'clinic_arrimo' || normalizedClinicId === 'cli-0001') return 'interno' as const
   const tradeName = clinicsById?.get(item.clinicId)?.tradeName?.trim().toUpperCase()
   return tradeName === 'ARRIMO' ? ('interno' as const) : ('externo' as const)
+}
+
+function resolveCaseOrigin(
+  item: CaseListItem,
+  patientsById: Map<string, PatientLookup>,
+  clinicsById: Map<string, ClinicLookup>,
+) {
+  const patientClinicId = item.patientId ? patientsById.get(item.patientId)?.clinicId : undefined
+  return inferTreatmentOrigin(
+    {
+      treatmentOrigin: item.treatmentOrigin,
+      clinicId: patientClinicId ?? item.clinicId,
+    },
+    clinicsById,
+  )
 }
 
 function buildLabStatusByCase(items: Array<{ caseId?: string; status?: string }>) {
@@ -125,7 +150,8 @@ export default function CasesPage() {
   const aiComercialEnabled = useAiModuleEnabled('comercial')
   const canAiComercial = can(currentUser, 'ai.comercial') && aiComercialEnabled
   const [supabaseCases, setSupabaseCases] = useState<CaseListItem[]>([])
-  const [supabasePatientsById, setSupabasePatientsById] = useState<Map<string, { name: string; shortId?: string }>>(new Map())
+  const [supabasePatientsById, setSupabasePatientsById] = useState<Map<string, PatientLookup>>(new Map())
+  const [supabaseClinicsById, setSupabaseClinicsById] = useState<Map<string, ClinicLookup>>(new Map())
   const [supabaseDentistsById, setSupabaseDentistsById] = useState<Map<string, { name: string; shortId?: string; gender?: string }>>(new Map())
   const [supabaseLabStatusByCase, setSupabaseLabStatusByCase] = useState<Map<string, LiveLabStatus>>(new Map())
   const [supabaseHasLabOrderByCase, setSupabaseHasLabOrderByCase] = useState<Set<string>>(new Set())
@@ -155,16 +181,16 @@ export default function CasesPage() {
           .select('id, clinic_id, patient_id, dentist_id, status, data, created_at, deleted_at')
           .is('deleted_at', null)
           .order('created_at', { ascending: false }),
-        supabase.from('patients').select('id, name, deleted_at').is('deleted_at', null),
+        supabase.from('patients').select('id, name, clinic_id, deleted_at').is('deleted_at', null),
         supabase.from('dentists').select('id, name, gender, deleted_at').is('deleted_at', null),
         supabase.from('clinics').select('id, trade_name, deleted_at').is('deleted_at', null),
         supabase.from('lab_items').select('case_id, status, deleted_at').is('deleted_at', null),
       ])
       if (!active) return
 
-      const patientsMap = new Map<string, { name: string; shortId?: string }>()
-      for (const row of (patientsRes.data ?? []) as Array<{ id: string; name: string }>) {
-        patientsMap.set(row.id, { name: row.name ?? '', shortId: undefined })
+      const patientsMap = new Map<string, PatientLookup>()
+      for (const row of (patientsRes.data ?? []) as Array<{ id: string; name: string; clinic_id?: string | null }>) {
+        patientsMap.set(row.id, { name: row.name ?? '', shortId: undefined, clinicId: row.clinic_id ?? undefined })
       }
       setSupabasePatientsById(patientsMap)
 
@@ -174,10 +200,11 @@ export default function CasesPage() {
       }
       setSupabaseDentistsById(dentistsMap)
 
-      const clinicsMap = new Map<string, { tradeName?: string }>()
+      const clinicsMap = new Map<string, ClinicLookup>()
       for (const row of (clinicsRes.data ?? []) as Array<{ id: string; trade_name?: string }>) {
         clinicsMap.set(row.id, { tradeName: row.trade_name ?? '' })
       }
+      setSupabaseClinicsById(clinicsMap)
 
       setSupabaseLabStatusByCase(
         buildLabStatusByCase(
@@ -253,7 +280,7 @@ export default function CasesPage() {
   }, [isSupabaseMode])
 
   const localPatientsById = useMemo(
-    () => new Map(db.patients.map((item) => [item.id, { name: item.name, shortId: item.shortId }])),
+    () => new Map(db.patients.map((item) => [item.id, { name: item.name, shortId: item.shortId, clinicId: item.clinicId }])),
     [db.patients],
   )
   const localClinicsById = useMemo(
@@ -299,6 +326,7 @@ export default function CasesPage() {
 
   const cases: CaseListItem[] = isSupabaseMode ? supabaseCases : localCases
   const patientsById = isSupabaseMode ? supabasePatientsById : localPatientsById
+  const clinicsById = isSupabaseMode ? supabaseClinicsById : localClinicsById
   const dentistsById = isSupabaseMode ? supabaseDentistsById : localDentistsById
   const liveLabStatusByCase = isSupabaseMode ? supabaseLabStatusByCase : localLabStatusByCase
   const hasLabOrderByCase = isSupabaseMode ? supabaseHasLabOrderByCase : localHasLabOrderByCase
@@ -319,7 +347,7 @@ export default function CasesPage() {
           (item.shortId ?? '').toLowerCase().includes(query) ||
           (item.treatmentCode ?? item.id).toLowerCase().includes(query)
         const matchesProduct = isAlignerProductType(item.productType)
-        const matchesOrigin = originFilter === 'todos' || inferTreatmentOrigin(item) === originFilter
+        const matchesOrigin = originFilter === 'todos' || resolveCaseOrigin(item, patientsById, clinicsById) === originFilter
 
         const concluded = isConcluded(item)
         const inProduction = isInProductionFlow(item)
@@ -335,7 +363,7 @@ export default function CasesPage() {
         const bb = b.caseDate || ''
         return bb.localeCompare(aa)
       })
-  }, [cases, dentistsById, originFilter, patientsById, search, showConcluded, showInTreatment])
+  }, [cases, clinicsById, dentistsById, originFilter, patientsById, search, showConcluded, showInTreatment])
 
   const toggleInTreatment = () => {
     if (showInTreatment && !showConcluded) return
@@ -464,7 +492,7 @@ export default function CasesPage() {
                     liveLabStatusByCase.get(item.id) ?? null,
                     hasLabOrderByCase.has(item.id),
                   )
-                  const originLabel = inferTreatmentOrigin(item) === 'interno' ? 'Interno' : 'Externo'
+                  const originLabel = resolveCaseOrigin(item, patientsById, clinicsById) === 'interno' ? 'Interno' : 'Externo'
                   return (
                     <tr key={item.id} className="bg-white">
                       <td className="px-5 py-4 text-sm font-semibold text-slate-800">{item.treatmentCode ?? item.id}</td>
