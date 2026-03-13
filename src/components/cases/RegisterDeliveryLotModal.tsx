@@ -8,6 +8,9 @@ type RegisterDeliveryLotModalProps = {
   caseOptions?: Array<{ id: string; label: string }>
   selectedCaseId?: string
   isSelectedRework?: boolean
+  selectedProductLabel?: string
+  selectedArch?: 'superior' | 'inferior' | 'ambos' | ''
+  requiresArchQuantities?: boolean
   initialUpperQty?: number
   initialLowerQty?: number
   onCaseChange?: (caseId: string) => void
@@ -25,6 +28,9 @@ export default function RegisterDeliveryLotModal({
   caseOptions,
   selectedCaseId,
   isSelectedRework = false,
+  selectedProductLabel,
+  selectedArch = '',
+  requiresArchQuantities = true,
   initialUpperQty = 0,
   initialLowerQty = 0,
   onCaseChange,
@@ -43,6 +49,15 @@ export default function RegisterDeliveryLotModal({
   }, [initialLowerQty, initialUpperQty, open, selectedCaseId])
 
   if (!open) return null
+
+  const archLabel =
+    selectedArch === 'superior'
+      ? 'Superior'
+      : selectedArch === 'inferior'
+        ? 'Inferior'
+        : selectedArch === 'ambos'
+          ? 'Ambas'
+          : '-'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
@@ -76,26 +91,35 @@ export default function RegisterDeliveryLotModal({
                 Rework selecionado: a entrega será registrada automaticamente pela placa solicitada.
               </div>
             ) : null}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Qtd Superior</label>
-              <Input
-                type="number"
-                min={0}
-                value={upperQty}
-                disabled={isSelectedRework}
-                onChange={(event) => setUpperQty(event.target.value)}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Qtd Inferior</label>
-              <Input
-                type="number"
-                min={0}
-                value={lowerQty}
-                disabled={isSelectedRework}
-                onChange={(event) => setLowerQty(event.target.value)}
-              />
-            </div>
+            {requiresArchQuantities ? (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Qtd Superior</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={upperQty}
+                    disabled={isSelectedRework}
+                    onChange={(event) => setUpperQty(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Qtd Inferior</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={lowerQty}
+                    disabled={isSelectedRework}
+                    onChange={(event) => setLowerQty(event.target.value)}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                <div><span className="font-semibold">Produto:</span> {selectedProductLabel || '-'}</div>
+                <div><span className="font-semibold">Arcada:</span> {archLabel}</div>
+              </div>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Observacao</label>

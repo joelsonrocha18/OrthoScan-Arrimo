@@ -11,7 +11,7 @@ import Button from '../components/Button'
 import Card from '../components/Card'
 import Input from '../components/Input'
 import { DATA_MODE } from '../data/dataMode'
-import { registerCaseDeliveryLot } from '../data/caseRepo'
+import { registerCaseDeliveryLot, updateCase } from '../data/caseRepo'
 import { addLabItem, createAdvanceLabOrder, deleteLabItem, listLabItems, moveLabItem, updateLabItem } from '../data/labRepo'
 import { getPipelineItems } from '../domain/labPipeline'
 import { getNextDeliveryDueDate, getReplenishmentAlerts } from '../domain/replenishment'
@@ -709,16 +709,32 @@ export default function LabPage() {
     () => !!selectedDeliveryItem && (isReworkItem(selectedDeliveryItem) || isReworkProductionItem(selectedDeliveryItem)),
     [selectedDeliveryItem],
   )
+  const selectedDeliveryProductType = useMemo(
+    () => normalizeProductType(selectedDeliveryItem?.productId ?? selectedDeliveryItem?.productType),
+    [selectedDeliveryItem?.productId, selectedDeliveryItem?.productType],
+  )
+  const selectedDeliveryRequiresArchQuantities = useMemo(
+    () => isAlignerProductType(selectedDeliveryProductType),
+    [selectedDeliveryProductType],
+  )
+  const selectedDeliveryCase = useMemo(
+    () => (selectedDeliveryItem?.caseId ? caseById.get(selectedDeliveryItem.caseId) : undefined),
+    [caseById, selectedDeliveryItem?.caseId],
+  )
+  const selectedDeliveryProductLabel = useMemo(
+    () => (selectedDeliveryItem ? resolveLabProductLabel(selectedDeliveryItem, selectedDeliveryCase) : ''),
+    [resolveLabProductLabel, selectedDeliveryCase, selectedDeliveryItem],
+  )
   const deliveryInitialUpperQty = useMemo(() => {
-    if (!selectedDeliveryItem || selectedDeliveryIsRework) return 0
+    if (!selectedDeliveryItem || selectedDeliveryIsRework || !selectedDeliveryRequiresArchQuantities) return 0
     if (selectedDeliveryItem.arch === 'inferior') return 0
     return Math.max(0, Math.trunc(selectedDeliveryItem.plannedUpperQty ?? 0))
-  }, [selectedDeliveryIsRework, selectedDeliveryItem])
+  }, [selectedDeliveryIsRework, selectedDeliveryItem, selectedDeliveryRequiresArchQuantities])
   const deliveryInitialLowerQty = useMemo(() => {
-    if (!selectedDeliveryItem || selectedDeliveryIsRework) return 0
+    if (!selectedDeliveryItem || selectedDeliveryIsRework || !selectedDeliveryRequiresArchQuantities) return 0
     if (selectedDeliveryItem.arch === 'superior') return 0
     return Math.max(0, Math.trunc(selectedDeliveryItem.plannedLowerQty ?? 0))
-  }, [selectedDeliveryIsRework, selectedDeliveryItem])
+  }, [selectedDeliveryIsRework, selectedDeliveryItem, selectedDeliveryRequiresArchQuantities])
   const casesWithAlerts = useMemo(
     () =>
       new Set(caseSource.filter((caseItem) => getReplenishmentAlerts(caseItem).length > 0).map((caseItem) => caseItem.id)),
@@ -2108,6 +2124,9 @@ export default function LabPage() {
         caseOptions={deliveryCaseOptions}
         selectedCaseId={deliveryCaseId}
         isSelectedRework={selectedDeliveryIsRework}
+        selectedProductLabel={selectedDeliveryProductLabel}
+        selectedArch={selectedDeliveryItem?.arch ?? ''}
+        requiresArchQuantities={selectedDeliveryRequiresArchQuantities}
         initialUpperQty={deliveryInitialUpperQty}
         initialLowerQty={deliveryInitialLowerQty}
         onCaseChange={setDeliveryCaseId}
@@ -2182,12 +2201,84 @@ export default function LabPage() {
               addToast({ type: 'error', title: 'Entrega de lote', message: 'Pedido não encontrado.' })
               return
             }
+            const selectedProductType = normalizeProductType(
+              selectedReadyItem.productId
+                ?? selectedReadyItem.productType
+                ?? caseItem.productId
+                ?? caseItem.productType,
+            )
+            const selectedRequiresArchQuantities = isAlignerProductType(selectedProductType)
             const caseTotals = getCaseTotalsByArch(caseItem)
             const selectedIsRework = isReworkItem(selectedReadyItem) || isReworkProductionItem(selectedReadyItem)
             const upperQty = Math.max(0, Math.trunc(payload.upperQty))
             const lowerQty = Math.max(0, Math.trunc(payload.lowerQty))
-            if (!selectedIsRework && upperQty + lowerQty <= 0) {
+            if (!selectedIsRework && selectedRequiresArchQuantities && upperQty + lowerQty <= 0) {
               addToast({ type: 'error', title: 'Entrega de lote', message: 'Informe quantidade superior e/ou inferior.' })
+              return
+            }
+
+            if (!selectedIsRework && !selectedRequiresArchQuantities) {
+              const nextStatus = 'em_entrega'
+              const nextPhase = 'em_producao'
+              const nextNote = payload.note ?? selectedReadyItem.notes
+              if (isSupabaseMode) {
+                if (!supabase) {
+                  addToast({ type: 'error', title: 'Entrega de lote', message: 'Supabase não configurado.' })
+                  return
+                }
+                const nowIso = new Date().toISOString()
+                const { error: labError } = await supabase
+                  .from('lab_items')
+                  .update({
+                    data: {
+                      ...selectedReadyItem,
+                      deliveredToProfessionalAt: payload.deliveredToDoctorAt,
+                    },
+                    notes: nextNote ?? null,
+                    updated_at: nowIso,
+                  })
+                  .eq('id', selectedReadyItem.id)
+                if (labError) {
+                  addToast({ type: 'error', title: 'Entrega de lote', message: labError.message })
+                  return
+                }
+                const nextData = {
+                  ...caseItem,
+                  status: nextStatus,
+                  phase: nextPhase,
+                  updatedAt: nowIso,
+                }
+                const { error: caseError } = await supabase
+                  .from('cases')
+                  .update({
+                    data: nextData,
+                    status: nextStatus,
+                    updated_at: nowIso,
+                  })
+                  .eq('id', selectedCaseId)
+                if (caseError) {
+                  addToast({ type: 'error', title: 'Entrega de lote', message: caseError.message })
+                  return
+                }
+                setSupabaseRefreshKey((current) => current + 1)
+              } else {
+                const labResult = updateLabItem(selectedReadyItem.id, {
+                  deliveredToProfessionalAt: payload.deliveredToDoctorAt,
+                  notes: nextNote,
+                })
+                if (labResult.error) {
+                  addToast({ type: 'error', title: 'Entrega de lote', message: labResult.error })
+                  return
+                }
+                updateCase(selectedCaseId, {
+                  status: nextStatus,
+                  phase: nextPhase,
+                })
+              }
+
+              setDeliveryOpen(false)
+              setDeliveryCaseId('')
+              addToast({ type: 'success', title: 'Entrega registrada pelo laboratorio' })
               return
             }
 
