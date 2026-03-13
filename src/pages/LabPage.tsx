@@ -1542,10 +1542,12 @@ export default function LabPage() {
         : patientOption?.dentistName || casePrintFallback?.dentistName || ''
       const dentistShort = toDentistShortLabelByGender(dentistNameRaw, dentistRef?.gender)
       const patientName = toPatientStickerName(item.patientName || '-')
+      const stickerProductLabel = resolveLabProductLabel(item, caseItem)
+      const isAlignerSticker = isAlignerProductType(normalizeProductType(item.productId ?? item.productType))
       const upperQty = Math.max(0, Math.trunc(item.plannedUpperQty ?? 0))
       const lowerQty = Math.max(0, Math.trunc(item.plannedLowerQty ?? 0))
       const trayQty = Math.max(0, Math.trunc(item.trayNumber || 0))
-      const baseLabelCount = Math.max(upperQty, lowerQty, trayQty, 1)
+      const baseLabelCount = isAlignerSticker ? Math.max(upperQty, lowerQty, trayQty, 1) : 1
       const clinicId = caseItem?.clinicId ?? item.clinicId ?? patientOption?.clinicId ?? ''
       const normalizedClinicId = clinicId.trim().toLowerCase()
       const clinicTradeName = normalizeSpaces(clinicsById.get(clinicId) || patientOption?.clinicName || casePrintFallback?.clinicName || '').toUpperCase()
@@ -1556,7 +1558,7 @@ export default function LabPage() {
         clinicTradeName === 'ARRIMO'
       const includeAttachmentGuideLabel = !isInternalArrimo && Boolean(caseItem?.attachmentBondingTray)
       const firstAlignerNumber = includeAttachmentGuideLabel ? 0 : 1
-      const totalLabels = baseLabelCount + (includeAttachmentGuideLabel ? 1 : 0)
+      const totalLabels = isAlignerSticker ? baseLabelCount + (includeAttachmentGuideLabel ? 1 : 0) : baseLabelCount
       const backgroundImage = isInternalArrimo ? 'sticker-arrimo-interno.png' : 'sticker-orthoscan-externo.png'
       const complementRaw = item.notes?.trim() || ''
       const complement = complementRaw.length > 0 && complementRaw.length <= 26 ? complementRaw : ''
@@ -1567,7 +1569,7 @@ export default function LabPage() {
               <div class="content">
                 <div class="line">${escapeHtml(dentistShort)}</div>
                 <div class="line">${escapeHtml(patientName)}</div>
-                <div class="line">${escapeHtml(`Alinhador ${alignerNumber}`)}</div>
+                <div class="line">${escapeHtml(isAlignerSticker ? `Alinhador ${alignerNumber}` : stickerProductLabel)}</div>
                 ${complement ? `<div class="line small">${escapeHtml(complement)}</div>` : ''}
               </div>
             </div>
