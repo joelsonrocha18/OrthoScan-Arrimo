@@ -75,7 +75,8 @@ function inferTreatmentOrigin(
 ) {
   if (item.treatmentOrigin === 'interno' || item.treatmentOrigin === 'externo') return item.treatmentOrigin
   if (!item.clinicId) return 'externo' as const
-  if (item.clinicId === 'clinic_arrimo') return 'interno' as const
+  const normalizedClinicId = item.clinicId.trim().toLowerCase()
+  if (normalizedClinicId === 'clinic_arrimo' || normalizedClinicId === 'cli-0001') return 'interno' as const
   const tradeName = clinicsById?.get(item.clinicId)?.tradeName?.trim().toUpperCase()
   return tradeName === 'ARRIMO' ? ('interno' as const) : ('externo' as const)
 }
@@ -198,6 +199,7 @@ export default function CasesPage() {
         const data = row.data ?? {}
         const status = (data.status as string | undefined) ?? row.status ?? 'planejamento'
         const phaseRaw = (data.phase as string | undefined) ?? ''
+        const resolvedClinicId = (data.clinicId as string | undefined) ?? row.clinic_id ?? undefined
         const phase = (
           phaseRaw
           || (
@@ -222,11 +224,11 @@ export default function CasesPage() {
           treatmentOrigin: inferTreatmentOrigin(
             {
               treatmentOrigin: (data.treatmentOrigin as 'interno' | 'externo' | undefined) ?? undefined,
-              clinicId: row.clinic_id,
+              clinicId: resolvedClinicId,
             },
             clinicsMap,
           ),
-          clinicId: row.clinic_id,
+          clinicId: resolvedClinicId,
           patientId: row.patient_id,
           patientName,
           dentistId: row.dentist_id,
