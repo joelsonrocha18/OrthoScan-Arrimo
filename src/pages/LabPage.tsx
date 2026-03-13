@@ -1545,7 +1545,7 @@ export default function LabPage() {
       const upperQty = Math.max(0, Math.trunc(item.plannedUpperQty ?? 0))
       const lowerQty = Math.max(0, Math.trunc(item.plannedLowerQty ?? 0))
       const trayQty = Math.max(0, Math.trunc(item.trayNumber || 0))
-      const totalLabels = Math.max(upperQty, lowerQty, trayQty, 1)
+      const baseLabelCount = Math.max(upperQty, lowerQty, trayQty, 1)
       const clinicId = caseItem?.clinicId ?? item.clinicId ?? patientOption?.clinicId ?? ''
       const normalizedClinicId = clinicId.trim().toLowerCase()
       const clinicTradeName = normalizeSpaces(clinicsById.get(clinicId) || patientOption?.clinicName || casePrintFallback?.clinicName || '').toUpperCase()
@@ -1554,6 +1554,9 @@ export default function LabPage() {
         normalizedClinicId === 'clinic_arrimo' ||
         normalizedClinicId === 'cli-0001' ||
         clinicTradeName === 'ARRIMO'
+      const includeAttachmentGuideLabel = !isInternalArrimo && Boolean(caseItem?.attachmentBondingTray)
+      const firstAlignerNumber = includeAttachmentGuideLabel ? 0 : 1
+      const totalLabels = baseLabelCount + (includeAttachmentGuideLabel ? 1 : 0)
       const backgroundImage = isInternalArrimo ? 'sticker-arrimo-interno.png' : 'sticker-orthoscan-externo.png'
       const complementRaw = item.notes?.trim() || ''
       const complement = complementRaw.length > 0 && complementRaw.length <= 26 ? complementRaw : ''
@@ -1570,7 +1573,7 @@ export default function LabPage() {
             </div>
           </div>
       `
-      const labelsHtml = Array.from({ length: totalLabels }, (_, index) => labelBlock(index + 1)).join('')
+      const labelsHtml = Array.from({ length: totalLabels }, (_, index) => labelBlock(firstAlignerNumber + index)).join('')
       const html = `
         <!doctype html>
         <html lang="pt-BR">
