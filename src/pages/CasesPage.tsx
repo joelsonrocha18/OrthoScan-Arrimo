@@ -1,12 +1,13 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useToast } from '../app/ToastProvider'
 import AppShell from '../layouts/AppShell'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
 import AiEditableModal from '../components/ai/AiEditableModal'
 import Card from '../components/Card'
 import Input from '../components/Input'
-import type { CasePhase } from '../types/Case'
+import type { Case, CasePhase } from '../types/Case'
 import type { ProductType } from '../types/Product'
 import { isAlignerProductType, normalizeProductType } from '../types/Product'
 import { DATA_MODE } from '../data/dataMode'
@@ -18,10 +19,11 @@ import { supabase } from '../lib/supabaseClient'
 import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 import { normalizeTreatmentIdsSupabase } from '../repo/profileRepo'
 import { useAiModuleEnabled } from '../lib/useAiModuleEnabled'
+import { downloadAlignerTreatmentReport, type AlignerTreatmentReportRow } from '../lib/alignerTreatmentReport'
 
 const phaseLabelMap: Record<CasePhase, string> = {
   planejamento: 'Planejamento',
-  orçamento: 'Orçamento',
+  'or\u00E7amento': 'Or\u00E7amento',
   contrato_pendente: 'Contrato pendente',
   contrato_aprovado: 'Contrato aprovado',
   em_producao: 'Em producao',
@@ -30,7 +32,7 @@ const phaseLabelMap: Record<CasePhase, string> = {
 
 const phaseToneMap: Record<CasePhase, 'neutral' | 'info' | 'success'> = {
   planejamento: 'neutral',
-  orçamento: 'neutral',
+  'or\u00E7amento': 'neutral',
   contrato_pendente: 'neutral',
   contrato_aprovado: 'info',
   em_producao: 'info',
@@ -65,8 +67,8 @@ type CaseListItem = {
   totalTraysUpper?: number
   totalTraysLower?: number
   changeEveryDays?: number
-  deliveryLots?: unknown[]
-  installation?: { installedAt?: string }
+  deliveryLots?: Case['deliveryLots']
+  installation?: Case['installation']
   arch?: 'superior' | 'inferior' | 'ambos'
   caseDate: string
 }
@@ -115,6 +117,106 @@ function resolveCaseOrigin(
   )
 }
 
+function addDaysIso(baseIsoDate: string, days: number) {
+  const base = new Date(`${baseIsoDate}T00:00:00`)
+  base.setDate(base.getDate() + days)
+  return base.toISOString().slice(0, 10)
+}
+
+function padTrayCount(value: number) {
+  return String(Math.max(0, Math.trunc(value))).padStart(2, '0')
+}
+
+function formatTrayPair(upper: number, lower: number, upperLabel: 'sup' | 'Sup', lowerLabel: 'inf' | 'Inf') {
+  return `${padTrayCount(upper)} ${upperLabel} / ${padTrayCount(lower)} ${lowerLabel}`
+}
+
+function resolveArchTotals(item: Pick<CaseListItem, 'arch' | 'totalTrays' | 'totalTraysUpper' | 'totalTraysLower'>) {
+  const totalUpper =
+    item.arch === 'inferior'
+      ? 0
+      : typeof item.totalTraysUpper === 'number'
+        ? item.totalTraysUpper
+        : (item.totalTrays ?? 0)
+  const totalLower =
+    item.arch === 'superior'
+      ? 0
+      : typeof item.totalTraysLower === 'number'
+        ? item.totalTraysLower
+        : (item.totalTrays ?? 0)
+  return {
+    upper: Math.max(0, Math.trunc(totalUpper)),
+    lower: Math.max(0, Math.trunc(totalLower)),
+  }
+}
+
+function resolveDeliveredToDentist(lots: Case['deliveryLots'] | undefined) {
+  return (lots ?? []).reduce(
+    (acc, lot) => {
+      const quantity = Math.max(0, Math.trunc(lot.quantity ?? 0))
+      if (lot.arch === 'superior') acc.upper += quantity
+      if (lot.arch === 'inferior') acc.lower += quantity
+      if (lot.arch === 'ambos') {
+        acc.upper += quantity
+        acc.lower += quantity
+      }
+      return acc
+    },
+    { upper: 0, lower: 0 },
+  )
+}
+
+function buildActualChangeDateMap(installation: Case['installation'] | undefined, arch: 'superior' | 'inferior') {
+  const map = new Map<number, string>()
+  ;(installation?.actualChangeDates ?? []).forEach((entry) => {
+    if (!entry?.trayNumber || !entry?.changedAt) return
+    if (entry.arch && entry.arch !== arch && entry.arch !== 'ambos') return
+    map.set(Math.max(0, Math.trunc(entry.trayNumber)), entry.changedAt.slice(0, 10))
+  })
+  return map
+}
+
+function buildArchScheduleDates(
+  installedAt: string | undefined,
+  changeEveryDays: number | undefined,
+  totalTrays: number,
+  actualChangeDatesByTray: Map<number, string>,
+) {
+  const dates: Array<string | undefined> = []
+  if (!installedAt || totalTrays <= 0) return dates
+  const changeDays = Math.max(1, Math.trunc(changeEveryDays ?? 0) || 1)
+  let currentDate = installedAt.slice(0, 10)
+  for (let trayNumber = 1; trayNumber <= totalTrays; trayNumber += 1) {
+    if (trayNumber > 1) {
+      currentDate = addDaysIso(currentDate, changeDays)
+    }
+    const actualDate = actualChangeDatesByTray.get(trayNumber) ?? currentDate
+    dates[trayNumber] = actualDate
+    currentDate = actualDate
+  }
+  return dates
+}
+
+function pickMaxIsoDate(values: Array<string | undefined>) {
+  const validValues = values.filter((value): value is string => Boolean(value))
+  if (validValues.length === 0) return undefined
+  return [...validValues].sort().at(-1)
+}
+
+function pickMinIsoDate(values: Array<string | undefined>) {
+  const validValues = values.filter((value): value is string => Boolean(value))
+  if (validValues.length === 0) return undefined
+  return [...validValues].sort()[0]
+}
+
+function formatDentistDisplayName(dentist?: { name: string; gender?: string }) {
+  const name = (dentist?.name ?? '').trim()
+  if (!name) return '-'
+  if (/^dra?\.?\s/i.test(name)) return name
+  const prefix = dentist?.gender === 'feminino' ? 'Dra' : 'Dr'
+  return `${prefix} ${name}`
+}
+
 function buildLabStatusByCase(items: Array<{ caseId?: string; status?: string }>) {
   const order: Array<Exclude<LiveLabStatus, null>> = ['aguardando_iniciar', 'em_producao', 'controle_qualidade', 'prontas']
   const score = (status: string) => {
@@ -137,10 +239,10 @@ function buildLabStatusByCase(items: Array<{ caseId?: string; status?: string }>
 function caseStatusBadge(item: CaseListItem, liveLabStatus: LiveLabStatus, hasLabOrder: boolean) {
   if (isConcluded(item)) return { label: 'Concluido', tone: 'success' as const }
   if (item.status === 'em_tratamento') return { label: 'Em tratamento', tone: 'info' as const }
-  if (item.status === 'aguardando_reposicao') return { label: 'Aguardando reposição', tone: 'danger' as const }
+  if (item.status === 'aguardando_reposicao') return { label: 'Aguardando reposi\u00E7\u00E3o', tone: 'danger' as const }
   if (item.phase === 'planejamento') return { label: 'Planejamento', tone: 'neutral' as const }
-  if (item.phase === 'orçamento') return { label: 'Orçamento', tone: 'neutral' as const }
-  if (item.phase === 'contrato_pendente') return { label: 'Aguardando aprovação de contrato', tone: 'neutral' as const }
+  if (item.phase === 'or\u00E7amento') return { label: 'Or\u00E7amento', tone: 'neutral' as const }
+  if (item.phase === 'contrato_pendente') return { label: 'Aguardando aprova\u00E7\u00E3o de contrato', tone: 'neutral' as const }
   if (item.phase === 'contrato_aprovado' && !hasLabOrder) return { label: 'Contrato aprovado - gerar OS', tone: 'info' as const }
   if (item.phase === 'contrato_aprovado' && hasLabOrder && !liveLabStatus) return { label: 'OS gerada', tone: 'info' as const }
   if (liveLabStatus === 'prontas') return { label: 'Pronto para entrega', tone: 'info' as const }
@@ -154,6 +256,7 @@ function caseStatusBadge(item: CaseListItem, liveLabStatus: LiveLabStatus, hasLa
 
 export default function CasesPage() {
   const { db } = useDb()
+  const { addToast } = useToast()
   const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
   const aiComercialEnabled = useAiModuleEnabled('comercial')
@@ -169,6 +272,7 @@ export default function CasesPage() {
   const [showInTreatment, setShowInTreatment] = useState(true)
   const [showConcluded, setShowConcluded] = useState(false)
   const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [isExportingExcel, setIsExportingExcel] = useState(false)
   const [aiModalTitle, setAiModalTitle] = useState('')
   const [aiDraft, setAiDraft] = useState('')
 
@@ -275,8 +379,8 @@ export default function CasesPage() {
           totalTraysUpper: data.totalTraysUpper as number | undefined,
           totalTraysLower: data.totalTraysLower as number | undefined,
           changeEveryDays: data.changeEveryDays as number | undefined,
-          deliveryLots: (data.deliveryLots as unknown[] | undefined) ?? [],
-          installation: (data.installation as { installedAt?: string } | undefined) ?? undefined,
+          deliveryLots: (data.deliveryLots as Case['deliveryLots'] | undefined) ?? [],
+          installation: (data.installation as Case['installation'] | undefined) ?? undefined,
           arch: (data.arch as 'superior' | 'inferior' | 'ambos' | undefined) ?? 'ambos',
           caseDate,
         } as CaseListItem
@@ -374,6 +478,63 @@ export default function CasesPage() {
       })
   }, [cases, clinicsById, dentistsById, originFilter, patientsById, search, showConcluded, showInTreatment])
 
+  const reportRows = useMemo<AlignerTreatmentReportRow[]>(() => {
+    return filteredCases.map((item) => {
+      const patientName = item.patientId ? (patientsById.get(item.patientId)?.name ?? item.patientName) : item.patientName
+      const dentist = item.dentistId ? dentistsById.get(item.dentistId) : undefined
+      const totals = resolveArchTotals(item)
+      const deliveredToDentist = resolveDeliveredToDentist(item.deliveryLots)
+      const deliveredUpper = Math.min(totals.upper, Math.max(0, Math.trunc(item.installation?.deliveredUpper ?? 0)))
+      const deliveredLower = Math.min(totals.lower, Math.max(0, Math.trunc(item.installation?.deliveredLower ?? 0)))
+      const upperSchedule = buildArchScheduleDates(
+        item.installation?.installedAt,
+        item.changeEveryDays,
+        totals.upper,
+        buildActualChangeDateMap(item.installation, 'superior'),
+      )
+      const lowerSchedule = buildArchScheduleDates(
+        item.installation?.installedAt,
+        item.changeEveryDays,
+        totals.lower,
+        buildActualChangeDateMap(item.installation, 'inferior'),
+      )
+      const lastUpperChange = deliveredUpper > 0 ? upperSchedule[deliveredUpper] : undefined
+      const lastLowerChange = deliveredLower > 0 ? lowerSchedule[deliveredLower] : undefined
+      const nextUpperChange = deliveredUpper < totals.upper ? upperSchedule[deliveredUpper + 1] : undefined
+      const nextLowerChange = deliveredLower < totals.lower ? lowerSchedule[deliveredLower + 1] : undefined
+
+      return {
+        caseCode: item.treatmentCode ?? item.shortId ?? item.id,
+        patientName,
+        dentistName: formatDentistDisplayName(dentist),
+        plannedTreatment: formatTrayPair(totals.upper, totals.lower, 'sup', 'inf'),
+        changeDays: (item.changeEveryDays ?? 0) > 0 ? Math.trunc(item.changeEveryDays ?? 0) : '',
+        deliveredToDentist: formatTrayPair(deliveredToDentist.upper, deliveredToDentist.lower, 'Sup', 'Inf'),
+        currentTray: formatTrayPair(deliveredUpper, deliveredLower, 'sup', 'inf'),
+        treatmentStartDate: item.installation?.installedAt?.slice(0, 10),
+        lastChangeDate: pickMaxIsoDate([lastUpperChange, lastLowerChange]),
+        nextChangeDate: pickMinIsoDate([nextUpperChange, nextLowerChange]),
+      }
+    })
+  }, [dentistsById, filteredCases, patientsById])
+
+  const handleExportExcel = async () => {
+    if (reportRows.length === 0) {
+      addToast({ type: 'error', title: 'Nenhum caso encontrado para exportar com os filtros atuais.' })
+      return
+    }
+    try {
+      setIsExportingExcel(true)
+      await downloadAlignerTreatmentReport(reportRows)
+      addToast({ type: "success", title: `Relatorio gerado com ${reportRows.length} registro(s).` })
+    } catch (error) {
+      console.error(error)
+      addToast({ type: 'error', title: 'Falha ao gerar o relatorio em Excel. Tente novamente.' })
+    } finally {
+      setIsExportingExcel(false)
+    }
+  }
+
   const toggleInTreatment = () => {
     if (showInTreatment && !showConcluded) return
     setShowInTreatment((current) => !current)
@@ -386,7 +547,7 @@ export default function CasesPage() {
 
   const runComercialAi = async (endpoint: '/comercial/script' | '/comercial/resumo-leigo' | '/comercial/followup', title: string) => {
     if (!canAiComercial) return
-    const reference = filteredCases.find((item) => item.phase === 'orçamento' || item.phase === 'contrato_pendente') ?? filteredCases[0]
+    const reference = filteredCases.find((item) => item.phase === 'or\u00E7amento' || item.phase === 'contrato_pendente') ?? filteredCases[0]
     if (!reference) return
     const result = await runAiRequest(endpoint, {
       clinicId: currentUser?.linkedClinicId,
@@ -405,16 +566,16 @@ export default function CasesPage() {
   }
 
   return (
-    <AppShell breadcrumb={['Início', 'Alinhadores']}>
+    <AppShell breadcrumb={['In\u00EDcio', 'Alinhadores']}>
       <section>
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Alinhadores</h1>
         <p className="mt-2 text-sm text-slate-500">Gestao dos alinhadores com fluxo clinico e esteira de producao.</p>
       </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_auto_auto] md:items-center">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_auto_auto_auto] md:items-center">
           <Input
-            placeholder="Buscar por codigo, paciente ou Nº Caso"
+            placeholder="Buscar por codigo, paciente ou N\u00BA Caso"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -438,6 +599,9 @@ export default function CasesPage() {
             onClick={toggleConcluded}
           >
             Concluidos
+          </Button>
+          <Button variant="secondary" onClick={() => void handleExportExcel()} disabled={isExportingExcel || reportRows.length === 0}>
+            {isExportingExcel ? 'Gerando Excel...' : 'Gerar Excel'}
           </Button>
         </div>
         {canAiComercial ? (
@@ -464,13 +628,13 @@ export default function CasesPage() {
             <table className="min-w-full text-left">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Nº Caso</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">N\u00BA Caso</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Paciente</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Interno/Externo</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Placas Sup/Inf</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Troca (dias)</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Etapa do tratamento</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">A\u00E7\u00F5es</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -555,4 +719,5 @@ export default function CasesPage() {
     </AppShell>
   )
 }
+
 
