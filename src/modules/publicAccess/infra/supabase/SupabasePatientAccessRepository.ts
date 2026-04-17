@@ -1,5 +1,6 @@
 import { err, ok, type Result } from '../../../../shared/errors'
 import { supabase } from '../../../../lib/supabaseClient'
+import { PUBLIC_SUPABASE_URL, SUPABASE_ANON_KEY } from '../../../../lib/supabaseEndpoint'
 import type {
   PatientAccessIdentityInput,
   PatientAccessPreview,
@@ -13,9 +14,6 @@ import type {
   PatientPortalSession,
   PatientPortalSnapshot,
 } from '../../domain/models/PatientPortal'
-
-const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? ''
-const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? ''
 
 type FunctionSuccess<T> = {
   ok: true
@@ -54,12 +52,12 @@ async function parseFunctionResponse<T>(response: Response): Promise<Result<T, s
 }
 
 async function invokePublicFunction<T>(name: string, body: Record<string, unknown>) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !supabase) {
+  if (!PUBLIC_SUPABASE_URL || !SUPABASE_ANON_KEY || !supabase) {
     return err('Supabase não configurado.')
   }
 
   try {
-    const response = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/${name}`, {
+    const response = await fetch(`${PUBLIC_SUPABASE_URL}/functions/v1/${name}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
@@ -76,7 +74,7 @@ async function invokePublicFunction<T>(name: string, body: Record<string, unknow
 }
 
 async function uploadPublicPhoto(input: PatientPortalPhotoUploadInput): Promise<Result<PatientPortalPhotoUploadReceipt, string>> {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return err('Supabase não configurado.')
+  if (!PUBLIC_SUPABASE_URL || !SUPABASE_ANON_KEY) return err('Supabase não configurado.')
 
   const form = new FormData()
   form.set('token', input.token)
@@ -94,7 +92,7 @@ async function uploadPublicPhoto(input: PatientPortalPhotoUploadInput): Promise<
   }
   form.set('file', input.file, input.file.name)
 
-  const response = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/patient-upload-progress-photo`, {
+  const response = await fetch(`${PUBLIC_SUPABASE_URL}/functions/v1/patient-upload-progress-photo`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${SUPABASE_ANON_KEY}`,

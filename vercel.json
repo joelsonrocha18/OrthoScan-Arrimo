@@ -16,6 +16,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/supabase/:path*", "destination": "https://temetyxufufuefuclati.supabase.co/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

@@ -1,4 +1,5 @@
 ﻿import { supabase } from '../lib/supabaseClient'
+import { PUBLIC_SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabaseEndpoint'
 import type { Role } from '../types/User'
 import { getSupabaseAccessToken } from '../lib/auth'
 import { getAuthProvider } from '../auth/authProvider'
@@ -45,14 +46,14 @@ export async function createOnboardingInvite(payload: {
   }
 
   if (!accessToken) return { ok: false as const, error: 'Sessão expirada. Saia e entre novamente.' }
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  const anonKey = SUPABASE_ANON_KEY
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  const supabaseUrl = PUBLIC_SUPABASE_URL
   if (!supabaseUrl) return { ok: false as const, error: 'Supabase URL ausente no build.' }
 
   let data: { inviteId?: string; inviteLink?: string } | null = null
   try {
-    const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/functions/v1/create-onboarding-invite`, {
+    const response = await fetch(`${supabaseUrl}/functions/v1/create-onboarding-invite`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${anonKey}`,
@@ -80,7 +81,7 @@ export async function createOnboardingInvite(payload: {
 
 export async function validateOnboardingInvite(token: string) {
   if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  const anonKey = SUPABASE_ANON_KEY
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
   const { data, error } = await supabase.functions.invoke('validate-onboarding-invite', {
     body: { token },
@@ -118,7 +119,7 @@ export async function completeOnboardingInvite(payload: {
   }
 }) {
   if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  const anonKey = SUPABASE_ANON_KEY
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
   const { data, error } = await supabase.functions.invoke('complete-onboarding-invite', {
     body: payload,
