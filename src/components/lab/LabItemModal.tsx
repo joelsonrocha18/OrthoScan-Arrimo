@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
-import { canMoveToStatus } from '../../data/labRepo'
+import { canTransitionLabOrderStage as canMoveToStatus } from '../../modules/lab'
 import type { Case } from '../../types/Case'
 import type { LabItem, LabPriority, LabStatus } from '../../types/Lab'
 import type { ProductType } from '../../types/Product'
@@ -47,6 +47,7 @@ type LabItemModalProps = {
   onSave: (id: string, patch: Partial<LabItem>) => { ok: boolean; message?: string } | Promise<{ ok: boolean; message?: string }>
   onDelete: (id: string) => void
   onReprintGuide?: (item: LabItem) => void
+  reprintGuideLabel?: string
 }
 
 type FormState = {
@@ -81,7 +82,7 @@ const defaultForm: FormState = {
 
 const statusOptions: Array<{ value: LabStatus; label: string }> = [
   { value: 'aguardando_iniciar', label: 'Aguardando iniciar' },
-  { value: 'em_producao', label: 'Em Producao' },
+  { value: 'em_producao', label: 'Em produção' },
   { value: 'controle_qualidade', label: 'Controle de qualidade' },
   { value: 'prontas', label: 'Prontas' },
 ]
@@ -125,6 +126,7 @@ export default function LabItemModal({
   onSave,
   onDelete,
   onReprintGuide,
+  reprintGuideLabel,
 }: LabItemModalProps) {
   const { addToast } = useToast()
   const [form, setForm] = useState<FormState>(defaultForm)
@@ -196,7 +198,13 @@ export default function LabItemModal({
   )
   const planQtyTotal = Math.trunc(Number(form.plannedUpperQty || 0)) + Math.trunc(Number(form.plannedLowerQty || 0))
   const isAlignerProduct = isAlignerProductType(form.productType)
-  const automaticStatus = isAlignerProduct && planQtyTotal > 0 ? 'em_producao' : 'aguardando_iniciar'
+  const automaticStatus: LabStatus = isAlignerProduct && planQtyTotal > 0 ? 'em_producao' : 'aguardando_iniciar'
+  const nextEditStatus: LabStatus =
+    mode === 'edit' && item
+      ? item.status === 'aguardando_iniciar'
+        ? item.status
+        : form.status
+      : automaticStatus
 
   const statusBlocked = useMemo(() => {
     if (mode === 'create') {
@@ -222,7 +230,7 @@ export default function LabItemModal({
     const plannedUpperQty = form.arch === 'inferior' ? 0 : rawUpperQty
     const plannedLowerQty = form.arch === 'superior' ? 0 : rawLowerQty
     if (!form.patientName.trim() || !form.dueDate || !Number.isFinite(tray) || tray <= 0) {
-      const message = 'Preencha os campos obrigatorios com valores validos.'
+      const message = 'Preencha os campos obrigatórios com valores válidos.'
       setError(message)
       addToast({ type: 'error', title: 'Validacao', message })
       return
@@ -252,7 +260,7 @@ export default function LabItemModal({
     }
 
     if (statusBlocked) {
-      const message = 'Transicao de status invalida para este item.'
+      const message = 'Transição de status inválida para este item.'
       setError(message)
       addToast({ type: 'error', title: 'Validacao', message })
       return
@@ -276,11 +284,11 @@ export default function LabItemModal({
         status: automaticStatus,
       })
       if (!result.ok) {
-        setError(result.message ?? 'Erro ao salvar solicitacao.')
-        addToast({ type: 'error', title: 'Erro', message: result.message ?? 'Erro ao salvar solicitacao.' })
+        setError(result.message ?? 'Erro ao salvar solicitação.')
+        addToast({ type: 'error', title: 'Erro', message: result.message ?? 'Erro ao salvar solicitação.' })
         return
       }
-      addToast({ type: 'success', title: 'Solicitacao salva' })
+      addToast({ type: 'success', title: 'Solicitação salva' })
       onClose()
       return
     }
@@ -303,14 +311,14 @@ export default function LabItemModal({
       dueDate: form.dueDate,
       priority: form.priority,
       notes: form.notes.trim() || undefined,
-      status: mode === 'edit' && item.status !== 'aguardando_iniciar' ? form.status : automaticStatus,
+      status: nextEditStatus,
     })
     if (!result.ok) {
-      setError(result.message ?? 'Erro ao salvar solicitacao.')
-      addToast({ type: 'error', title: 'Erro', message: result.message ?? 'Erro ao salvar solicitacao.' })
+      setError(result.message ?? 'Erro ao salvar solicitação.')
+      addToast({ type: 'error', title: 'Erro', message: result.message ?? 'Erro ao salvar solicitação.' })
       return
     }
-    addToast({ type: 'success', title: 'Solicitacao salva' })
+    addToast({ type: 'success', title: 'Solicitação salva' })
     onClose()
   }
 
@@ -321,7 +329,7 @@ export default function LabItemModal({
     if (!item) {
       return
     }
-    if (!window.confirm('Deseja excluir este item do laboratorio?')) {
+    if (!window.confirm('Deseja excluir este item do laboratório?')) {
       return
     }
     onDelete(item.id)
@@ -333,14 +341,14 @@ export default function LabItemModal({
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">
-              {mode === 'create' ? 'Solicitacao avulsa' : isReworkItem ? 'Detalhes do Rework' : 'Detalhes do Item'}
+              {mode === 'create' ? 'Solicitação avulsa' : isReworkItem ? 'Detalhes da reconfecção' : 'Detalhes do item'}
             </h2>
             <p className="mt-1 text-sm text-slate-500">
               {mode === 'create'
-                ? 'Cadastre uma solicitacao avulsa na fila do laboratorio.'
+                ? 'Cadastre uma solicitação avulsa na fila do laboratório.'
                 : isReworkItem
-                  ? 'Rework da esteira: ajuste prazo, observacoes e status.'
-                  : 'Edite prioridade, prazo, observacoes e status.'}
+                  ? 'Reconfecção na esteira: ajuste prazo, observações e status.'
+                  : 'Edite prioridade, prazo, observações e status.'}
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -375,7 +383,7 @@ export default function LabItemModal({
             ) : null}
             {isReworkItem && item ? (
               <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                <p className="font-semibold">Placa(s) solicitada(s) para rework: #{item.trayNumber}</p>
+                <p className="font-semibold">Placa(s) solicitada(s) para reconfecção: #{item.trayNumber}</p>
                 <p className="text-xs">Arcada: {archLabelMap[item.arch]}</p>
               </div>
             ) : null}
@@ -459,7 +467,7 @@ export default function LabItemModal({
               disabled={readOnly}
             >
               <option value="Baixo">Baixo</option>
-              <option value="Medio">Medio</option>
+              <option value="Medio">Médio</option>
               <option value="Urgente">Urgente</option>
             </select>
           </div>
@@ -498,7 +506,7 @@ export default function LabItemModal({
             <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
             {(mode === 'create' || item?.status === 'aguardando_iniciar') ? (
               <p className="mb-1 text-xs text-slate-500">
-                Status automático: fica em "Aguardando iniciar" ate definir quantidade. Ao salvar com quantidade, vai para "Em Producao".
+                Status inicial fica em "Aguardando iniciar". Defina as quantidades e salve; o avanço para "Em Produção" acontece ao mover a etapa na esteira.
               </p>
             ) : null}
             <select
@@ -522,7 +530,7 @@ export default function LabItemModal({
               onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
               rows={4}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
-              placeholder="Detalhes internos do laboratorio..."
+              placeholder="Detalhes internos do laboratório..."
               disabled={readOnly}
             />
           </div>
@@ -534,7 +542,7 @@ export default function LabItemModal({
           <div className="flex items-center gap-2">
             {!readOnly && mode === 'edit' && isStartWaitingStatus(item?.status) && item && onReprintGuide ? (
               <Button variant="secondary" onClick={() => onReprintGuide(item)}>
-                Reimpressao O.S
+                {reprintGuideLabel || 'Reimpressao guia'}
               </Button>
             ) : null}
             {!readOnly && canDelete && allowDelete ? (

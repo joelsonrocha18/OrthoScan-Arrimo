@@ -95,7 +95,7 @@ export async function listInternalChatContacts(payload: { userId: string; clinic
 export async function ensureInternalDirectRoom(payload: { me: string; other: string }) {
   if (!supabase) return { ok: false as const, error: 'Supabase não configurado.', roomKey: '' }
   if (!payload.me || !payload.other || payload.me === payload.other) {
-    return { ok: false as const, error: 'Participantes invalidos.', roomKey: '' }
+    return { ok: false as const, error: 'Participantes inválidos.', roomKey: '' }
   }
   const [userA, userB] = stableRoomPair(payload.me, payload.other)
   const roomKey = directRoomKey(userA, userB)

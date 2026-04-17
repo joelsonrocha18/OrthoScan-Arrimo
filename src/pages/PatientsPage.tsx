@@ -138,12 +138,17 @@ export default function PatientsPage() {
 
   const localPatients = useMemo(() => listPatientsForUser(db, currentUser), [db, currentUser])
   const sourcePatients = isSupabaseMode ? supabasePatients : localPatients
-  const dentistsById = isSupabaseMode
-    ? supabaseDentistsById
-    : new Map(db.dentists.map((dentist) => [dentist.id, dentist.name]))
-  const clinicsById = isSupabaseMode
-    ? supabaseClinicsById
-    : new Map(db.clinics.filter((clinic) => !clinic.deletedAt).map((clinic) => [clinic.id, clinic.tradeName]))
+  const dentistsById = useMemo(
+    () => (isSupabaseMode ? supabaseDentistsById : new Map(db.dentists.map((dentist) => [dentist.id, dentist.name]))),
+    [db.dentists, isSupabaseMode, supabaseDentistsById],
+  )
+  const clinicsById = useMemo(
+    () =>
+      isSupabaseMode
+        ? supabaseClinicsById
+        : new Map(db.clinics.filter((clinic) => !clinic.deletedAt).map((clinic) => [clinic.id, clinic.tradeName])),
+    [db.clinics, isSupabaseMode, supabaseClinicsById],
+  )
   const dentistOptions = useMemo(
     () =>
       Array.from(dentistsById.entries())
@@ -323,7 +328,6 @@ export default function PatientsPage() {
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Pacientes</h1>
-          <p className="mt-2 text-sm text-slate-500">Cadastro centralizado de pacientes e vínculos de tratamento.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canWrite ? (
@@ -342,8 +346,7 @@ export default function PatientsPage() {
       {showImport ? (
         <section className="mt-4">
           <Card>
-            <h2 className="text-lg font-semibold text-slate-900">Importar pacientes por planilha</h2>
-            <p className="mt-1 text-sm text-slate-500">Colunas esperadas: Data Emissão + Nome do Paciente.</p>
+            <h2 className="text-lg font-semibold text-slate-900">Importar pacientes</h2>
             <textarea
               className="mt-3 min-h-36 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
               placeholder="Cole aqui os dados copiados do Excel"
@@ -374,7 +377,7 @@ export default function PatientsPage() {
           <div className="border-b border-slate-200 px-5 py-4">
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(220px,1fr)_minmax(220px,1fr)_auto]">
               <Input
-                placeholder="Buscar por codigo, nome, CPF, telefone ou WhatsApp"
+                placeholder="Buscar por código, nome, CPF, telefone ou WhatsApp"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -400,7 +403,7 @@ export default function PatientsPage() {
               </select>
               <label className="inline-flex items-center gap-2 text-sm text-slate-600">
                 <input type="checkbox" checked={showDeleted} onChange={(event) => setShowDeleted(event.target.checked)} />
-                Mostrar excluidos
+                Mostrar excluídos
               </label>
             </div>
           </div>
@@ -412,7 +415,7 @@ export default function PatientsPage() {
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Dentista responsável</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Telefone fixo</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">WhatsApp</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Historico de produtos</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Histórico de produtos</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</th>
                 </tr>
               </thead>

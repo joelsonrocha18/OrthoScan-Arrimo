@@ -16,12 +16,12 @@ begin
   and deleted_at is null;
 
   if case_data is null then
-    raise exception 'Caso/Pedido vinculado nao encontrado para gerar OS.';
+    raise exception 'Caso/pedido vinculado não encontrado para gerar OS.';
   end if;
 
   contract_status := coalesce(case_data->'contract'->>'status', 'pendente');
   if contract_status <> 'aprovado' then
-    raise exception 'Contrato nao aprovado. Nao e possivel gerar OS para o laboratorio.';
+    raise exception 'Contrato não aprovado. Não é possível gerar OS para o laboratório.';
   end if;
 
   return new;

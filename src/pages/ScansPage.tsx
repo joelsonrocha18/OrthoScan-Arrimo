@@ -217,7 +217,7 @@ export default function ScansPage() {
     return () => {
       active = false
     }
-  }, [isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
+  }, [addToast, isSupabaseMode, supabaseRefreshKey, supabaseSyncTick])
 
   const scans = useMemo(() => (isSupabaseMode ? supabaseScans : canRead ? listScansForUser(db, currentUser) : []), [canRead, isSupabaseMode, supabaseScans, db, currentUser])
   const purposeOptions = useMemo(
@@ -371,7 +371,7 @@ export default function ScansPage() {
         <body>
           <div class="header">
             <div class="brand">
-              <img src="${window.location.origin}/brand/orthoscan.png" alt="Orthoscan" />
+              <img src="${window.location.origin}/brand/orthoscan-submark-light.jpg" alt="Orthoscan" />
               <p>Odontologia Digital</p>
             </div>
             <div class="doc">
@@ -383,7 +383,7 @@ export default function ScansPage() {
 
           <div class="meta">
             <div class="meta-box"><div class="meta-label">Paciente</div><div class="meta-value">${escapeHtml(payload.patientName)}</div></div>
-            <div class="meta-box"><div class="meta-label">Data do scan</div><div class="meta-value">${escapeHtml(scanDateLabel)}</div></div>
+            <div class="meta-box"><div class="meta-label">Data do exame</div><div class="meta-value">${escapeHtml(scanDateLabel)}</div></div>
             <div class="meta-box"><div class="meta-label">Clínica</div><div class="meta-value">${escapeHtml(clinic?.name ?? '-')}</div></div>
             <div class="meta-box"><div class="meta-label">Dentista responsável</div><div class="meta-value">${escapeHtml(dentistLabel)}</div></div>
             <div class="meta-box"><div class="meta-label">Solicitante</div><div class="meta-value">${escapeHtml(requesterLabel)}</div></div>
@@ -457,17 +457,17 @@ export default function ScansPage() {
       const result = await updateScanStatusSupabase(id, 'reprovado')
       if (!result.ok) return addToast({ type: 'error', title: result.error })
       setSupabaseRefreshKey((current) => current + 1)
-      addToast({ type: 'info', title: 'Scan reprovado' })
+      addToast({ type: 'info', title: 'Exame reprovado' })
       return
     }
     rejectScan(id)
-    addToast({ type: 'info', title: 'Scan reprovado' })
+    addToast({ type: 'info', title: 'Exame reprovado' })
   }
 
   const handleDelete = async (scan: Scan) => {
     if (!canDelete) return
     const confirmed = window.confirm(
-      `Confirma excluir permanentemente este exame de ${scan.patientName}? Esta ação será registrada no historico do paciente.`,
+      `Confirma excluir permanentemente este exame de ${scan.patientName}? Esta ação será registrada no histórico do paciente.`,
     )
     if (!confirmed) return
     if (isSupabaseMode) {
@@ -477,14 +477,14 @@ export default function ScansPage() {
         setDetails(null)
       }
       setSupabaseRefreshKey((current) => current + 1)
-      addToast({ type: 'success', title: 'Escaneamento excluido' })
+      addToast({ type: 'success', title: 'Escaneamento excluído' })
       return
     }
     deleteScan(scan.id)
     if (details?.id === scan.id) {
       setDetails(null)
     }
-    addToast({ type: 'success', title: 'Escaneamento excluido' })
+    addToast({ type: 'success', title: 'Escaneamento excluído' })
   }
   const addAttachment = async (
     scanId: string,
@@ -518,7 +518,7 @@ export default function ScansPage() {
         : undefined
       const clinicId = targetScan?.clinicId || patientClinicId || currentUser?.linkedClinicId
       if (!clinicId) {
-        addToast({ type: 'error', title: 'Não foi possível determinar a clinica para upload.' })
+        addToast({ type: 'error', title: 'Não foi possível determinar a clínica para envio.' })
         return
       }
       filePath = buildScanAttachmentPath({
@@ -681,7 +681,7 @@ export default function ScansPage() {
     }
 
     setDetails((current) => (current && current.id === scanId ? nextScan : current))
-    addToast({ type: 'success', title: 'Novo anexo adicionado ao historico' })
+      addToast({ type: 'success', title: 'Novo anexo adicionado ao histórico' })
   }
 
   const flagAttachmentError = (scanId: string, attachmentId: string, reason: string) => {
@@ -763,45 +763,44 @@ export default function ScansPage() {
     <AppShell breadcrumb={['Início', 'Exames']}>
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Exames (Scans)</h1>
-          <p className="mt-2 text-sm text-slate-500">Escaneamentos digitais e origem dos tratamentos.</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Exames</h1>
         </div>
         {canWrite ? <Button onClick={() => setCreateOpen(true)}>Novo Exame</Button> : null}
       </section>
 
       <section className="mt-6">
-        <Card className="overflow-hidden p-0">
-          <div className="border-b border-slate-200 p-4">
+        <Card className="ui-surface-panel overflow-hidden p-0">
+          <div className="border-b border-slate-300/80 p-4">
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
               <div className="relative lg:col-span-2">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar por codigo, paciente, O.S ou finalidade"
-                  className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                  placeholder="Buscar por código, paciente, O.S. ou finalidade"
+                  className="ui-input-strong h-10 w-full rounded-lg pl-9 pr-3 text-sm outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
               </div>
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'todos' | Scan['status'])} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'todos' | Scan['status'])} className="ui-input-strong h-10 w-full rounded-lg px-3 text-sm">
                 <option value="todos">Status: Todos</option>
                 <option value="pendente">Pendente</option>
                 <option value="aprovado">Aprovado</option>
                 <option value="reprovado">Reprovado</option>
                 <option value="convertido">Convertido</option>
               </select>
-              <select value={originFilter} onChange={(event) => setOriginFilter(event.target.value as 'todos' | 'interno' | 'externo')} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">
+              <select value={originFilter} onChange={(event) => setOriginFilter(event.target.value as 'todos' | 'interno' | 'externo')} className="ui-input-strong h-10 w-full rounded-lg px-3 text-sm">
                 <option value="todos">Origem: Todas</option>
                 <option value="interno">Interno</option>
                 <option value="externo">Externo</option>
               </select>
               <div className="grid grid-cols-2 gap-3">
-                <select value={archFilter} onChange={(event) => setArchFilter(event.target.value as 'todos' | Scan['arch'])} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                <select value={archFilter} onChange={(event) => setArchFilter(event.target.value as 'todos' | Scan['arch'])} className="ui-input-strong h-10 w-full rounded-lg px-3 text-sm">
                   <option value="todos">Arcada: Todas</option>
                   <option value="superior">Superior</option>
                   <option value="inferior">Inferior</option>
                   <option value="ambos">Ambos</option>
                 </select>
-                <select value={purposeFilter} onChange={(event) => setPurposeFilter(event.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900">
+                <select value={purposeFilter} onChange={(event) => setPurposeFilter(event.target.value)} className="ui-input-strong h-10 w-full rounded-lg px-3 text-sm">
                   <option value="todos">Finalidade: Todas</option>
                   {purposeOptions.map((item) => (
                     <option key={item} value={item}>{item}</option>
@@ -812,41 +811,43 @@ export default function ScansPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
-              <thead className="bg-slate-50">
+              <thead className="ui-table-head">
                 <tr>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">O.S</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Paciente</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Finalidade</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Data</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Arcada</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Completude</th>
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</th>
+                  <th className="px-4 py-3 text-xs uppercase tracking-wide">O.S</th>
+                  <th className="px-4 py-3 text-xs uppercase tracking-wide">Paciente</th>
+                  <th className="px-4 py-3 text-xs uppercase tracking-wide">Finalidade</th>
+                  <th className="px-4 py-3 text-xs uppercase tracking-wide">Data</th>
+                  <th className="px-4 py-3 text-xs uppercase tracking-wide">Arcada</th>
+                  <th className="px-4 py-3 text-xs uppercase tracking-wide">Status</th>
+                  <th className="px-4 py-3 text-xs uppercase tracking-wide">Completude</th>
+                  <th className="px-4 py-3 text-xs uppercase tracking-wide">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-300/70">
                 {filteredScans.map((scan) => {
                   const comp = scanCompleteness(scan)
                   const linkedCaseCode = scan.linkedCaseId ? caseById.get(scan.linkedCaseId)?.treatmentCode : undefined
                   const serviceOrderCode = scan.serviceOrderCode ?? linkedCaseCode ?? '-'
                   return (
-                    <tr key={scan.id} className="bg-white">
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-900">{serviceOrderCode}</td>
-                      <td className="px-4 py-4 text-sm font-medium text-slate-900">
+                    <tr key={scan.id} className="ui-table-row">
+                      <td className="px-4 py-4 text-sm font-bold text-[#1A202C]">{serviceOrderCode}</td>
+                      <td className="px-4 py-4 text-[16px] font-bold text-[#1A202C]">
                         {scan.patientId ? (patientsById.get(scan.patientId) ?? scan.patientName) : scan.patientName}
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{scan.purposeLabel ?? scan.purposeProductType ?? 'Alinhador'}</td>
-                      <td className="px-4 py-4 text-sm text-slate-700">{new Date(`${scan.scanDate}T00:00:00`).toLocaleDateString('pt-BR')}</td>
+                      <td className="px-4 py-4 text-sm font-semibold text-[#1A202C]">{scan.purposeLabel ?? scan.purposeProductType ?? 'Alinhador'}</td>
+                      <td className="px-4 py-4 text-sm font-semibold text-[#1A202C]">{new Date(`${scan.scanDate}T00:00:00`).toLocaleDateString('pt-BR')}</td>
                       <td className="px-4 py-4">
                         <Badge tone={archTone(scan.arch)}>{scan.arch}</Badge>
                       </td>
                       <td className="px-4 py-4">
                         <Badge tone={statusTone(scan.status)}>{scan.status}</Badge>
                       </td>
-                      <td className="px-4 py-4 text-xs text-slate-600">
-                        Fotos {comp.photos}/11 • RX {comp.rx}/3
+                      <td className="px-4 py-4 text-xs">
+                        <span className="ui-label">Fotos:</span> <span className="ui-value">{comp.photos}/11</span> •{' '}
+                        <span className="ui-label">RX:</span> <span className="ui-value">{comp.rx}/3</span>
                         <br />
-                        STL sup: {comp.stlSup} • STL inf: {comp.stlInf}
+                        <span className="ui-label">STL sup:</span> <span className="ui-value">{comp.stlSup}</span> •{' '}
+                        <span className="ui-label">STL inf:</span> <span className="ui-value">{comp.stlInf}</span>
                       </td>
                       <td className="px-4 py-4">
                         <div className="flex flex-wrap gap-2">
@@ -879,7 +880,7 @@ export default function ScansPage() {
                               </Button>
                               {canCreateCase ? (
                                 <Button size="sm" onClick={() => setCreateCaseTarget(scan)}>
-                                  Criar Caso
+                                  Criar caso
                                 </Button>
                               ) : null}
                               {canDelete ? (
@@ -925,7 +926,7 @@ export default function ScansPage() {
                 })}
                 {filteredScans.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">
+                    <td colSpan={8} className="ui-copy-muted px-4 py-8 text-center text-sm">
                       Nenhum exame encontrado com os filtros atuais.
                     </td>
                   </tr>
@@ -1043,7 +1044,7 @@ export default function ScansPage() {
                 return
               }
               setSupabaseRefreshKey((current) => current + 1)
-              addToast({ type: 'success', title: 'Caso criado a partir do scan' })
+              addToast({ type: 'success', title: 'Caso criado a partir do exame' })
               navigate('/app/cases')
             })()
             return
@@ -1053,7 +1054,7 @@ export default function ScansPage() {
             addToast({ type: 'error', title: 'Não foi possível criar o caso', message: result.error })
             return
           }
-          addToast({ type: 'success', title: 'Caso criado a partir do scan' })
+          addToast({ type: 'success', title: 'Caso criado a partir do exame' })
           navigate(`/app/cases/${result.caseId}`)
         }}
       />

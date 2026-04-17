@@ -133,7 +133,7 @@ export default function MigrationPage() {
             Clínicas: {localCounts.clinics} | Dentistas: {localCounts.dentists} | Pacientes: {localCounts.patients}
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            Scans: {localCounts.scans} | Cases: {localCounts.cases} | Lab: {localCounts.labItems}
+            Exames: {localCounts.scans} | Casos: {localCounts.cases} | Laboratório: {localCounts.labItems}
           </p>
           <p className="mt-1 text-xs text-amber-700">
             Arquivos locais não sao migrados. Reenvie anexos para Storage.
@@ -177,9 +177,9 @@ export default function MigrationPage() {
 
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Exportar (Supabase)</h2>
-          <p className="mt-2 text-sm text-slate-500">Exporta dados da clinica do usuário logado.</p>
+          <p className="mt-2 text-sm text-slate-500">Exporta dados da clínica do usuário logado.</p>
           <Button className="mt-4" onClick={exportSupabase}>
-            Exportar dados da clinica
+            Exportar dados da clínica
           </Button>
           {supabaseExport ? <p className="mt-2 text-xs text-slate-500">JSON gerado.</p> : null}
         </Card>

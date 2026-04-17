@@ -44,13 +44,13 @@ type PasswordMode = 'auto' | 'manual'
 type ReportDatasetKey = 'patients' | 'dentists' | 'clinics' | 'users' | 'scans' | 'cases' | 'labItems'
 type ReportFieldOption = { key: string; label: string }
 const ROLE_LIST: Role[] = ['master_admin', 'dentist_admin', 'dentist_client', 'clinic_client', 'lab_tech', 'receptionist']
-const MODULE_ORDER: PermissionModule[] = ['Dashboard', 'Pacientes', 'Scans', 'Alinhadores', 'Laboratório', 'Usuarios', 'Configurações']
+const MODULE_ORDER: PermissionModule[] = ['Painel', 'Pacientes', 'Exames', 'Alinhadores', 'Laboratório', 'Usuários', 'Configurações']
 const REPORT_DATASETS: Array<{ key: ReportDatasetKey; label: string }> = [
   { key: 'patients', label: 'Pacientes' },
   { key: 'dentists', label: 'Dentistas' },
   { key: 'clinics', label: 'Clínicas' },
-  { key: 'users', label: 'Usuarios' },
-  { key: 'scans', label: 'Scans' },
+  { key: 'users', label: 'Usuários' },
+  { key: 'scans', label: 'Exames' },
   { key: 'cases', label: 'Alinhadores' },
   { key: 'labItems', label: 'Laboratório' },
 ]
@@ -414,7 +414,7 @@ export default function SettingsPage() {
     setCepStatus('')
     if (!form.cep.trim()) return
     if (!isValidCep(form.cep)) {
-      setCepError('CEP invalido.')
+      setCepError('CEP inválido.')
       return
     }
     setCepStatus('Buscando CEP...')
@@ -446,37 +446,37 @@ export default function SettingsPage() {
         if (!supabase) return setError('Supabase não configurado.')
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) {
-          setError('Sessao expirada. Saia e entre novamente.')
+          setError('Sessão expirada. Saia e entre novamente.')
           return
         }
         submitAccessToken = data.session?.access_token ?? ''
-        console.info('[settings-users] submit session snapshot', {
+        console.info('[configuracoes-usuarios] resumo da sessão no envio', {
           hasSession: Boolean(data.session),
           tokenLength: submitAccessToken.length,
           expiresAt: data.session?.expires_at ?? null,
           userId: data.session?.user?.id ?? null,
         })
         if (!submitAccessToken) {
-          setError('Sessao expirada. Saia e entre novamente.')
+          setError('Sessão expirada. Saia e entre novamente.')
           return
         }
       }
 
       if (isSupabaseMode && !editingUser) {
-        if (!form.name.trim()) return setError('Nome e obrigatorio.')
-        if (!form.email.trim()) return setError('Email e obrigatorio.')
-        if (!form.password.trim()) return setError('Senha e obrigatoria.')
-        if (form.password.trim().length < 8) return setError('Senha deve ter no minimo 8 caracteres.')
-        if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
-        if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
+        if (!form.name.trim()) return setError('Nome é obrigatório.')
+        if (!form.email.trim()) return setError('E-mail é obrigatório.')
+        if (!form.password.trim()) return setError('Senha é obrigatória.')
+        if (form.password.trim().length < 8) return setError('Senha deve ter no mínimo 8 caracteres.')
+        if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo inválido.')
+        if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp inválido.')
         if (!INVITE_ROLE_LIST.includes(form.role)) {
           return setError('Perfil não permitido para criação neste modo.')
         }
         if (ROLE_REQUIRES_CLINIC.includes(form.role) && !form.linkedClinicId.trim()) {
-          return setError('Clínica vinculada e obrigatoria para este perfil.')
+          return setError('Clínica vinculada é obrigatória para este perfil.')
         }
         if (form.role === 'dentist_client' && !form.linkedDentistId.trim()) {
-          return setError('Dentista responsável e obrigatorio para perfil Dentista Cliente.')
+          return setError('Dentista responsável é obrigatório para perfil Dentista Cliente.')
         }
         const result = await inviteUser({
           email: form.email.trim(),
@@ -490,20 +490,20 @@ export default function SettingsPage() {
           accessToken: submitAccessToken,
         })
         if (!result.ok) {
-          if (result.code === 'unauthorized') return setError('Sessao expirada. Saia e entre novamente.')
-          if (result.code === 'forbidden') return setError('Sem permissão para criar usuarios.')
+          if (result.code === 'unauthorized') return setError('Sessão expirada. Saia e entre novamente.')
+          if (result.code === 'forbidden') return setError('Sem permissão para criar usuários.')
           if (result.code === 'network_error') return setError(result.error)
           return setError(normalizeUserCreationError(result.error))
         }
         await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
         setModalOpen(false)
-        addToast({ type: 'success', title: 'Usuário criado', message: 'Acesso liberado com email e senha cadastrados.' })
+        addToast({ type: 'success', title: 'Usuário criado', message: 'Acesso liberado com e-mail e senha cadastrados.' })
         return
       }
 
       if (isSupabaseMode && editingUser) {
-        if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
-        if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
+        if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo inválido.')
+        if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp inválido.')
         const result = await updateProfile(editingUser.id, {
           full_name: form.name.trim() || null,
           cpf: form.cpf.trim() || null,
@@ -523,10 +523,10 @@ export default function SettingsPage() {
         return
       }
 
-      if (!form.name.trim() || !form.email.trim()) return setError('Nome e email sao obrigatorios.')
-      if (!editingUser && !form.password.trim()) return setError('Senha e obrigatoria para novo usuário.')
-      if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo invalido.')
-      if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp invalido.')
+      if (!form.name.trim() || !form.email.trim()) return setError('Nome e e-mail são obrigatórios.')
+      if (!editingUser && !form.password.trim()) return setError('Senha é obrigatória para novo usuário.')
+      if (form.phone.trim() && !isValidFixedPhone(form.phone)) return setError('Telefone fixo inválido.')
+      if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) return setError('Celular/WhatsApp inválido.')
       const basePayload = {
         name: form.name.trim(),
         username: form.username.trim() || undefined,
@@ -575,15 +575,15 @@ export default function SettingsPage() {
 
   const saveLab = () => {
     if (!labForm.tradeName.trim() || !labForm.legalName.trim() || !isValidCnpj(labForm.cnpj) || !labForm.email.trim() || !labForm.phone.trim() || !labForm.addressLine.trim()) {
-      addToast({ type: 'error', title: 'Preencha os dados obrigatorios do laboratorio.' })
+      addToast({ type: 'error', title: 'Preencha os dados obrigatórios do laboratório.' })
       return
     }
     if (!isValidFixedPhone(labForm.phone)) {
-      addToast({ type: 'error', title: 'Telefone fixo do laboratorio invalido.' })
+      addToast({ type: 'error', title: 'Telefone fixo do laboratório inválido.' })
       return
     }
     if (labForm.whatsapp.trim() && !isValidMobilePhone(labForm.whatsapp)) {
-      addToast({ type: 'error', title: 'Celular/WhatsApp do laboratorio invalido.' })
+      addToast({ type: 'error', title: 'Celular/WhatsApp do laboratório inválido.' })
       return
     }
     const next = addAuditEntry({ ...settingsState, labCompany: { ...labForm, cnpj: formatCnpj(labForm.cnpj), updatedAt: new Date().toISOString() } }, { action: 'lab_profile_updated', actor: currentUser?.email, details: labForm.tradeName })
@@ -610,37 +610,36 @@ export default function SettingsPage() {
     )
     void persistSettings(next)
     setSettingsState(next)
-    addToast({ type: 'success', title: 'Automacao de guias salva' })
+    addToast({ type: 'success', title: 'Automação de guias salva' })
   }
 
   const saveAiGateway = () => {
-    const ai = settingsState.aiGateway
     const next = addAuditEntry(
       {
         ...settingsState,
         aiGateway: {
-          enabled: ai.enabled !== false,
+          enabled: false,
           modules: {
-            clinica: ai.modules?.clinica !== false,
-            lab: ai.modules?.lab !== false,
-            gestao: ai.modules?.gestao !== false,
-            comercial: ai.modules?.comercial !== false,
+            clinica: false,
+            lab: false,
+            gestao: false,
+            comercial: false,
           },
-          provider: ai.provider === 'http' || ai.provider === 'openai' ? ai.provider : 'mock',
-          model: ai.model?.trim() || 'gpt-4.1-mini',
-          apiBaseUrl: ai.apiBaseUrl?.trim() || '',
-          apiKey: ai.apiKey ?? '',
+          provider: 'mock',
+          model: 'gpt-4.1-mini',
+          apiBaseUrl: '',
+          apiKey: '',
         },
       },
       {
-        action: 'settings.ai_gateway.updated',
+        action: 'settings.ai_gateway.disabled',
         actor: currentUser?.email,
-        details: `enabled=${ai.enabled !== false}; provider=${ai.provider}; model=${ai.model}`,
+        details: 'Modo enxuto aplicado: IA removida do fluxo ativo.',
       },
     )
     void persistSettings(next)
     setSettingsState(next)
-    addToast({ type: 'success', title: 'Configurações de IA salvas' })
+    addToast({ type: 'success', title: 'IA desativada no modo enxuto' })
   }
 
   const addPriceProduct = () => {
@@ -651,32 +650,32 @@ export default function SettingsPage() {
       return
     }
     if (priceForm.pricingMode === 'unit' && parsePriceInput(priceForm.unitPrice) <= 0) {
-      addToast({ type: 'error', title: 'Informe um preco por unidade valido.' })
+      addToast({ type: 'error', title: 'Informe um preço por unidade válido.' })
       return
     }
     if (priceForm.pricingMode === 'arch') {
       const upper = parsePriceInput(priceForm.upperPrice)
       const lower = parsePriceInput(priceForm.lowerPrice)
       if (priceForm.archScope === 'superior' && upper <= 0) {
-        addToast({ type: 'error', title: 'Informe preco da arcada superior.' })
+        addToast({ type: 'error', title: 'Informe o preço da arcada superior.' })
         return
       }
       if (priceForm.archScope === 'inferior' && lower <= 0) {
-        addToast({ type: 'error', title: 'Informe preco da arcada inferior.' })
+        addToast({ type: 'error', title: 'Informe o preço da arcada inferior.' })
         return
       }
       if (priceForm.archScope === 'ambas' && upper <= 0 && lower <= 0) {
-        addToast({ type: 'error', title: 'Informe preco por arcada superior e/ou inferior.' })
+        addToast({ type: 'error', title: 'Informe o preço por arcada superior e/ou inferior.' })
         return
       }
     }
     if (priceForm.pricingMode === 'tooth') {
       if (parsePriceInput(priceForm.toothUnitPrice) <= 0) {
-        addToast({ type: 'error', title: 'Informe o preco por dente.' })
+        addToast({ type: 'error', title: 'Informe o preço por dente.' })
         return
       }
       if (!priceForm.selectedTeeth.length) {
-        addToast({ type: 'error', title: 'Selecione ao menos um dente para esta politica.' })
+      addToast({ type: 'error', title: 'Selecione ao menos um dente para esta política.' })
         return
       }
     }
@@ -719,14 +718,14 @@ export default function SettingsPage() {
       toothUnitPrice: '',
       selectedTeeth: [],
     })
-    addToast({ type: 'success', title: 'Produto adicionado na politica de preco.' })
+    addToast({ type: 'success', title: 'Produto adicionado à política de preço.' })
   }
 
   const removePriceProduct = (id: string) => {
     const current = settingsState.priceCatalog ?? []
     const target = current.find((item) => item.id === id)
     if (!target) return
-    if (!window.confirm(`Excluir o produto ${target.name} da politica de preco?`)) return
+    if (!window.confirm(`Excluir o produto ${target.name} da política de preço?`)) return
     const next = addAuditEntry(
       {
         ...settingsState,
@@ -736,7 +735,7 @@ export default function SettingsPage() {
     )
     void persistSettings(next)
     setSettingsState(next)
-    addToast({ type: 'info', title: 'Produto removido da politica de preco.' })
+    addToast({ type: 'info', title: 'Produto removido da política de preço.' })
   }
 
   const togglePriceProductActive = (id: string, isActive: boolean) => {
@@ -885,7 +884,7 @@ export default function SettingsPage() {
       addToast({ type: 'success', title: `Relatorio gerado com ${filteredRows.length} registro(s).` })
     } catch (error) {
       console.error(error)
-      addToast({ type: 'error', title: 'Falha ao preparar exportacao. Tente novamente.' })
+      addToast({ type: 'error', title: 'Falha ao preparar exportação. Tente novamente.' })
     } finally {
       setExportingReport(false)
     }
@@ -895,15 +894,15 @@ export default function SettingsPage() {
     <AppShell breadcrumb={['Início', 'Configurações']}>
       <section>
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Configurações</h1>
-        <p className="mt-2 text-sm text-slate-500">Gestao de cadastro, usuarios, atualizacao e diagnostico do sistema.</p>
+        
       </section>
       <section className="mt-6">
         <div className="flex flex-wrap gap-2">
           {[
             { id: 'registration', label: 'Cadastro' },
-            { id: 'users', label: 'Usuarios' },
-            { id: 'pricing', label: 'Politica de preco' },
-            { id: 'system_update', label: 'Atualizacao do sistema' },
+            { id: 'users', label: 'Usuários' },
+            { id: 'pricing', label: 'Política de preço' },
+            { id: 'system_update', label: 'Atualização do sistema' },
             { id: 'system_diagnostics', label: 'Diagnóstico do sistema' },
           ].map((item) => (
             <button key={item.id} type="button" onClick={() => setMainTab(item.id as MainTab)} className={`rounded-lg px-3 py-2 text-sm font-semibold ${mainTab === item.id ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{item.label}</button>
@@ -915,8 +914,8 @@ export default function SettingsPage() {
         <Card className="overflow-hidden p-0">
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <div>
-              <h2 className="text-lg font-semibold text-slate-900">Usuarios</h2>
-              <p className="text-sm text-slate-500">Tabela limpa com Perfil, status e vinculo.</p>
+              <h2 className="text-lg font-semibold text-slate-900">Usuários</h2>
+              
             </div>
             {canManageUsers ? <Button onClick={openNew}>+ Novo usuário</Button> : null}
           </div>
@@ -927,7 +926,7 @@ export default function SettingsPage() {
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Usuário</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Perfil</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Status</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Vinculo</th>
+                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Vínculo</th>
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Ações</th>
                 </tr>
               </thead>
@@ -947,7 +946,7 @@ export default function SettingsPage() {
                     {canManageUsers ? <Button size="sm" variant="ghost" onClick={async () => {
                       if (DATA_MODE === 'supabase') {
                         if (user.role === 'master_admin' && user.isActive && currentUser?.id !== user.id) {
-                          return addToast({ type: 'error', title: 'Não e permitido desativar outro master admin.' })
+                          return addToast({ type: 'error', title: 'Não é permitido desativar outro administrador master.' })
                         }
                         const result = await setProfileActive(user.id, !user.isActive)
                         if (!result.ok) return addToast({ type: 'error', title: result.error })
@@ -965,7 +964,7 @@ export default function SettingsPage() {
                       }
                       const p = generatePassword()
                       resetUserPassword(user.id, p)
-                      addToast({ type: 'info', title: `Senha temporaria: ${p}` })
+                      addToast({ type: 'info', title: `Senha temporária: ${p}` })
                     }} title="Redefinir senha"><LockKeyhole className="h-4 w-4" /></Button> : null}
                     {canManageUsers ? <Button size="sm" variant="ghost" onClick={async () => {
                       if (DATA_MODE === 'supabase') {
@@ -974,10 +973,10 @@ export default function SettingsPage() {
                         return addToast({ type: 'success', title: `Acesso enviado para ${user.email}` })
                       }
                       addToast({ type: 'info', title: `Acesso enviado para ${user.email}` })
-                    }} title="Enviar acesso por email"><Mail className="h-4 w-4" /></Button> : null}
+                    }} title="Enviar acesso por e-mail"><Mail className="h-4 w-4" /></Button> : null}
                     {canDeleteUsers ? <Button size="sm" variant="ghost" className="text-red-600" onClick={async () => {
                       if (DATA_MODE === 'supabase') {
-                        if (user.role === 'master_admin') return addToast({ type: 'error', title: 'Não e permitido excluir o master admin.' })
+                        if (user.role === 'master_admin') return addToast({ type: 'error', title: 'Não é permitido excluir o administrador master.' })
                         const result = await softDeleteProfile(user.id)
                         if (!result.ok) return addToast({ type: 'error', title: result.error })
                         await reloadSupabaseUsers(isSupabaseMode, setSupabaseUsers)
@@ -992,7 +991,7 @@ export default function SettingsPage() {
           </div>
         </Card>
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Perfis e permissoes</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Perfis e permissões</h2>
           <div className="mt-4 space-y-4">
             {ROLE_LIST.map((role) => {
               const grouped = groupedPermissionsForRole(role)
@@ -1014,26 +1013,23 @@ export default function SettingsPage() {
       {mainTab === 'registration' ? <section className="mt-4 space-y-4">
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Tema</h2>
-          <div className="mt-3 flex gap-2"><Button variant={settingsState.theme === 'light' ? 'primary' : 'secondary'} onClick={() => saveTheme('light')}>Light</Button><Button variant={settingsState.theme === 'dark' ? 'primary' : 'secondary'} onClick={() => saveTheme('dark')}>Dark</Button></div>
+          <div className="mt-3 flex gap-2"><Button variant={settingsState.theme === 'light' ? 'primary' : 'secondary'} onClick={() => saveTheme('light')}>Claro</Button><Button variant={settingsState.theme === 'dark' ? 'primary' : 'secondary'} onClick={() => saveTheme('dark')}>Escuro</Button></div>
         </Card>
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Cadastro do laboratorio</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Cadastro do laboratório</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Nome do laboratorio *</label><Input value={labForm.tradeName} onChange={(event) => setLabForm((c) => ({ ...c, tradeName: event.target.value }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Razao social *</label><Input value={labForm.legalName} onChange={(event) => setLabForm((c) => ({ ...c, legalName: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Nome do laboratório *</label><Input value={labForm.tradeName} onChange={(event) => setLabForm((c) => ({ ...c, tradeName: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Razão social *</label><Input value={labForm.legalName} onChange={(event) => setLabForm((c) => ({ ...c, legalName: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">CNPJ *</label><Input value={labForm.cnpj} onChange={(event) => setLabForm((c) => ({ ...c, cnpj: formatCnpj(event.target.value) }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Email empresarial *</label><Input type="email" value={labForm.email} onChange={(event) => setLabForm((c) => ({ ...c, email: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">E-mail empresarial *</label><Input type="email" value={labForm.email} onChange={(event) => setLabForm((c) => ({ ...c, email: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Telefone fixo *</label><Input value={labForm.phone} onChange={(event) => setLabForm((c) => ({ ...c, phone: formatFixedPhone(event.target.value) }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Celular (WhatsApp)</label><Input value={labForm.whatsapp} onChange={(event) => setLabForm((c) => ({ ...c, whatsapp: formatMobilePhone(event.target.value) }))} /><WhatsappLink value={labForm.whatsapp} className="mt-2 text-xs font-semibold" /></div>
-            <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Endereco completo *</label><Input value={labForm.addressLine} onChange={(event) => setLabForm((c) => ({ ...c, addressLine: event.target.value }))} /></div>
+            <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Endereço completo *</label><Input value={labForm.addressLine} onChange={(event) => setLabForm((c) => ({ ...c, addressLine: event.target.value }))} /></div>
           </div>
-          <div className="mt-4"><Button onClick={saveLab}>Salvar cadastro do laboratorio</Button></div>
+          <div className="mt-4"><Button onClick={saveLab}>Salvar cadastro do laboratório</Button></div>
         </Card>
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Automacao de guias</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Define quando o sistema gera automaticamente as guias/OS de reposição com base na data prevista de troca.
-          </p>
+          <h2 className="text-lg font-semibold text-slate-900">Automação de guias</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -1049,11 +1045,11 @@ export default function SettingsPage() {
                   }))
                 }
               />
-              Ativar geracao automatica de guias
+              Ativar geração automática de guias
             </label>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
-                Gerar com antecedencia de (dias)
+                Gerar com antecedência de (dias)
               </label>
               <Input
                 type="number"
@@ -1073,171 +1069,26 @@ export default function SettingsPage() {
             </div>
           </div>
           <div className="mt-4">
-            <Button onClick={saveGuideAutomation}>Salvar automacao de guias</Button>
+            <Button onClick={saveGuideAutomation}>Salvar automação de guias</Button>
           </div>
         </Card>
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">AI Gateway</h2>
-          <p className="mt-1 text-sm text-slate-500">Configure provedor de IA e chaves de ativacao por módulo.</p>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={settingsState.aiGateway?.enabled !== false}
-                onChange={(event) =>
-                  setSettingsState((current) => ({
-                    ...current,
-                    aiGateway: {
-                      ...current.aiGateway,
-                      enabled: event.target.checked,
-                    },
-                  }))
-                }
-              />
-              Ativar IA global
-            </label>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Provider</label>
-              <select
-                value={settingsState.aiGateway?.provider ?? 'mock'}
-                onChange={(event) =>
-                  setSettingsState((current) => ({
-                    ...current,
-                    aiGateway: {
-                      ...current.aiGateway,
-                      provider: event.target.value as 'mock' | 'http' | 'openai',
-                    },
-                  }))
-                }
-                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
-              >
-                <option value="mock">Mock (local)</option>
-                <option value="http">HTTP</option>
-                <option value="openai">OpenAI</option>
-              </select>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={settingsState.aiGateway?.modules?.clinica !== false}
-                onChange={(event) =>
-                  setSettingsState((current) => ({
-                    ...current,
-                    aiGateway: {
-                      ...current.aiGateway,
-                      modules: { ...current.aiGateway.modules, clinica: event.target.checked },
-                    },
-                  }))
-                }
-              />
-              Módulo Clínica
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={settingsState.aiGateway?.modules?.lab !== false}
-                onChange={(event) =>
-                  setSettingsState((current) => ({
-                    ...current,
-                    aiGateway: {
-                      ...current.aiGateway,
-                      modules: { ...current.aiGateway.modules, lab: event.target.checked },
-                    },
-                  }))
-                }
-              />
-              Módulo Laboratório
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={settingsState.aiGateway?.modules?.gestao !== false}
-                onChange={(event) =>
-                  setSettingsState((current) => ({
-                    ...current,
-                    aiGateway: {
-                      ...current.aiGateway,
-                      modules: { ...current.aiGateway.modules, gestao: event.target.checked },
-                    },
-                  }))
-                }
-              />
-              Módulo Gestao
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={settingsState.aiGateway?.modules?.comercial !== false}
-                onChange={(event) =>
-                  setSettingsState((current) => ({
-                    ...current,
-                    aiGateway: {
-                      ...current.aiGateway,
-                      modules: { ...current.aiGateway.modules, comercial: event.target.checked },
-                    },
-                  }))
-                }
-              />
-              Módulo Comercial
-            </label>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Model</label>
-              <Input
-                value={settingsState.aiGateway?.model ?? ''}
-                placeholder="gpt-4.1-mini"
-                onChange={(event) =>
-                  setSettingsState((current) => ({
-                    ...current,
-                    aiGateway: {
-                      ...current.aiGateway,
-                      model: event.target.value,
-                    },
-                  }))
-                }
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">API Base URL</label>
-              <Input
-                value={settingsState.aiGateway?.apiBaseUrl ?? ''}
-                placeholder="https://api.openai.com/v1/responses"
-                onChange={(event) =>
-                  setSettingsState((current) => ({
-                    ...current,
-                    aiGateway: {
-                      ...current.aiGateway,
-                      apiBaseUrl: event.target.value,
-                    },
-                  }))
-                }
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-slate-700">API Key</label>
-              <Input
-                type="password"
-                value={settingsState.aiGateway?.apiKey ?? ''}
-                placeholder="sk-..."
-                onChange={(event) =>
-                  setSettingsState((current) => ({
-                    ...current,
-                    aiGateway: {
-                      ...current.aiGateway,
-                      apiKey: event.target.value,
-                    },
-                  }))
-                }
-              />
-              <p className="mt-1 text-xs text-slate-500">No modo local, a IA usa mock e não envia chamadas externas.</p>
+          <h2 className="text-lg font-semibold text-slate-900">IA</h2>
+          <div className="mt-4 space-y-3">
+            <p className="text-sm text-slate-600">
+              O modo enxuto mantém a IA fora do fluxo ativo para evitar consumo acidental de provider, Edge Functions e suporte operacional.
+            </p>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              A interface de IA foi removida desta operação. Se quisermos recolocar depois, fazemos isso com escopo e orçamento separados.
             </div>
           </div>
           <div className="mt-4">
-            <Button onClick={saveAiGateway}>Salvar configuracoes de IA</Button>
+            <Button variant="secondary" onClick={saveAiGateway}>Aplicar desativação da IA</Button>
           </div>
         </Card>
         <Card>
           <h2 className="text-lg font-semibold text-slate-900">Ajuda e LGPD</h2>
-          <p className="mt-1 text-sm text-slate-500">Tutoriais rapidos e documentos legais para entrega/operacao.</p>
+          
           <div className="mt-4 flex flex-wrap gap-3">
             <Link to="/app/help" className="text-sm font-semibold text-brand-700 hover:text-brand-500">Abrir Ajuda</Link>
             <span className="text-slate-300">|</span>
@@ -1252,15 +1103,15 @@ export default function SettingsPage() {
 
       {mainTab === 'pricing' ? <section className="mt-4 space-y-4">
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Politica de preco por produto</h2>
-          <p className="mt-1 text-sm text-slate-500">Cadastre produtos e defina regra de cobranca por unidade, arcada ou dentes do modelo enviado.</p>
+          <h2 className="text-lg font-semibold text-slate-900">Política de preço por produto</h2>
+          
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Produto</label>
               <Input
                 value={priceForm.customName}
                 onChange={(event) => setPriceForm((current) => ({ ...current, customName: event.target.value }))}
-                placeholder="Ex.: Contencao premium, Guia cirurgico, Alinhador"
+                placeholder="Ex.: Contenção premium, Guia cirúrgico, Alinhador"
               />
             </div>
             <div>
@@ -1275,7 +1126,7 @@ export default function SettingsPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Modo de cobranca</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Modo de cobrança</label>
               <select
                 value={priceForm.pricingMode}
                 onChange={(event) => setPriceForm((current) => ({ ...current, pricingMode: event.target.value as PricingMode }))}
@@ -1413,7 +1264,7 @@ export default function SettingsPage() {
                 ))}
                 {(settingsState.priceCatalog ?? []).length === 0 ? (
                   <tr>
-                    <td className="px-5 py-6 text-sm text-slate-500" colSpan={5}>Nenhum produto cadastrado na politica de preco.</td>
+                    <td className="px-5 py-6 text-sm text-slate-500" colSpan={5}>Nenhum produto cadastrado na política de preço.</td>
                   </tr>
                 ) : null}
               </tbody>
@@ -1424,15 +1275,15 @@ export default function SettingsPage() {
 
       {mainTab === 'system_update' ? <section className="mt-4 space-y-4">
         <Card><h2 className="text-lg font-semibold text-slate-900">Backup</h2><div className="mt-3"><Button onClick={exportBackup}>Gerar backup</Button></div></Card>
-        <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Relatorios</h2><p className="mt-1 text-sm text-slate-500">Exporte os dados com selecao de campos e periodo de criação.</p></div><Button onClick={() => setReportModalOpen(true)}>Abrir gerador de relatorio</Button></Card>
+        <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Relatórios</h2></div><Button onClick={() => setReportModalOpen(true)}>Abrir gerador de relatório</Button></Card>
       </section> : null}
 
-      {mainTab === 'system_diagnostics' ? <section className="mt-4"><Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Diagnóstico do sistema</h2><p className="mt-1 text-sm text-slate-500">Checklist automático de recursos e dados.</p></div><Link to="/app/settings/diagnostics" className="inline-flex"><Button>Abrir diagnostico</Button></Link></Card></section> : null}
+      {mainTab === 'system_diagnostics' ? <section className="mt-4"><Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Diagnóstico do sistema</h2></div><Link to="/app/settings/diagnostics" className="inline-flex"><Button>Abrir diagnóstico</Button></Link></Card></section> : null}
 
       {reportModalOpen ? <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 px-3 sm:px-4">
         <Card className="w-full max-w-5xl overflow-hidden p-0">
           <div className="flex items-center justify-between bg-brand-500 px-5 py-4 text-white">
-            <h2 className="text-lg font-semibold">Gerar relatorio</h2>
+            <h2 className="text-lg font-semibold">Gerar relatório</h2>
             <button type="button" className="text-xl leading-none text-white/90 hover:text-white" onClick={() => setReportModalOpen(false)} aria-label="Fechar">x</button>
           </div>
           <div className="space-y-4 p-5">
@@ -1463,7 +1314,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setReportModalOpen(false)}>Fechar</Button>
-              <Button disabled={exportingReport} onClick={() => void exportReport()}>{exportingReport ? 'Preparando exportacao...' : 'Exportar planilha'}</Button>
+              <Button disabled={exportingReport} onClick={() => void exportReport()}>{exportingReport ? 'Preparando exportação...' : 'Exportar planilha'}</Button>
             </div>
           </div>
         </Card>
@@ -1476,8 +1327,8 @@ export default function SettingsPage() {
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {(isSupabaseMode
-              ? [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (usuário e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, ...(showLinkTab ? [{ id: 'link', label: 'Vinculo' }] : [])]
-              : [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (login e senha)' }, { id: 'profile', label: 'Perfil e permissoes' }, { id: 'link', label: 'Vinculo' }]
+              ? [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (usuário e senha)' }, { id: 'profile', label: 'Perfil e permissões' }, ...(showLinkTab ? [{ id: 'link', label: 'Vínculo' }] : [])]
+              : [{ id: 'personal', label: 'Dados pessoais' }, { id: 'access', label: 'Acesso (login e senha)' }, { id: 'profile', label: 'Perfil e permissões' }, { id: 'link', label: 'Vínculo' }]
             ).map((tab) => <button key={tab.id} type="button" onClick={() => setModalTab(tab.id as ModalTab)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${modalTab === tab.id ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{tab.label}</button>)}
           </div>
           {modalTab === 'personal' ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1501,30 +1352,30 @@ export default function SettingsPage() {
               {cepError ? <p className="mt-1 text-xs text-red-600">{cepError}</p> : null}
             </div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Logradouro</label><Input value={form.street} onChange={(event) => setForm((c) => ({ ...c, street: event.target.value }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Numero</label><Input value={form.number} onChange={(event) => setForm((c) => ({ ...c, number: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">Número</label><Input value={form.number} onChange={(event) => setForm((c) => ({ ...c, number: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Bairro</label><Input value={form.district} onChange={(event) => setForm((c) => ({ ...c, district: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Cidade</label><Input value={form.city} onChange={(event) => setForm((c) => ({ ...c, city: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Estado</label><Input value={form.state} onChange={(event) => setForm((c) => ({ ...c, state: event.target.value.toUpperCase().slice(0, 2) }))} /></div>
           </div> : null}
           {modalTab === 'access' ? <div className="mt-4 space-y-4">
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Usuário</label><Input aria-label="Usuário" value={form.username} placeholder="nome.sobrenome" onChange={(event) => setForm((c) => ({ ...c, username: event.target.value }))} /></div>
-            <div><label className="mb-1 block text-sm font-medium text-slate-700">Email (login)</label><Input aria-label="Email (login)" type="email" value={form.email} onChange={(event) => setForm((c) => ({ ...c, email: event.target.value }))} /></div>
+            <div><label className="mb-1 block text-sm font-medium text-slate-700">E-mail (login)</label><Input aria-label="E-mail (login)" type="email" value={form.email} onChange={(event) => setForm((c) => ({ ...c, email: event.target.value }))} /></div>
             <div><label className="mb-1 block text-sm font-medium text-slate-700">Senha</label><div className="flex items-center gap-2"><div className="relative flex-1"><Input aria-label="Senha" type={showPassword ? 'text' : 'password'} value={form.password} onChange={(event) => setForm((c) => ({ ...c, password: event.target.value }))} className="pr-12" /><button type="button" onClick={() => setShowPassword((current) => !current)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700">{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div><Button variant={passwordMode === 'manual' ? 'secondary' : 'ghost'} size="sm" onClick={() => setPasswordMode('manual')}>Manual</Button><Button variant={passwordMode === 'auto' ? 'secondary' : 'ghost'} size="sm" onClick={() => { setPasswordMode('auto'); setForm((c) => ({ ...c, password: generatePassword() })) }}>Auto</Button></div></div>
-            <div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={() => setForm((c) => ({ ...c, password: generatePassword() }))}><WandSparkles className="mr-2 h-4 w-4" />Gerar senha automatica</Button><Button variant="ghost" size="sm" onClick={async () => {
-              if (!form.email.trim()) return addToast({ type: 'error', title: 'Informe um email.' })
+            <div className="flex flex-wrap gap-2"><Button variant="secondary" size="sm" onClick={() => setForm((c) => ({ ...c, password: generatePassword() }))}><WandSparkles className="mr-2 h-4 w-4" />Gerar senha automática</Button><Button variant="ghost" size="sm" onClick={async () => {
+              if (!form.email.trim()) return addToast({ type: 'error', title: 'Informe um e-mail.' })
               if (DATA_MODE === 'supabase') {
                 const result = await sendAccessEmail({ email: form.email.trim(), fullName: form.name.trim() || undefined })
                 if (!result.ok) return addToast({ type: 'error', title: result.error })
                 return addToast({ type: 'success', title: `Acesso enviado para ${form.email}` })
               }
               addToast({ type: 'info', title: `Acesso enviado para ${form.email || '-'}` })
-            }}><Mail className="mr-2 h-4 w-4" />Enviar acesso por email</Button></div>
-            {isSupabaseMode ? <p className="text-xs text-slate-500">No modo supabase, o login principal e por email + senha.</p> : null}
+            }}><Mail className="mr-2 h-4 w-4" />Enviar acesso por e-mail</Button></div>
+            {isSupabaseMode ? <p className="text-xs text-slate-500">Login principal por e-mail e senha.</p> : null}
           </div> : null}
           {modalTab === 'profile' ? <div className="mt-4 space-y-4"><div><label className="mb-1 block text-sm font-medium text-slate-700">Perfil</label><select value={form.role} onChange={(event) => {
             const nextRole = event.target.value as Role
             setForm((c) => ({ ...c, role: nextRole, linkedDentistId: nextRole === 'dentist_client' ? c.linkedDentistId : '' }))
-          }} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{availableRoleList.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select>{isSupabaseMode ? <p className="mt-1 text-xs text-slate-500">Usuarios criados diretamente por admin com email e senha.</p> : null}{isSupabaseMode && form.role === 'dentist_admin' ? <div className="mt-3"><label className="mb-1 block text-sm font-medium text-slate-700">Clínica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div> : null}</div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
+          }} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">{availableRoleList.map((role) => <option key={role} value={role}>{profileLabel(role)}</option>)}</select>{isSupabaseMode ? <p className="mt-1 text-xs text-slate-500">Criação por e-mail e senha.</p> : null}{isSupabaseMode && form.role === 'dentist_admin' ? <div className="mt-3"><label className="mb-1 block text-sm font-medium text-slate-700">Clínica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div> : null}</div><div className="rounded-lg border border-slate-200 p-4"><p className="text-sm font-semibold text-slate-900">{profileDescription(form.role)}</p><div className="mt-2 space-y-2">{MODULE_ORDER.filter((module) => (modalPermissions[module] ?? []).length > 0).map((module) => <div key={module}><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{module}</p><div className="mt-1 flex flex-wrap gap-2">{(modalPermissions[module] ?? []).map((permission) => <Badge key={permission} tone="neutral">{permissionLabel(permission)}</Badge>)}</div></div>)}</div></div></div> : null}
           {modalTab === 'link' && showLinkTab ? <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2"><div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Clínica vinculada</label><select value={form.linkedClinicId} onChange={(event) => setForm((c) => ({ ...c, linkedClinicId: event.target.value, linkedDentistId: '' }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{clinicOptions.map((clinic) => <option key={clinic.id} value={clinic.id}>{clinic.tradeName}</option>)}</select></div>{form.role === 'dentist_client' ? <div className="sm:col-span-2"><label className="mb-1 block text-sm font-medium text-slate-700">Dentista responsável</label><select value={form.linkedDentistId} onChange={(event) => setForm((c) => ({ ...c, linkedDentistId: event.target.value }))} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"><option value="">Selecione</option>{dentistsForSelect.map((dentist) => <option key={dentist.id} value={dentist.id}>{dentist.name}</option>)}</select></div> : null}</div> : null}
           {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
           <div className="mt-6 flex justify-end gap-2">

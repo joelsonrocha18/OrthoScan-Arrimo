@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import type { ReactElement } from 'react'
+import type { ComponentType, ReactElement } from 'react'
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './app/ProtectedRoute'
 import { ToastProvider } from './app/ToastProvider'
@@ -8,9 +8,13 @@ import { DATA_MODE } from './data/dataMode'
 import { applyStoredTheme, saveSystemSettings } from './lib/systemSettings'
 import { loadSystemSettingsSupabase } from './repo/systemSettingsRepo'
 
+const PUSH_NOTIFICATIONS_ENABLED = ((import.meta.env.VITE_WEB_PUSH_ENABLED as string | undefined)?.trim().toLowerCase() ?? '') === 'true'
+
 const CaseDetailPage = lazy(() => import('./pages/CaseDetailPage'))
 const CasesPage = lazy(() => import('./pages/CasesPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const DentistAccessPage = lazy(() => import('./pages/DentistAccessPage'))
+const DentistPortalPage = lazy(() => import('./pages/DentistPortalPage'))
 const DentistDetailPage = lazy(() => import('./pages/DentistDetailPage'))
 const DentistsPage = lazy(() => import('./pages/DentistsPage'))
 const ClinicDetailPage = lazy(() => import('./pages/ClinicDetailPage'))
@@ -24,9 +28,12 @@ const LegalLgpdPage = lazy(() => import('./pages/LegalLgpdPage'))
 const LegalPrivacyPage = lazy(() => import('./pages/LegalPrivacyPage'))
 const LegalTermsPage = lazy(() => import('./pages/LegalTermsPage'))
 const OnboardingInvitePage = lazy(() => import('./pages/OnboardingInvitePage'))
+const PatientAccessPage = lazy(() => import('./pages/PatientAccessPage'))
+const PatientPortalPage = lazy(() => import('./pages/PatientPortalPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const PatientDetailPage = lazy(() => import('./pages/PatientDetailPage'))
 const PatientsPage = lazy(() => import('./pages/PatientsPage'))
+const PublicAccessPage = lazy(() => import('./pages/PublicAccessPage'))
 const ScansPage = lazy(() => import('./pages/ScansPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 
@@ -72,6 +79,8 @@ function RootRedirect() {
 }
 
 export default function App() {
+  const [PushNotificationsBridge, setPushNotificationsBridge] = useState<ComponentType | null>(null)
+
   useEffect(() => {
     applyStoredTheme()
     if (DATA_MODE !== 'supabase') return
@@ -83,14 +92,31 @@ export default function App() {
     })()
   }, [])
 
+  useEffect(() => {
+    if (!PUSH_NOTIFICATIONS_ENABLED) return
+    let active = true
+    void import('./pwa/PushNotificationsBridge').then((module) => {
+      if (!active) return
+      setPushNotificationsBridge(() => module.default)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
   const Router = window.location.protocol === 'file:' ? HashRouter : BrowserRouter
 
   return (
     <ToastProvider>
       <Router>
+        {PushNotificationsBridge ? <PushNotificationsBridge /> : null}
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/login" element={withSuspense(<LoginPage />)} />
+          <Route path="/acesso" element={withSuspense(<PublicAccessPage />)} />
+          <Route path="/acesso/dentistas" element={withSuspense(<DentistAccessPage />)} />
+          <Route path="/acesso/pacientes" element={withSuspense(<PatientAccessPage />)} />
+          <Route path="/acesso/pacientes/portal" element={withSuspense(<PatientPortalPage />)} />
           <Route path="/legal/privacy" element={withSuspense(<LegalPrivacyPage />)} />
           <Route path="/legal/terms" element={withSuspense(<LegalTermsPage />)} />
           <Route path="/legal/lgpd" element={withSuspense(<LegalLgpdPage />)} />
@@ -98,6 +124,7 @@ export default function App() {
           <Route path="/reset-password" element={withSuspense(<ResetPasswordPage />)} />
           <Route element={<ProtectedRoute permission="dashboard.read" />}>
             <Route path="/app/dashboard" element={withSuspense(<DashboardPage />)} />
+            <Route path="/dashboard/agendamentos" element={<Navigate to="/app/dashboard" replace />} />
           </Route>
           <Route element={<ProtectedRoute permission="scans.read" />}>
             <Route path="/app/scans" element={withSuspense(<ScansPage />)} />
@@ -105,6 +132,9 @@ export default function App() {
           <Route element={<ProtectedRoute permission="cases.read" />}>
             <Route path="/app/cases" element={withSuspense(<CasesPage />)} />
             <Route path="/app/cases/:id" element={withSuspense(<CaseDetailPage />)} />
+          </Route>
+          <Route element={<ProtectedRoute permission="cases.read" fallbackTo="/acesso/dentistas" />}>
+            <Route path="/app/portal-dentista" element={withSuspense(<DentistPortalPage />)} />
           </Route>
           <Route element={<ProtectedRoute permission="dentists.read" />}>
             <Route path="/app/dentists" element={withSuspense(<DentistsPage />)} />

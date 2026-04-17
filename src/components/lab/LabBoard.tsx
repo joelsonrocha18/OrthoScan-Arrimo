@@ -1,5 +1,6 @@
 ﻿import type { LabItem, LabStatus } from '../../types/Lab'
-import { moveLabItem, nextStatus, previousStatus } from '../../data/labRepo'
+import { moveLabItem } from '../../data/labRepo'
+import { getNextLabOrderStage as nextStatus, getPreviousLabOrderStage as previousStatus } from '../../modules/lab'
 import { useToast } from '../../app/ToastProvider'
 import LabColumn from './LabColumn'
 
@@ -18,7 +19,7 @@ type LabBoardProps = {
 
 const columns: Array<{ status: LabStatus; label: string }> = [
   { status: 'aguardando_iniciar', label: 'Aguardando iniciar' },
-  { status: 'em_producao', label: 'Em producao' },
+  { status: 'em_producao', label: 'Em produção' },
   { status: 'controle_qualidade', label: 'Controle de qualidade' },
   { status: 'prontas', label: 'Prontas' },
 ]

@@ -360,11 +360,11 @@ export default function ScanModal({
 
   const submit = async () => {
     if (!form.patientName.trim() || !form.scanDate) {
-      setError('Paciente e data do scan sao obrigatorios.')
+      setError('Paciente e data do exame são obrigatórios.')
       return
     }
     if (!form.purposeProductId || !form.purposeLabel) {
-      setError('Cadastre pelo menos um produto ativo na Politica de preco para definir a finalidade do exame.')
+      setError('Cadastre pelo menos um produto ativo na Política de preço para definir a finalidade do exame.')
       return
     }
 
@@ -400,11 +400,11 @@ export default function ScanModal({
   const printServiceOrder = () => {
     if (!onPrintServiceOrder) return
     if (!form.patientName.trim() || !form.scanDate) {
-      setError('Paciente e data do scan sao obrigatorios para imprimir a O.S.')
+      setError('Paciente e data do exame são obrigatórios para imprimir a O.S.')
       return
     }
     if (!form.purposeProductId || !form.purposeLabel) {
-      setError('Cadastre pelo menos um produto ativo na Politica de preco para definir a finalidade do exame.')
+      setError('Cadastre pelo menos um produto ativo na Política de preço para definir a finalidade do exame.')
       return
     }
     setError('')
@@ -609,7 +609,7 @@ export default function ScanModal({
                 onChange={(event) => setForm((c) => ({ ...c, clinicId: event.target.value || undefined }))}
                 className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"
               >
-                <option value="">Sem clinica</option>
+                <option value="">Sem clínica</option>
                 {clinics.map((clinic) => (
                   <option key={clinic.id} value={clinic.id}>
                     {clinic.name}
@@ -684,7 +684,7 @@ export default function ScanModal({
                     }}
                     className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900"
                   >
-                    {nonAlignerPurposeOptions.length === 0 ? <option value="">Cadastre produtos na politica de preco</option> : null}
+                    {nonAlignerPurposeOptions.length === 0 ? <option value="">Cadastre produtos na política de preço</option> : null}
                     {nonAlignerPurposeOptions.map((option) => (
                       <option key={option.id} value={option.id}>
                         {option.label}
@@ -763,7 +763,7 @@ export default function ScanModal({
             </datalist>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Data do scan</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Data do exame</label>
             <Input type="date" value={form.scanDate} onChange={(event) => setForm((c) => ({ ...c, scanDate: event.target.value }))} />
           </div>
           <div>
@@ -797,7 +797,7 @@ export default function ScanModal({
             <textarea rows={3} value={form.complaint} onChange={(event) => setForm((c) => ({ ...c, complaint: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Orientacao do dentista</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Orientação do dentista</label>
             <textarea rows={3} value={form.dentistGuidance} onChange={(event) => setForm((c) => ({ ...c, dentistGuidance: event.target.value }))} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
           </div>
           <div>
@@ -807,7 +807,7 @@ export default function ScanModal({
         </div>
 
         <div className="mt-6 rounded-xl border border-slate-200 p-4">
-          <h3 className="text-sm font-semibold text-slate-900">Scan 3D</h3>
+          <h3 className="text-sm font-semibold text-slate-900">Escaneamento 3D</h3>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {(form.arch === 'superior' || form.arch === 'ambos') && renderScan3dCard('Superior (.stl, .obj, .ply)', 'superior')}
             {(form.arch === 'inferior' || form.arch === 'ambos') && renderScan3dCard('Inferior (.stl, .obj, .ply)', 'inferior')}
@@ -820,7 +820,7 @@ export default function ScanModal({
           {intraSlots.length > 0 ? (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{intraSlots.map((slot) => renderPhotoSlot(slot))}</div>
           ) : (
-            <p className="mt-2 text-xs text-slate-500">Nenhum slot intraoral disponivel neste ambiente.</p>
+            <p className="mt-2 text-xs text-slate-500">Nenhum slot intraoral disponível neste ambiente.</p>
           )}
         </div>
 
@@ -829,7 +829,7 @@ export default function ScanModal({
           {extraSlots.length > 0 ? (
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{extraSlots.map((slot) => renderPhotoSlot(slot))}</div>
           ) : (
-            <p className="mt-2 text-xs text-slate-500">Nenhum slot extraoral disponivel neste ambiente.</p>
+            <p className="mt-2 text-xs text-slate-500">Nenhum slot extraoral disponível neste ambiente.</p>
           )}
         </div>
 

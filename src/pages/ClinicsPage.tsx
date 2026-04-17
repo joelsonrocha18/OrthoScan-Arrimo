@@ -88,7 +88,6 @@ export default function ClinicsPage() {
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Clínicas</h1>
-          <p className="mt-2 text-sm text-slate-500">Cadastro e vinculo de clinicas parceiras.</p>
         </div>
         {canWrite ? (
           <Link to="/app/clinics/new">
@@ -101,13 +100,13 @@ export default function ClinicsPage() {
         <Card className="overflow-hidden p-0">
           <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <Input
-              placeholder="Buscar por codigo, nome, razao social, CNPJ ou telefone"
+                placeholder="Buscar por código, nome, razão social, CNPJ ou telefone"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
             <label className="inline-flex items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={showDeleted} onChange={(event) => setShowDeleted(event.target.checked)} />
-              Mostrar excluidas
+              Mostrar excluídas
             </label>
           </div>
           <div className="overflow-x-auto">
@@ -152,7 +151,7 @@ export default function ClinicsPage() {
                 {clinics.length === 0 ? (
                   <tr>
                     <td className="px-5 py-8 text-sm text-slate-500" colSpan={7}>
-                      Nenhuma clinica encontrada.
+                      Nenhuma clínica encontrada.
                     </td>
                   </tr>
                 ) : null}

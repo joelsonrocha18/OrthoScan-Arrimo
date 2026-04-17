@@ -33,12 +33,12 @@ export type Permission =
   | 'ai.comercial'
 
 export type PermissionModule =
-  | 'Dashboard'
+  | 'Painel'
   | 'Pacientes'
-  | 'Scans'
+  | 'Exames'
   | 'Alinhadores'
   | 'Laboratório'
-  | 'Usuarios'
+  | 'Usuários'
   | 'Configurações'
   | 'Documentos'
   | 'Dentistas'
@@ -93,34 +93,34 @@ const rolePermissions: Record<Role, Permission[]> = {
 }
 
 const profileLabels: Record<Role, string> = {
-  master_admin: 'Master Admin',
-  dentist_admin: 'Dentista Admin',
+  master_admin: 'Administrador master',
+  dentist_admin: 'Administrador dentista',
   dentist_client: 'Dentista Cliente',
   clinic_client: 'Clínica Cliente',
-  lab_tech: 'Tecnico de Laboratório',
-  receptionist: 'Recepcao',
+  lab_tech: 'Técnico de laboratório',
+  receptionist: 'Recepção',
 }
 
 const profileDescriptions: Record<Role, string> = {
-  master_admin: 'Acesso total ao sistema e configuracoes avancadas.',
-  dentist_admin: 'Gestao operacional da clinica com permissoes administrativas.',
+  master_admin: 'Acesso total ao sistema e configurações avançadas.',
+  dentist_admin: 'Gestão operacional da clínica com permissões administrativas.',
   dentist_client: 'Perfil externo: visualiza e cadastra pacientes vinculados ao dentista.',
-  clinic_client: 'Perfil externo: visualiza e cadastra pacientes vinculados a clinica.',
-  lab_tech: 'Execucao e acompanhamento do fluxo de laboratorio.',
+  clinic_client: 'Perfil externo: visualiza e cadastra pacientes vinculados à clínica.',
+  lab_tech: 'Execução e acompanhamento do fluxo de laboratório.',
   receptionist: 'Suporte de cadastro e atendimento operacional.',
 }
 
 const permissionLabels: Record<Permission, string> = {
-  'dashboard.read': 'Visualizar dashboard',
-  'users.read': 'Visualizar usuarios',
-  'users.write': 'Cadastrar/editar usuarios',
-  'users.delete': 'Excluir usuarios',
+  'dashboard.read': 'Visualizar painel',
+  'users.read': 'Visualizar usuários',
+  'users.write': 'Cadastrar/editar usuários',
+  'users.delete': 'Excluir usuários',
   'dentists.read': 'Visualizar dentistas',
   'dentists.write': 'Cadastrar/editar dentistas',
   'dentists.delete': 'Excluir dentistas',
-  'clinics.read': 'Visualizar clinicas',
-  'clinics.write': 'Cadastrar/editar clinicas',
-  'clinics.delete': 'Excluir clinicas',
+  'clinics.read': 'Visualizar clínicas',
+  'clinics.write': 'Cadastrar/editar clínicas',
+  'clinics.delete': 'Excluir clínicas',
   'patients.read': 'Visualizar pacientes',
   'patients.write': 'Cadastrar/editar pacientes',
   'patients.delete': 'Excluir pacientes',
@@ -131,23 +131,23 @@ const permissionLabels: Record<Permission, string> = {
   'cases.read': 'Visualizar alinhadores',
   'cases.write': 'Criar/editar alinhadores',
   'cases.delete': 'Excluir alinhadores',
-  'lab.read': 'Visualizar laboratorio',
-  'lab.write': 'Gerenciar laboratorio',
+  'lab.read': 'Visualizar laboratório',
+  'lab.write': 'Gerenciar laboratório',
   'docs.read': 'Visualizar documentos',
   'docs.write': 'Gerenciar documentos',
-  'settings.read': 'Visualizar configuracoes',
-  'settings.write': 'Gerenciar configuracoes',
-  'ai.clinica': 'IA clinica',
-  'ai.lab': 'IA laboratorio',
-  'ai.gestao': 'IA gestao',
+  'settings.read': 'Visualizar configurações',
+  'settings.write': 'Gerenciar configurações',
+  'ai.clinica': 'IA clínica',
+  'ai.lab': 'IA laboratório',
+  'ai.gestao': 'IA gestão',
   'ai.comercial': 'IA comercial',
 }
 
 const permissionModules: Record<Permission, PermissionModule> = {
-  'dashboard.read': 'Dashboard',
-  'users.read': 'Usuarios',
-  'users.write': 'Usuarios',
-  'users.delete': 'Usuarios',
+  'dashboard.read': 'Painel',
+  'users.read': 'Usuários',
+  'users.write': 'Usuários',
+  'users.delete': 'Usuários',
   'dentists.read': 'Dentistas',
   'dentists.write': 'Dentistas',
   'dentists.delete': 'Dentistas',
@@ -157,10 +157,10 @@ const permissionModules: Record<Permission, PermissionModule> = {
   'patients.read': 'Pacientes',
   'patients.write': 'Pacientes',
   'patients.delete': 'Pacientes',
-  'scans.read': 'Scans',
-  'scans.write': 'Scans',
-  'scans.approve': 'Scans',
-  'scans.delete': 'Scans',
+  'scans.read': 'Exames',
+  'scans.write': 'Exames',
+  'scans.approve': 'Exames',
+  'scans.delete': 'Exames',
   'cases.read': 'Alinhadores',
   'cases.write': 'Alinhadores',
   'cases.delete': 'Alinhadores',

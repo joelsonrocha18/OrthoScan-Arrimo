@@ -6,14 +6,14 @@ type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 }
 
 const toneClasses: Record<NonNullable<BadgeProps['tone']>, string> = {
-  neutral: 'bg-slate-100 text-slate-700',
-  success: 'bg-emerald-100 text-emerald-700',
-  info: 'bg-brand-50 text-brand-700',
-  danger: 'bg-red-100 text-red-700',
+  neutral: 'border border-slate-300 bg-slate-100 text-slate-800',
+  success: 'border border-olive-300 bg-olive-100 text-olive-700',
+  info: 'border border-baby-300 bg-baby-100 text-brand-700',
+  danger: 'border border-[rgba(197,48,48,0.28)] bg-[rgba(229,62,62,0.16)] text-[#742A2A]',
 }
 
 export default function Badge({ className, tone = 'neutral', ...props }: BadgeProps) {
   return (
-    <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium', toneClasses[tone], className)} {...props} />
+    <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold', toneClasses[tone], className)} {...props} />
   )
 }

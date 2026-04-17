@@ -6,6 +6,7 @@ export const APP_ROUTE_PATHS = [
   '/legal/lgpd',
   '/complete-signup',
   '/app/dashboard',
+  '/dashboard/agendamentos',
   '/app/scans',
   '/app/cases',
   '/app/cases/:id',

@@ -10,9 +10,10 @@ import type { SessionUser } from '../auth/session'
 type ProtectedRouteProps = {
   permission?: Permission
   roles?: Role[]
+  fallbackTo?: string
 }
 
-export default function ProtectedRoute({ permission, roles }: ProtectedRouteProps) {
+export default function ProtectedRoute({ permission, roles, fallbackTo = '/login' }: ProtectedRouteProps) {
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -42,14 +43,14 @@ export default function ProtectedRoute({ permission, roles }: ProtectedRouteProp
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
         <Card className="w-full max-w-lg text-center">
-          <p className="text-sm font-semibold text-slate-700">Verificando sessao...</p>
+          <p className="text-sm font-semibold text-slate-700">Verificando sessão...</p>
         </Card>
       </div>
     )
   }
 
   if (!sessionUser) {
-    return <Navigate to="/login" replace />
+    return <Navigate to={fallbackTo} replace />
   }
 
   const userForPerms: User = {

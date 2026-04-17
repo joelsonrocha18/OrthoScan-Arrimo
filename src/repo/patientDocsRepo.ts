@@ -1,21 +1,34 @@
-﻿import { DATA_MODE } from '../data/dataMode'
+import { pushAudit } from '../data/audit'
+import { DATA_MODE } from '../data/dataMode'
 import { loadDb, saveDb } from '../data/db'
 import { getSessionProfile } from '../lib/auth'
+import { logger } from '../lib/logger'
 import { supabase } from '../lib/supabaseClient'
+import { nowIsoDateTime, toIsoDateTime } from '../shared/utils/date'
+import { createEntityId } from '../shared/utils/id'
+import { validatePatientDocumentInput } from '../shared/validators'
 import type { PatientDocument } from '../types/PatientDocument'
-import { buildPatientDocPath, createSignedUrl, deleteFromStorage, uploadToStorage } from './storageRepo'
+import {
+  buildPatientDocPath,
+  createSignedUrl,
+  deleteFromStorage,
+  uploadToStorage,
+  validatePatientDocFile,
+} from './storageRepo'
 import { uploadFileToStorage } from '../lib/storageUpload'
 
 function nowIso() {
-  return new Date().toISOString()
+  return nowIsoDateTime()
 }
 
 function mapSupabaseDoc(row: Record<string, unknown>): PatientDocument {
   const note = typeof row.note === 'string' ? row.note : undefined
   const errorNote = typeof row.error_note === 'string' ? row.error_note : undefined
+  const data = row.data && typeof row.data === 'object' ? (row.data as Record<string, unknown>) : {}
   return {
     id: String(row.id ?? ''),
     patientId: String(row.patient_id ?? ''),
+    caseId: typeof row.case_id === 'string' ? row.case_id : undefined,
     title: String(row.title ?? 'Documento'),
     category: (String(row.category ?? 'outro') as PatientDocument['category']) ?? 'outro',
     createdAt: String(row.created_at ?? nowIso()),
@@ -26,6 +39,18 @@ function mapSupabaseDoc(row: Record<string, unknown>): PatientDocument {
     mimeType: (row.mime_type as string | null) ?? undefined,
     status: ((row.status as 'ok' | 'erro' | null) ?? 'ok') as 'ok' | 'erro',
     errorNote,
+    metadata: {
+      trayNumber: typeof data.trayNumber === 'number' ? data.trayNumber : undefined,
+      capturedAt: typeof data.capturedAt === 'string' ? data.capturedAt : undefined,
+      accessCode: typeof data.accessCode === 'string' ? data.accessCode : undefined,
+      sentAt: typeof data.sentAt === 'string' ? data.sentAt : undefined,
+      deviceLabel: typeof data.deviceLabel === 'string' ? data.deviceLabel : undefined,
+      source:
+        data.source === 'patient_portal' || data.source === 'internal'
+          ? data.source
+          : undefined,
+      uploadedByPatient: typeof data.uploadedByPatient === 'boolean' ? data.uploadedByPatient : undefined,
+    },
   }
 }
 
@@ -39,7 +64,7 @@ async function supabaseListPatientDocs(patientId: string) {
   if (!supabase) return []
   const { data, error } = await supabase
     .from('documents')
-    .select('id, patient_id, category, title, file_path, file_name, mime_type, status, note, error_note, created_at')
+    .select('id, patient_id, case_id, category, title, file_path, file_name, mime_type, status, note, error_note, created_at, data')
     .eq('patient_id', patientId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
@@ -57,7 +82,7 @@ export async function getPatientDoc(id: string) {
     if (!supabase) return null
     const { data, error } = await supabase
       .from('documents')
-      .select('id, patient_id, category, title, file_path, file_name, mime_type, status, note, error_note, created_at')
+      .select('id, patient_id, case_id, category, title, file_path, file_name, mime_type, status, note, error_note, created_at, data')
       .eq('id', id)
       .maybeSingle()
     if (error || !data) return null
@@ -67,12 +92,20 @@ export async function getPatientDoc(id: string) {
 }
 
 export async function resolvePatientDocUrl(doc: PatientDocument) {
+  if (doc.filePath && doc.metadata?.source === 'patient_portal' && supabase) {
+    const { data, error } = await supabase.storage.from('orthoscan').createSignedUrl(doc.filePath, 60 * 60 * 12)
+    if (!error && data?.signedUrl) {
+      return { ok: true as const, url: data.signedUrl }
+    }
+  }
   if (doc.filePath) return createSignedUrl(doc.filePath, 300)
   if (doc.url) return { ok: true as const, url: doc.url }
   return { ok: false as const, error: 'Documento sem caminho de arquivo.' }
 }
+
 export async function addPatientDoc(payload: {
   patientId: string
+  caseId?: string
   clinicId?: string
   title: string
   category: PatientDocument['category']
@@ -80,54 +113,70 @@ export async function addPatientDoc(payload: {
   createdAt?: string
   file?: File
 }) {
+  const validated = validatePatientDocumentInput(payload)
+  if (validated.file) {
+    const fileValidation = validatePatientDocFile(validated.file)
+    if (!fileValidation.ok) return fileValidation
+  }
+
   if (DATA_MODE === 'supabase') {
     if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
     const profile = getSessionProfile()
-    if (!profile?.id) return { ok: false as const, error: 'Sessao invalida. Faca login novamente.' }
-    const clinicId = profile?.clinicId ?? payload.clinicId
-    if (!clinicId) return { ok: false as const, error: 'Sessao sem clinicId e paciente sem clinica vinculada.' }
+    if (!profile?.id) return { ok: false as const, error: 'Sessão inválida. Faça login novamente.' }
+    const clinicId = profile.clinicId ?? validated.clinicId
+    if (!clinicId) return { ok: false as const, error: 'Sessão sem clinicId e paciente sem clínica vinculada.' }
 
     let filePath: string | undefined
-    if (payload.file) {
+    if (validated.file) {
       filePath = buildPatientDocPath({
         clinicId,
-        patientId: payload.patientId,
-        fileName: payload.file.name,
+        patientId: validated.patientId,
+        fileName: validated.file.name,
       })
-      const upload = await uploadToStorage(filePath, payload.file)
+      const upload = await uploadToStorage(filePath, validated.file)
       if (!upload.ok) return upload
     }
 
+    const createdAt = validated.createdAt ? toIsoDateTime(validated.createdAt) : nowIso()
     const { data, error } = await supabase
       .from('documents')
       .insert({
         clinic_id: clinicId,
-        patient_id: payload.patientId,
-        category: payload.category,
-        title: payload.title.trim() || 'Documento',
+        patient_id: validated.patientId,
+        case_id: payload.caseId ?? null,
+        category: validated.category,
+        title: validated.title,
         file_path: filePath ?? null,
-        file_name: payload.file?.name ?? (payload.title.trim() || 'arquivo'),
-        mime_type: payload.file?.type ?? null,
+        file_name: validated.file?.name ?? validated.title,
+        mime_type: validated.file?.type ?? null,
         status: 'ok',
-        note: payload.note?.trim() || null,
+        note: validated.note ?? null,
+        data: null,
         created_by: profile.id,
-        created_at: payload.createdAt ? new Date(payload.createdAt).toISOString() : nowIso(),
+        created_at: createdAt,
       })
-      .select('id, patient_id, category, title, file_path, file_name, mime_type, status, note, error_note, created_at')
+      .select('id, patient_id, case_id, category, title, file_path, file_name, mime_type, status, note, error_note, created_at, data')
       .single()
     if (error || !data) return { ok: false as const, error: error?.message ?? 'Falha ao criar documento.' }
-    return { ok: true as const, doc: mapSupabaseDoc(data as Record<string, unknown>) }
+    const doc = mapSupabaseDoc(data as Record<string, unknown>)
+    logger.info('Documento do paciente criado no Supabase.', {
+      flow: 'documents.create',
+      patientId: validated.patientId,
+      documentId: doc.id,
+      actorId: profile.id,
+    })
+    return { ok: true as const, doc }
   }
 
   const db = loadDb()
   let uploadedUrl: string | undefined
-  let isLocal = Boolean(payload.file)
+  let isLocal = Boolean(validated.file)
 
-  if (payload.file) {
-    const uploaded = await uploadFileToStorage(payload.file, {
+  if (validated.file) {
+    const uploaded = await uploadFileToStorage(validated.file, {
       scope: 'patient-docs',
-      clinicId: payload.clinicId,
-      ownerId: payload.patientId,
+      clinicId: validated.clinicId,
+      ownerId: validated.patientId,
     })
     if (uploaded) {
       uploadedUrl = uploaded.url
@@ -136,21 +185,33 @@ export async function addPatientDoc(payload: {
   }
 
   const doc: PatientDocument = {
-    id: `pat_doc_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-    patientId: payload.patientId,
-    title: payload.title.trim() || 'Documento',
-    category: payload.category,
-    createdAt: payload.createdAt ? new Date(payload.createdAt).toISOString() : nowIso(),
-    note: payload.note?.trim() || undefined,
+    id: createEntityId('pat-doc'),
+    patientId: validated.patientId,
+    caseId: payload.caseId,
+    title: validated.title,
+    category: validated.category,
+    createdAt: validated.createdAt ? toIsoDateTime(validated.createdAt) : nowIso(),
+    note: validated.note,
     isLocal,
-    url: payload.file ? (uploadedUrl ?? URL.createObjectURL(payload.file)) : undefined,
-    fileName: payload.file?.name ?? (payload.title.trim() || 'arquivo'),
-    mimeType: payload.file?.type,
+    url: validated.file ? (uploadedUrl ?? URL.createObjectURL(validated.file)) : undefined,
+    fileName: validated.file?.name ?? validated.title,
+    mimeType: validated.file?.type,
     status: 'ok',
   }
 
   db.patientDocuments = [doc, ...db.patientDocuments]
+  pushAudit(db, {
+    entity: 'document',
+    entityId: doc.id,
+    action: 'document.create',
+    message: `Documento ${doc.title} registrado para o paciente ${doc.patientId}.`,
+  })
   saveDb(db)
+  logger.info('Documento do paciente criado no modo local.', {
+    flow: 'documents.create',
+    patientId: validated.patientId,
+    documentId: doc.id,
+  })
   return { ok: true as const, doc }
 }
 
@@ -160,13 +221,13 @@ export async function updatePatientDoc(id: string, patch: Partial<Pick<PatientDo
     const { data, error } = await supabase
       .from('documents')
       .update({
-        title: patch.title,
+        title: patch.title?.trim() || undefined,
         category: patch.category,
-        note: patch.note,
-        created_at: patch.createdAt ? new Date(patch.createdAt).toISOString() : undefined,
+        note: patch.note?.trim() || undefined,
+        created_at: patch.createdAt ? toIsoDateTime(patch.createdAt) : undefined,
       })
       .eq('id', id)
-      .select('id, patient_id, category, title, file_path, file_name, mime_type, status, note, error_note, created_at')
+      .select('id, patient_id, case_id, category, title, file_path, file_name, mime_type, status, note, error_note, created_at, data')
       .single()
     if (error || !data) return { ok: false as const, error: error?.message ?? 'Documento não encontrado.' }
     return { ok: true as const, doc: mapSupabaseDoc(data as Record<string, unknown>) }
@@ -182,10 +243,16 @@ export async function updatePatientDoc(id: string, patch: Partial<Pick<PatientDo
     title: patch.title !== undefined ? patch.title.trim() || current.title : current.title,
     category: patch.category ?? current.category,
     note: patch.note !== undefined ? patch.note.trim() || undefined : current.note,
-    createdAt: patch.createdAt ? new Date(patch.createdAt).toISOString() : current.createdAt,
+    createdAt: patch.createdAt ? toIsoDateTime(patch.createdAt) : current.createdAt,
   }
 
   db.patientDocuments = db.patientDocuments.map((doc) => (doc.id === id ? next : doc))
+  pushAudit(db, {
+    entity: 'document',
+    entityId: next.id,
+    action: 'document.update',
+    message: `Documento ${next.title} atualizado.`,
+  })
   saveDb(db)
   return { ok: true as const, doc: next }
 }
@@ -203,6 +270,11 @@ export async function deletePatientDoc(id: string) {
     if (existing.filePath) {
       await deleteFromStorage(existing.filePath)
     }
+    logger.info('Documento do paciente removido no Supabase.', {
+      flow: 'documents.delete',
+      documentId: id,
+      patientId: existing.patientId,
+    })
     return { ok: true as const }
   }
 
@@ -211,16 +283,25 @@ export async function deletePatientDoc(id: string) {
   if (!current) return { ok: false as const, error: 'Documento não encontrado.' }
 
   db.patientDocuments = db.patientDocuments.filter((doc) => doc.id !== id)
+  pushAudit(db, {
+    entity: 'document',
+    entityId: id,
+    action: 'document.delete',
+    message: `Documento ${current.title} removido.`,
+  })
   saveDb(db)
   return { ok: true as const }
 }
 
 export async function markPatientDocAsError(id: string, errorNote: string) {
+  const trimmed = errorNote.trim()
+  if (!trimmed) return { ok: false as const, error: 'Informe o motivo da falha do documento.' }
+
   if (DATA_MODE === 'supabase') {
     if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
     const { error } = await supabase
       .from('documents')
-      .update({ status: 'erro', error_note: errorNote.trim() })
+      .update({ status: 'erro', error_note: trimmed })
       .eq('id', id)
     if (error) return { ok: false as const, error: error.message }
     return { ok: true as const }
@@ -231,8 +312,14 @@ export async function markPatientDocAsError(id: string, errorNote: string) {
   if (!target) return { ok: false as const, error: 'Documento não encontrado.' }
 
   db.patientDocuments = db.patientDocuments.map((doc) =>
-    doc.id === id ? { ...doc, status: 'erro', errorNote: errorNote.trim() } : doc,
+    doc.id === id ? { ...doc, status: 'erro', errorNote: trimmed } : doc,
   )
+  pushAudit(db, {
+    entity: 'document',
+    entityId: id,
+    action: 'document.mark_error',
+    message: `Documento ${target.title} marcado com erro.`,
+  })
   saveDb(db)
   return { ok: true as const }
 }
@@ -255,7 +342,12 @@ export async function restoreDocStatus(id: string) {
   db.patientDocuments = db.patientDocuments.map((doc) =>
     doc.id === id ? { ...doc, status: 'ok', errorNote: undefined } : doc,
   )
+  pushAudit(db, {
+    entity: 'document',
+    entityId: id,
+    action: 'document.restore',
+    message: `Documento ${target.title} restaurado para OK.`,
+  })
   saveDb(db)
   return { ok: true as const }
 }
-

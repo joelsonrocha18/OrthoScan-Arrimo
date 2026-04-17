@@ -6,6 +6,15 @@
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  --orth-brand-500: #01527d;
+  --orth-brand-600: #014565;
+  --orth-baby-100: #dff8fb;
+  --orth-baby-200: #b8edf3;
+  --orth-olive-200: #d0d9ad;
+  --orth-olive-500: #7f8f4b;
+  --orth-salmon-100: #ffe0d8;
+  --orth-salmon-300: #f4a18d;
+  --orth-salmon-500: #e88774;
 }
 
 * {
@@ -16,7 +25,12 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #f1f5f9;
+  background:
+    radial-gradient(circle at top left, rgba(88, 196, 210, 0.16), transparent 26%),
+    radial-gradient(circle at top right, rgba(1, 82, 125, 0.12), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(88, 196, 210, 0.1), transparent 20%),
+    radial-gradient(circle at bottom right, rgba(1, 82, 125, 0.08), transparent 22%),
+    linear-gradient(180deg, #f8fdfe 0%, #f5fbfd 46%, #edf7fa 100%);
   color: #0f172a;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -24,9 +38,186 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.app-card {
+  border-color: rgba(148, 163, 184, 0.44);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    0 24px 40px -34px rgba(1, 82, 125, 0.3),
+    0 14px 24px -28px rgba(88, 196, 210, 0.34);
+}
+
+.app-card-surface {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(255, 255, 255, 0.93)),
+    linear-gradient(135deg, rgba(223, 248, 251, 0.34), rgba(1, 82, 125, 0.04));
+}
+
+.app-card .text-slate-500 {
+  color: #475569;
+}
+
+.app-card .text-slate-400 {
+  color: #64748b;
+}
+
+.app-card .border-slate-200,
+.app-card .border-baby-200,
+.app-card .border-dashed.border-slate-200 {
+  border-color: rgba(148, 163, 184, 0.42);
+}
+
+.app-card .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+.app-sidebar {
+  background:
+    linear-gradient(180deg, #001c29 0%, #01354d 26%, #01527d 64%, #1d8897 100%);
+}
+
+.app-sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(223, 248, 251, 0.14), transparent 30%),
+    radial-gradient(circle at bottom left, rgba(88, 196, 210, 0.18), transparent 28%);
+  pointer-events: none;
+}
+
+.app-sidebar-active {
+  background: linear-gradient(90deg, rgba(88, 196, 210, 0.24), rgba(223, 248, 251, 0.14));
+  box-shadow: inset 0 0 0 1px rgba(184, 237, 243, 0.2);
+}
+
+.app-login-shell {
+  background:
+    radial-gradient(circle at top left, rgba(88, 196, 210, 0.24), transparent 28%),
+    radial-gradient(circle at top right, rgba(88, 196, 210, 0.14), transparent 22%),
+    radial-gradient(circle at bottom right, rgba(1, 82, 125, 0.26), transparent 28%),
+    linear-gradient(165deg, #00131d 0%, #01283b 26%, #014565 58%, #01527d 100%);
+}
+
+.app-login-card {
+  border-color: rgba(184, 237, 243, 0.16);
+  background:
+    linear-gradient(180deg, rgba(0, 24, 37, 0.92), rgba(1, 37, 55, 0.9)),
+    linear-gradient(135deg, rgba(88, 196, 210, 0.12), rgba(1, 82, 125, 0.12));
+  box-shadow:
+    0 26px 60px -38px rgba(2, 6, 23, 0.8),
+    0 18px 40px -30px rgba(88, 196, 210, 0.2);
+}
+
+.ui-copy-muted {
+  color: #4a5568;
+}
+
+.ui-copy-strong {
+  color: #1a202c;
+  font-weight: 700;
+}
+
+.ui-label {
+  color: #4a5568;
+  font-weight: 600;
+}
+
+.ui-value {
+  color: #1a202c;
+  font-weight: 700;
+}
+
+.ui-surface-panel {
+  background: #ffffff !important;
+  border: 1px solid rgba(148, 163, 184, 0.36) !important;
+  box-shadow:
+    0 10px 30px rgba(15, 23, 42, 0.06),
+    0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.ui-input-strong {
+  border-color: #a0aec0 !important;
+  background: #ffffff !important;
+  color: #1a202c !important;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.ui-input-strong::placeholder {
+  color: #718096;
+}
+
+.ui-table-head {
+  background: #f8fafc;
+}
+
+.ui-table-head th {
+  color: #4a5568;
+  font-weight: 700;
+}
+
+.ui-table-row {
+  background: #ffffff;
+  transition: background-color 160ms ease;
+}
+
+.ui-table-row:hover {
+  background: #f8fbff;
+}
+
 :root[data-theme='dark'] body {
   background-color: #020617;
   color: #e2e8f0;
+}
+
+:root[data-theme='dark'] .app-card {
+  border-color: rgba(52, 120, 246, 0.16);
+}
+
+:root[data-theme='dark'] .app-card-surface {
+  background:
+    linear-gradient(180deg, rgba(10, 18, 38, 0.95), rgba(14, 26, 48, 0.92)),
+    linear-gradient(135deg, rgba(52, 120, 246, 0.12), rgba(232, 135, 116, 0.08));
+}
+
+:root[data-theme='dark'] .ui-copy-muted,
+:root[data-theme='dark'] .ui-label {
+  color: #cbd5e1;
+}
+
+:root[data-theme='dark'] .ui-copy-strong,
+:root[data-theme='dark'] .ui-value {
+  color: #f8fafc;
+}
+
+:root[data-theme='dark'] .ui-surface-panel {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  box-shadow:
+    0 10px 30px rgba(2, 6, 23, 0.34),
+    0 1px 2px rgba(2, 6, 23, 0.3);
+}
+
+:root[data-theme='dark'] .ui-input-strong {
+  background: #0f172a !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+}
+
+:root[data-theme='dark'] .ui-table-head {
+  background: #0b1220;
+}
+
+:root[data-theme='dark'] .ui-table-head th {
+  color: #cbd5e1;
+}
+
+:root[data-theme='dark'] .ui-table-row {
+  background: #0f172a;
+}
+
+:root[data-theme='dark'] .ui-table-row:hover {
+  background: #111827;
 }
 
 :root[data-theme='dark'] .bg-slate-100 {

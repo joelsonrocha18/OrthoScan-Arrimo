@@ -1,23 +1,13 @@
-function numericFromId(id: string) {
-  const input = (id || '').trim()
-  let hash = 0
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash * 31 + input.charCodeAt(i)) % 1000000
-  }
-  return String(hash).padStart(6, '0')
-}
+import { buildEntityCode } from '../shared/utils/id'
 
 export function patientCode(id: string, shortId?: string) {
-  if (typeof shortId === 'string' && shortId.trim()) return shortId
-  return `P${numericFromId(id)}`
+  return buildEntityCode('P', id, shortId)
 }
 
 export function dentistCode(id: string, shortId?: string) {
-  if (typeof shortId === 'string' && shortId.trim()) return shortId
-  return `D${numericFromId(id)}`
+  return buildEntityCode('D', id, shortId)
 }
 
 export function clinicCode(id: string, shortId?: string) {
-  if (typeof shortId === 'string' && shortId.trim()) return shortId
-  return `C${numericFromId(id)}`
+  return buildEntityCode('C', id, shortId)
 }

@@ -34,11 +34,11 @@ export default function OnboardingInvitePage() {
   useEffect(() => {
     let active = true
     if (DATA_MODE !== 'supabase') {
-      setInviteState({ status: 'invalid', message: 'Fluxo de convite disponivel apenas em modo Supabase.' })
+      setInviteState({ status: 'invalid', message: 'Fluxo de convite disponível apenas em modo Supabase.' })
       return
     }
     if (!token) {
-      setInviteState({ status: 'invalid', message: 'Link invalido (token ausente).' })
+      setInviteState({ status: 'invalid', message: 'Link inválido (token ausente).' })
       return
     }
     setInviteState({ status: 'loading' })
@@ -46,7 +46,7 @@ export default function OnboardingInvitePage() {
       if (!active) return
       if (!result.ok) {
         if (result.used) {
-          setInviteState({ status: 'invalid', message: 'Este convite ja foi utilizado.' })
+          setInviteState({ status: 'invalid', message: 'Este convite já foi utilizado.' })
           return
         }
         if (result.expired) {
@@ -69,7 +69,7 @@ export default function OnboardingInvitePage() {
     setMessage('')
     if (inviteState.status !== 'ready') return
     if (!email.trim()) {
-      setError('Informe seu email.')
+      setError('Informe seu e-mail.')
       return
     }
     if (!fullName.trim()) {

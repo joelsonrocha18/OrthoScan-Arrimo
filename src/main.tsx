@@ -4,7 +4,11 @@ import App from './App'
 import './index.css'
 import { initMonitoring } from './lib/monitoring'
 
-initMonitoring()
+const MONITORING_ENABLED = Boolean((import.meta.env.VITE_MONITORING_WEBHOOK_URL as string | undefined)?.trim())
+
+if (MONITORING_ENABLED) {
+  initMonitoring()
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

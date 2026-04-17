@@ -22,11 +22,11 @@ export default function ResetPasswordPage() {
     setError('')
     setMessage('')
     if (!email.trim()) {
-      setError('Informe seu email.')
+      setError('Informe seu e-mail.')
       return
     }
     if (DATA_MODE !== 'supabase') {
-      setMessage('No modo local, solicite ao administrador a redefinicao.')
+      setMessage('No modo local, solicite ao administrador a redefinição.')
       return
     }
     setLoading(true)
@@ -36,14 +36,14 @@ export default function ResetPasswordPage() {
       setError(result.error)
       return
     }
-    setMessage('Se o email existir, o link de redefinicao foi enviado.')
+    setMessage('Se o e-mail existir, o link de redefinição foi enviado.')
   }
 
   const submitReset = async () => {
     setError('')
     setMessage('')
     if (!token.trim()) {
-      setError('Token obrigatorio.')
+      setError('Token obrigatório.')
       return
     }
     if (!password.trim() || password.length < 10) {
@@ -55,7 +55,7 @@ export default function ResetPasswordPage() {
       return
     }
     if (DATA_MODE !== 'supabase') {
-      setError('Redefinicao por token disponivel apenas em modo Supabase.')
+      setError('Redefinição por token disponível apenas em modo Supabase.')
       return
     }
     setLoading(true)
@@ -65,7 +65,7 @@ export default function ResetPasswordPage() {
       setError(result.error)
       return
     }
-    setMessage('Senha redefinida com sucesso. Voce ja pode entrar.')
+    setMessage('Senha redefinida com sucesso. Você já pode entrar.')
     window.setTimeout(() => navigate('/login', { replace: true }), 1200)
   }
 
@@ -74,13 +74,13 @@ export default function ResetPasswordPage() {
       <div className="relative w-full max-w-md">
         <Card className="border border-slate-800 bg-slate-900 p-6 sm:p-8">
           <h2 className="text-xl font-semibold text-white">Redefinir Senha</h2>
-          <p className="mt-1 text-sm text-slate-300">Solicite um token por email e conclua a redefinicao.</p>
+          <p className="mt-1 text-sm text-slate-300">Solicite um token por e-mail e conclua a redefinição.</p>
 
           <div className="mt-6 space-y-3">
             <label className="mb-1 block text-sm font-medium text-slate-200">Email</label>
             <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
             <Button className="w-full" variant="secondary" onClick={requestToken} disabled={loading}>
-              Solicitar token por email
+              Solicitar token por e-mail
             </Button>
           </div>
 
@@ -92,7 +92,7 @@ export default function ResetPasswordPage() {
             <label className="mb-1 block text-sm font-medium text-slate-200">Confirmar nova senha</label>
             <Input type="password" value={confirm} onChange={(event) => setConfirm(event.target.value)} />
             <Button className="w-full" onClick={submitReset} disabled={loading}>
-              {loading ? 'Processando...' : 'Concluir redefinicao'}
+              {loading ? 'Processando...' : 'Concluir redefinição'}
             </Button>
           </div>
 

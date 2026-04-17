@@ -161,7 +161,7 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
       <Card className="w-full max-w-lg">
-        <h3 className="text-xl font-semibold text-slate-900">Criar Caso a partir do Scan</h3>
+        <h3 className="text-xl font-semibold text-slate-900">Criar caso a partir do exame</h3>
         <p className="mt-1 text-sm text-slate-500">
           {isAlignerFlow
             ? scan.arch === 'ambos'
@@ -240,12 +240,12 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
                 checked={attachmentBondingTray}
                 onChange={(event) => setAttachmentBondingTray(event.target.checked)}
               />
-              Incluir placa para colar attachments antes do início
+              Incluir placa para colar ataches antes do início
             </label>
           ) : null}
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Observacao do planejamento (opcional)</label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Observação do planejamento (opcional)</label>
             <textarea
               rows={3}
               value={planningNote}
@@ -261,7 +261,7 @@ export default function CreateCaseFromScanModal({ open, scan, onClose, onConfirm
           <Button variant="secondary" onClick={onClose}>
             Cancelar
           </Button>
-          <Button onClick={submit}>Criar Caso</Button>
+          <Button onClick={submit}>Criar caso</Button>
         </div>
       </Card>
     </div>

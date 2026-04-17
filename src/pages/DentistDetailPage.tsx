@@ -11,6 +11,7 @@ import { useDb } from '../lib/useDb'
 import { fetchCep, isValidCep, normalizeCep } from '../lib/cep'
 import { formatFixedPhone, formatMobilePhone, isValidFixedPhone, isValidMobilePhone } from '../lib/phone'
 import { getCurrentUser } from '../lib/auth'
+import { buildDentistPortalWhatsappHref } from '../lib/accessLinks'
 import { can } from '../auth/permissions'
 import { DATA_MODE } from '../data/dataMode'
 import { supabase } from '../lib/supabaseClient'
@@ -221,7 +222,7 @@ export default function DentistDetailPage() {
             state: data.state || current.address.state,
           },
         }))
-        setCepStatus('Endereco preenchido automaticamente.')
+        setCepStatus('Endereço preenchido automaticamente.')
         setCepError('')
       })
       .catch((err: Error) => {
@@ -238,6 +239,15 @@ export default function DentistDetailPage() {
   const namePrefix = form.gender === 'feminino' ? 'Dra.' : 'Dr.'
   const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim()
   const headerName = fullName ? `${namePrefix} ${fullName}` : ''
+  const dentistPortalWhatsappHref = useMemo(
+    () =>
+      buildDentistPortalWhatsappHref({
+        dentistName: headerName || existing?.name,
+        whatsapp: form.whatsapp,
+        email: form.email,
+      }),
+    [existing?.name, form.email, form.whatsapp, headerName],
+  )
 
   if (!isNew && loadingExisting) {
     return (
@@ -272,11 +282,11 @@ export default function DentistDetailPage() {
       return
     }
     if (form.phone.trim() && !isValidFixedPhone(form.phone)) {
-      setError('Telefone fixo invalido.')
+      setError('Telefone fixo inválido.')
       return
     }
     if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) {
-      setError('Celular/WhatsApp invalido.')
+      setError('Celular/WhatsApp inválido.')
       return
     }
     const payload = {
@@ -430,15 +440,30 @@ export default function DentistDetailPage() {
           </h1>
           {!isNew && existing ? <p className="mt-1 text-xs font-semibold text-slate-500">{dentistCode(existing.id, existing.shortId)}</p> : null}
           <p className="mt-2 text-sm text-slate-500">
-            Dentista {existing?.deletedAt ? '(Excluido)' : ''}
+            Dentista {existing?.deletedAt ? '(Excluído)' : ''}
           </p>
         </div>
-        <Link
-          to="/app/dentists"
-          className="inline-flex h-10 items-center rounded-lg bg-slate-100 px-4 text-sm font-semibold text-slate-800 hover:bg-slate-200"
-        >
-          Voltar
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {!isNew ? (
+            <Button
+              variant="secondary"
+              disabled={!dentistPortalWhatsappHref}
+              onClick={
+                dentistPortalWhatsappHref
+                  ? () => window.open(dentistPortalWhatsappHref, '_blank', 'noopener,noreferrer')
+                  : undefined
+              }
+            >
+              Encaminhar acesso
+            </Button>
+          ) : null}
+          <Link
+            to="/app/dentists"
+            className="inline-flex h-10 items-center rounded-lg bg-slate-100 px-4 text-sm font-semibold text-slate-800 hover:bg-slate-200"
+          >
+            Voltar
+          </Link>
+        </div>
       </section>
 
       <section className="mt-6 space-y-4">
@@ -497,7 +522,7 @@ export default function DentistDetailPage() {
               </select>
               {form.clinicId ? (
                 <Link to={`/app/clinics/${form.clinicId}`} className="mt-2 inline-flex text-xs font-semibold text-brand-700">
-                  Abrir clinica
+                  Abrir clínica
                 </Link>
               ) : null}
             </div>
@@ -531,7 +556,7 @@ export default function DentistDetailPage() {
         </Card>
 
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Endereco</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Endereço</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">CEP</label>
@@ -554,7 +579,7 @@ export default function DentistDetailPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Numero</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Número</label>
               <Input
                 value={form.address.number}
                 onChange={(event) =>

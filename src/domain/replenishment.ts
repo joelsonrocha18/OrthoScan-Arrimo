@@ -1,4 +1,5 @@
-﻿import type { Case } from '../types/Case'
+import { diffIsoDays, nowIsoDateTime, toDateOnly, toIsoDate } from '../shared/utils/date'
+import type { Case } from '../types/Case'
 
 export type ReplenishmentAlert = {
   id: string
@@ -8,17 +9,6 @@ export type ReplenishmentAlert = {
   message: string
   dueDate: string
   daysLeft: number
-}
-
-function toDateOnly(value: string) {
-  return new Date(`${value.slice(0, 10)}T00:00:00`)
-}
-
-function diffDays(targetDate: string, nowIso: string) {
-  const now = toDateOnly(nowIso)
-  const due = toDateOnly(targetDate)
-  const ms = due.getTime() - now.getTime()
-  return Math.ceil(ms / (1000 * 60 * 60 * 24))
 }
 
 export function getTotalTrays(caseItem: Case): number {
@@ -65,14 +55,14 @@ export function getNextDeliveryDueDate(caseItem: Case): string | null {
   const deliveredOffset = anchorActual ? Math.max(0, maxDelivered - anchorActual.trayNumber) : maxDelivered
   const daysToAdd = deliveredOffset * caseItem.changeEveryDays
   baseDate.setDate(baseDate.getDate() + daysToAdd)
-  return baseDate.toISOString().slice(0, 10)
+  return toIsoDate(baseDate)
 }
 
-export function getReplenishmentAlerts(caseItem: Case, nowIso = new Date().toISOString()): ReplenishmentAlert[] {
+export function getReplenishmentAlerts(caseItem: Case, nowIso: string = nowIsoDateTime()): ReplenishmentAlert[] {
   const dueDate = getNextDeliveryDueDate(caseItem)
   if (!dueDate) return []
 
-  const daysLeft = diffDays(dueDate, nowIso)
+  const daysLeft = diffIsoDays(dueDate, nowIso)
   if (daysLeft <= 15 && daysLeft > 10) {
     return [
       {
@@ -106,7 +96,7 @@ export function getReplenishmentAlerts(caseItem: Case, nowIso = new Date().toISO
         type: 'overdue',
         severity: 'urgent',
         title: 'Reposição atrasada',
-        message: `Caso ${caseItem.patientName} esta atrasado para reposição ha ${Math.abs(daysLeft)} dia(s).`,
+          message: `Caso ${caseItem.patientName} está atrasado para reposição há ${Math.abs(daysLeft)} dia(s).`,
         dueDate,
         daysLeft,
       },
@@ -124,4 +114,3 @@ export function getCaseSupplySummary(caseItem: Case) {
   const nextDueDate = getNextDeliveryDueDate(caseItem)
   return { total, delivered, remaining, nextTray, nextDueDate }
 }
-

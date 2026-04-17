@@ -46,13 +46,13 @@ export function getDentist(id: string) {
 export function createDentist(payload: Omit<DentistClinic, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>) {
   const db = loadDb()
   const name = payload.name.trim()
-  if (!name) return { ok: false as const, error: 'Nome e obrigatorio.' }
+  if (!name) return { ok: false as const, error: 'Nome é obrigatório.' }
 
   const type = payload.type
   const cnpj = normalizeText(payload.cnpj)
   if (type === 'clinica') {
-    if (!cnpj) return { ok: false as const, error: 'CNPJ e obrigatorio para clinica.' }
-    if (!isValidCnpj(cnpj)) return { ok: false as const, error: 'CNPJ invalido.' }
+    if (!cnpj) return { ok: false as const, error: 'CNPJ é obrigatório para clínica.' }
+    if (!isValidCnpj(cnpj)) return { ok: false as const, error: 'CNPJ inválido.' }
   }
 
   const now = nowIso()
@@ -91,8 +91,8 @@ export function updateDentist(id: string, patch: Partial<DentistClinic>) {
   const nextType = patch.type ?? current.type
   const cnpjValue = patch.cnpj ?? current.cnpj
   if (nextType === 'clinica') {
-    if (!cnpjValue) return { ok: false as const, error: 'CNPJ e obrigatorio para clinica.' }
-    if (!isValidCnpj(cnpjValue)) return { ok: false as const, error: 'CNPJ invalido.' }
+    if (!cnpjValue) return { ok: false as const, error: 'CNPJ é obrigatório para clínica.' }
+    if (!isValidCnpj(cnpjValue)) return { ok: false as const, error: 'CNPJ inválido.' }
   }
 
   const next: DentistClinic = {

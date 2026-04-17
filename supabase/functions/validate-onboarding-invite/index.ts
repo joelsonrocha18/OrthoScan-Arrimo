@@ -42,8 +42,8 @@ async function sha256Hex(value: string) {
 }
 
 const ROLE_LABEL: Record<string, string> = {
-  master_admin: 'Master Admin',
-  dentist_admin: 'Dentista Admin',
+  master_admin: 'Administrador master',
+  dentist_admin: 'Administrador dentista',
   dentist_client: 'Dentista Cliente',
   clinic_client: 'Clinica Cliente',
   lab_tech: 'Tecnico de Laboratorio',
@@ -52,16 +52,16 @@ const ROLE_LABEL: Record<string, string> = {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) })
-  if (req.method !== 'POST') return json(req, { ok: false, error: 'Method not allowed' }, 405)
+  if (req.method !== 'POST') return json(req, { ok: false, error: 'Método não permitido.' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   if (!supabaseUrl || !serviceRoleKey) {
-    return json(req, { ok: false, error: 'Missing SUPABASE_URL or SERVICE_ROLE_KEY.' }, 500)
+    return json(req, { ok: false, error: 'SUPABASE_URL ou SERVICE_ROLE_KEY ausente.' }, 500)
   }
 
   const payload = (await req.json()) as Payload
-  if (!payload.token?.trim()) return json(req, { ok: false, error: 'Token obrigatorio.' }, 400)
+  if (!payload.token?.trim()) return json(req, { ok: false, error: 'Token obrigatório.' }, 400)
 
   const tokenHash = await sha256Hex(payload.token.trim())
   const supabase = createClient(supabaseUrl, serviceRoleKey)
@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     .maybeSingle()
 
   if (error) return json(req, { ok: false, error: error.message }, 400)
-  if (!invite) return json(req, { ok: false, expired: false, used: false, error: 'Token invalido.' }, 404)
+  if (!invite) return json(req, { ok: false, expired: false, used: false, error: 'Token inválido.' }, 404)
 
   const expired = new Date(invite.expires_at).getTime() <= Date.now()
   const used = Boolean(invite.used_at)

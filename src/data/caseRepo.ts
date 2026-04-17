@@ -2,6 +2,8 @@
 import { pushAudit } from './audit'
 import { handleRework as handleReplacementRework, markReplacementBankDeliveredByLot } from './replacementBankRepo'
 import type { Case, CaseAttachment, CaseTray, TrayState } from '../types/Case'
+import { appendCaseTimelineEntry, createCaseTimelineEntry } from '../modules/cases/domain/entities/Case'
+import { CaseLifecycleService } from '../modules/cases/domain/services/CaseLifecycleService'
 
 type RepoResult<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -58,17 +60,7 @@ function removeTrayFromDeliveryLots(
 }
 
 function deriveCaseLifecycle(caseItem: Case, nextTrays: CaseTray[]): Pick<Case, 'status' | 'phase'> {
-  const hasDelivery = nextTrays.some((item) => item.state === 'entregue')
-  const hasProduction = nextTrays.some((item) => item.state === 'em_producao' || item.state === 'pronta' || item.state === 'rework')
-  // Entrega total das placas não finaliza automaticamente.
-  // A finalizacao do tratamento e manual.
-  if (hasDelivery || !!caseItem.installation?.installedAt) {
-    return { status: 'em_entrega', phase: 'em_producao' }
-  }
-  if (hasProduction) {
-    return { status: 'em_producao', phase: 'em_producao' }
-  }
-  return { status: caseItem.status, phase: caseItem.phase }
+  return CaseLifecycleService.deriveLifecycleFromTrays(caseItem, nextTrays)
 }
 
 export function listCases() {
@@ -155,10 +147,10 @@ export function setTrayState(caseId: string, trayNumber: number, newState: TrayS
 
   const allowed = trayTransitionMap[tray.state]
   if (!allowed.includes(newState)) {
-    return { ok: false, error: 'Transicao de estado invalida para esta placa.' }
+    return { ok: false, error: 'Transição de estado inválida para esta placa.' }
   }
   if (tray.state === 'entregue' && newState !== 'entregue' && newState !== 'rework') {
-    return { ok: false, error: 'Não e permitido regredir uma placa ja entregue ao dentista.' }
+    return { ok: false, error: 'Não é permitido regredir uma placa já entregue ao dentista.' }
   }
 
   const nextTrays: CaseTray[] = targetCase.trays.map((item) => {
@@ -173,7 +165,21 @@ export function setTrayState(caseId: string, trayNumber: number, newState: TrayS
   })
 
   const lifecycle = deriveCaseLifecycle(targetCase, nextTrays)
-  const updated = updateCase(caseId, { trays: nextTrays, ...lifecycle })
+  const updated = updateCase(caseId, {
+    trays: nextTrays,
+    ...lifecycle,
+    timelineEntries: appendCaseTimelineEntry(targetCase, createCaseTimelineEntry({
+      at: nowIso(),
+      type: 'tray_updated',
+      title: 'Placa atualizada',
+      description: `Placa #${trayNumber} alterada para ${newState}.`,
+      metadata: {
+        trayNumber,
+        status: lifecycle.status,
+        phase: lifecycle.phase,
+      },
+    })),
+  })
   if (!updated) {
     return { ok: false, error: 'Não foi possível atualizar a placa.' }
   }
@@ -224,7 +230,7 @@ export function createDeliveryBatch(
   }
 
   if (fromTray > toTray) {
-    return { ok: false, error: 'Intervalo invalido. O valor "De" deve ser menor ou igual a "Ate".' }
+    return { ok: false, error: 'Intervalo inválido. O valor "De" deve ser menor ou igual a "Até".' }
   }
 
   const range = targetCase.trays.filter((item) => item.trayNumber >= fromTray && item.trayNumber <= toTray)
@@ -234,7 +240,7 @@ export function createDeliveryBatch(
 
   const invalid = range.find((item) => item.state !== 'pronta')
   if (invalid) {
-    return { ok: false, error: `A placa #${invalid.trayNumber} não esta pronta para entrega.` }
+    return { ok: false, error: `A placa #${invalid.trayNumber} não está pronta para entrega.` }
   }
 
   const nextTrays = targetCase.trays.map((item) =>
@@ -244,7 +250,20 @@ export function createDeliveryBatch(
   )
 
   const lifecycle = deriveCaseLifecycle(targetCase, nextTrays)
-  const updated = updateCase(caseId, { trays: nextTrays, ...lifecycle })
+  const updated = updateCase(caseId, {
+    trays: nextTrays,
+    ...lifecycle,
+    timelineEntries: appendCaseTimelineEntry(targetCase, createCaseTimelineEntry({
+      at: nowIso(),
+      type: 'delivery_registered',
+      title: 'Entrega por lote registrada',
+      description: `Lote de placas #${fromTray} a #${toTray} entregue.`,
+      metadata: {
+        status: lifecycle.status,
+        phase: lifecycle.phase,
+      },
+    })),
+  })
   if (!updated) {
     return { ok: false, error: 'Não foi possível registrar a entrega por lote.' }
   }
@@ -259,7 +278,7 @@ export function markCaseScanFileError(caseId: string, scanFileId: string, reason
   }
   const trimmed = reason.trim()
   if (!trimmed) {
-    return { ok: false, error: 'Motivo do erro e obrigatorio.' }
+    return { ok: false, error: 'Motivo do erro é obrigatório.' }
   }
 
   const nextScanFiles = (targetCase.scanFiles ?? []).map((item) =>
@@ -314,7 +333,7 @@ export function registerCaseInstallation(
   const currentInstallation = targetCase.installation
   const isFirstInstallation = !currentInstallation?.installedAt
   if (isFirstInstallation && !payload.installedAt) {
-    return { ok: false, error: 'Data de instalação e obrigatoria.' }
+    return { ok: false, error: 'Data de instalação é obrigatória.' }
   }
   const upperTotal = targetCase.totalTraysUpper ?? targetCase.totalTrays
   const lowerTotal = targetCase.totalTraysLower ?? targetCase.totalTrays
@@ -326,18 +345,18 @@ export function registerCaseInstallation(
     return { ok: false, error: 'Na primeira instalação, informe ao menos 1 alinhador entregue ao paciente.' }
   }
   if (!Number.isFinite(inputUpper) || inputUpper < 0) {
-    return { ok: false, error: `Quantidade superior invalida. Informe entre 0 e ${upperTotal}.` }
+    return { ok: false, error: `Quantidade superior inválida. Informe entre 0 e ${upperTotal}.` }
   }
   if (!Number.isFinite(inputLower) || inputLower < 0) {
-    return { ok: false, error: `Quantidade inferior invalida. Informe entre 0 e ${lowerTotal}.` }
+    return { ok: false, error: `Quantidade inferior inválida. Informe entre 0 e ${lowerTotal}.` }
   }
   const deliveredUpper = Math.trunc(currentDeliveredUpper + inputUpper)
   const deliveredLower = Math.trunc(currentDeliveredLower + inputLower)
   if (deliveredUpper > upperTotal) {
-    return { ok: false, error: `Quantidade superior invalida. Informe entre 0 e ${upperTotal}.` }
+    return { ok: false, error: `Quantidade superior inválida. Informe entre 0 e ${upperTotal}.` }
   }
   if (deliveredLower > lowerTotal) {
-    return { ok: false, error: `Quantidade inferior invalida. Informe entre 0 e ${lowerTotal}.` }
+    return { ok: false, error: `Quantidade inferior inválida. Informe entre 0 e ${lowerTotal}.` }
   }
   const deliveredToDentist = deliveryLots.reduce(
     (acc, lot) => {
@@ -370,7 +389,7 @@ export function registerCaseInstallation(
   const nextPairDelivered = Math.max(0, Math.min(normalizedDeliveredUpper, normalizedDeliveredLower))
   const newPairQty = Math.max(0, nextPairDelivered - currentPairDelivered)
   if (newPairQty > 0 && !payload.installedAt) {
-    return { ok: false, error: 'Data da entrega ao paciente e obrigatoria.' }
+    return { ok: false, error: 'Data da entrega ao paciente é obrigatória.' }
   }
   const patientDeliveryLots = [...(currentInstallation?.patientDeliveryLots ?? [])]
   if (newPairQty > 0) {
@@ -397,6 +416,16 @@ export function registerCaseInstallation(
     },
     status: targetCase.status === 'finalizado' ? 'finalizado' : 'em_tratamento',
     phase: targetCase.phase === 'finalizado' ? 'finalizado' : 'em_producao',
+    timelineEntries: appendCaseTimelineEntry(targetCase, createCaseTimelineEntry({
+      at: nowIso(),
+      type: 'installation_registered',
+      title: currentInstallation?.installedAt ? 'Reposição ao paciente registrada' : 'Instalação inicial registrada',
+      description: payload.note?.trim() || undefined,
+      metadata: {
+        status: targetCase.status === 'finalizado' ? 'finalizado' : 'em_tratamento',
+        phase: targetCase.phase === 'finalizado' ? 'finalizado' : 'em_producao',
+      },
+    })),
   })
   if (!updated) {
     return { ok: false, error: 'Não foi possível registrar a instalação.' }
@@ -432,13 +461,13 @@ export function registerCaseDeliveryLot(
     return { ok: false, error: 'Placa inicial deve ser maior ou igual a 1.' }
   }
   if (!Number.isFinite(payload.toTray) || payload.toTray < payload.fromTray) {
-    return { ok: false, error: 'Intervalo de placas invalido.' }
+    return { ok: false, error: 'Intervalo de placas inválido.' }
   }
   if (payload.toTray > total) {
     return { ok: false, error: `Intervalo excede o total do caso (${total}).` }
   }
   if (!payload.deliveredToDoctorAt) {
-    return { ok: false, error: 'Data da entrega e obrigatoria.' }
+    return { ok: false, error: 'Data da entrega é obrigatória.' }
   }
 
   const existing = targetCase.deliveryLots ?? []
@@ -457,7 +486,7 @@ export function registerCaseDeliveryLot(
   }
   const notReady = inRange.find((item) => item.state !== 'pronta' && item.state !== 'entregue' && item.state !== 'rework')
   if (notReady) {
-    return { ok: false, error: `A placa #${notReady.trayNumber} não esta pronta para entrega.` }
+    return { ok: false, error: `A placa #${notReady.trayNumber} não está pronta para entrega.` }
   }
   const nextTrays = targetCase.trays.map((item) =>
     item.trayNumber >= payload.fromTray && item.trayNumber <= payload.toTray
@@ -481,6 +510,16 @@ export function registerCaseDeliveryLot(
     deliveryLots: [...existing, newLot],
     status: 'em_entrega',
     phase: 'em_producao',
+    timelineEntries: appendCaseTimelineEntry(targetCase, createCaseTimelineEntry({
+      at: nowIso(),
+      type: 'delivery_registered',
+      title: 'Entrega ao profissional registrada',
+      description: `Arcada ${payload.arch}, placas #${payload.fromTray} a #${payload.toTray}.`,
+      metadata: {
+        status: 'em_entrega',
+        phase: 'em_producao',
+      },
+    })),
   })
   if (!updated) {
     return { ok: false, error: 'Não foi possível registrar o lote.' }
@@ -520,8 +559,19 @@ export function handleRework(
   const updated = updateCase(caseId, {
     deliveryLots: nextLots,
     installation: nextInstallation,
+    timelineEntries: appendCaseTimelineEntry(targetCase, createCaseTimelineEntry({
+      at: nowIso(),
+      type: 'tray_updated',
+      title: 'Reconfecção registrada',
+      description: `Placa #${payload.trayNumber} marcada para reconfecção (${payload.arch}).`,
+      metadata: {
+        trayNumber: payload.trayNumber,
+        status: targetCase.status,
+        phase: targetCase.phase,
+      },
+    })),
   })
-  if (!updated) return { ok: false, error: 'Não foi possível ajustar dados do rework.' }
+  if (!updated) return { ok: false, error: 'Não foi possível ajustar dados da reconfecção.' }
 
   handleReplacementRework(caseId, payload.trayNumber, payload.arch, payload.sourceLabItemId)
   return { ok: true, data: updated }

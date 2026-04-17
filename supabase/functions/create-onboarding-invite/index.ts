@@ -38,7 +38,7 @@ function corsHeaders(req: Request) {
   return {
     'Access-Control-Allow-Origin': origin,
     // `x-user-jwt` carries the authenticated user's access token (ES256) because the Functions gateway
-    // rejects it in the standard `Authorization` header as "Invalid JWT". We keep `Authorization` as anon.
+    // rejeita no header padrão `Authorization` como "Invalid JWT". Mantemos `Authorization` como anon.
     'Access-Control-Allow-Headers': 'authorization, x-user-jwt, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     Vary: 'Origin',
@@ -66,7 +66,7 @@ async function sha256Hex(value: string) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) })
-  if (req.method !== 'POST') return json(req, { ok: false, error: 'Method not allowed' }, 405)
+  if (req.method !== 'POST') return json(req, { ok: false, error: 'Método não permitido.' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   // Use our own secret, since some Supabase-provided env keys are not available/consistent across plans.
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
   const siteUrl = Deno.env.get('SITE_URL') ?? ''
 
   if (!supabaseUrl || !serviceRoleKey || !siteUrl) {
-    return json(req, { ok: false, error: 'Missing SUPABASE_URL, SERVICE_ROLE_KEY or SITE_URL.' }, 500)
+    return json(req, { ok: false, error: 'SUPABASE_URL, SERVICE_ROLE_KEY ou SITE_URL ausente.' }, 500)
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
@@ -86,10 +86,10 @@ Deno.serve(async (req) => {
   const headerJwt = (req.headers.get('x-user-jwt') ?? '').replace(/^Bearer\\s+/i, '').trim()
   const userJwt = bodyJwt || headerJwt
   if (!payload.fullName?.trim() || !payload.role?.trim() || !payload.clinicId?.trim()) {
-    return json(req, { ok: false, error: 'Missing fullName, role or clinicId.' }, 400)
+    return json(req, { ok: false, error: 'fullName, role ou clinicId ausente.' }, 400)
   }
   if (!APP_ROLES.has(payload.role)) {
-    return json(req, { ok: false, error: 'Invalid role.' }, 400)
+    return json(req, { ok: false, error: 'Perfil inválido.' }, 400)
   }
 
   const {
@@ -112,12 +112,12 @@ Deno.serve(async (req) => {
 
   let targetClinicId = payload.clinicId
   if (actorRole === 'dentist_admin') {
-    if (!actorProfile?.clinic_id) return json(req, { ok: false, error: 'Clinic missing for actor.' }, 403)
+    if (!actorProfile?.clinic_id) return json(req, { ok: false, error: 'Clínica ausente para este usuário.' }, 403)
     targetClinicId = actorProfile.clinic_id
   }
 
   if (actorRole === 'dentist_admin' && ['master_admin', 'dentist_admin'].includes(payload.role)) {
-    return json(req, { ok: false, error: 'Role not allowed for actor.' }, 403)
+    return json(req, { ok: false, error: 'Perfil não permitido para este usuário.' }, 403)
   }
 
   const inviteWindowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString()
@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
     .single()
 
   if (insertError || !invite) {
-    return json(req, { ok: false, error: insertError?.message ?? 'Invite insert failed.' }, 400)
+    return json(req, { ok: false, error: insertError?.message ?? 'Falha ao inserir convite.' }, 400)
   }
 
   const inviteLink = `${siteUrl.replace(/\/$/, '')}/complete-signup?token=${token}`

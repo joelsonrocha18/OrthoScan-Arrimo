@@ -1,9 +1,7 @@
-﻿import { loadDb, saveDb } from '../data/db'
+import { loadDb, saveDb } from '../data/db'
+import { nowIsoDateTime } from '../shared/utils/date'
+import { createEntityId } from '../shared/utils/id'
 import type { Role, User } from '../types/User'
-
-function nowIso() {
-  return new Date().toISOString()
-}
 
 export function listUsers(includeDeleted = false) {
   return loadDb()
@@ -32,15 +30,15 @@ export function createUser(payload: {
   linkedClinicId?: string
 }) {
   const db = loadDb()
-  if (!payload.name.trim()) return { ok: false as const, error: 'Nome e obrigatorio.' }
-  if (!payload.email.trim()) return { ok: false as const, error: 'Email e obrigatorio.' }
-  if (!payload.password.trim()) return { ok: false as const, error: 'Senha e obrigatoria.' }
+  if (!payload.name.trim()) return { ok: false as const, error: 'Nome é obrigatório.' }
+  if (!payload.email.trim()) return { ok: false as const, error: 'E-mail é obrigatório.' }
+  if (!payload.password.trim()) return { ok: false as const, error: 'Senha é obrigatória.' }
   const duplicated = db.users.find((user) => user.email.toLowerCase() === payload.email.trim().toLowerCase())
-  if (duplicated) return { ok: false as const, error: 'Email ja cadastrado.' }
+  if (duplicated) return { ok: false as const, error: 'E-mail já cadastrado.' }
 
-  const now = nowIso()
+  const now = nowIsoDateTime()
   const user: User = {
-    id: `user_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    id: createEntityId('user'),
     name: payload.name.trim(),
     username: payload.username?.trim() || undefined,
     email: payload.email.trim(),
@@ -81,7 +79,7 @@ export function updateUser(id: string, patch: Partial<User>) {
     phone: patch.phone ? patch.phone.trim() : current.phone,
     whatsapp: patch.whatsapp ? patch.whatsapp.trim() : current.whatsapp,
     addressLine: patch.addressLine ? patch.addressLine.trim() : current.addressLine,
-    updatedAt: nowIso(),
+    updatedAt: nowIsoDateTime(),
   }
 
   db.users = db.users.map((user) => (user.id === id ? next : user))
@@ -90,13 +88,13 @@ export function updateUser(id: string, patch: Partial<User>) {
 }
 
 export function resetUserPassword(id: string, password: string) {
-  if (!password.trim()) return { ok: false as const, error: 'Senha temporaria invalida.' }
+  if (!password.trim()) return { ok: false as const, error: 'Senha temporária inválida.' }
   return updateUser(id, { password })
 }
 
 export function setUserActive(id: string, isActive: boolean) {
   const current = getUser(id)
-  if (current?.role === 'master_admin') return { ok: false as const, error: 'Não e permitido desativar o master admin.' }
+  if (current?.role === 'master_admin') return { ok: false as const, error: 'Não é permitido desativar o administrador master.' }
   return updateUser(id, { isActive })
 }
 
@@ -104,10 +102,10 @@ export function softDeleteUser(id: string) {
   const db = loadDb()
   const current = db.users.find((user) => user.id === id)
   if (!current) return { ok: false as const, error: 'Usuário não encontrado.' }
-  if (current.role === 'master_admin') return { ok: false as const, error: 'Não e permitido excluir o master admin.' }
+  if (current.role === 'master_admin') return { ok: false as const, error: 'Não é permitido excluir o administrador master.' }
 
   db.users = db.users.map((user) =>
-    user.id === id ? { ...user, deletedAt: nowIso(), isActive: false, updatedAt: nowIso() } : user,
+    user.id === id ? { ...user, deletedAt: nowIsoDateTime(), isActive: false, updatedAt: nowIsoDateTime() } : user,
   )
   saveDb(db)
   return { ok: true as const }
@@ -119,9 +117,8 @@ export function restoreUser(id: string) {
   if (!current) return { ok: false as const, error: 'Usuário não encontrado.' }
 
   db.users = db.users.map((user) =>
-    user.id === id ? { ...user, deletedAt: undefined, isActive: true, updatedAt: nowIso() } : user,
+    user.id === id ? { ...user, deletedAt: undefined, isActive: true, updatedAt: nowIsoDateTime() } : user,
   )
   saveDb(db)
   return { ok: true as const }
 }
-

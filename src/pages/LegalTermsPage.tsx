@@ -17,15 +17,15 @@ export default function LegalTermsPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-50">Termos de Uso</h1>
           <p className="mt-1 text-sm text-slate-400">
-            OrthoScan (laboratorio de alinhadores). Versao modelo para revisao juridica. Ultima atualizacao: 18/02/2026.
+            OrthoScan (laboratório de alinhadores). Versão modelo para revisão jurídica. Última atualização: 18/02/2026.
           </p>
         </div>
 
         <Card className="border border-slate-800 bg-slate-900">
           <Section title="1. Objetivo">
             <p>
-              Estes termos regulam o uso do sistema OrthoScan para gestao operacional do laboratorio (scans, planejamentos,
-              producao, entregas e administracao).
+              Estes termos regulam o uso do sistema OrthoScan para gestão operacional do laboratório (exames, planejamentos,
+              produção, entregas e administração).
             </p>
           </Section>
 
@@ -33,21 +33,21 @@ export default function LegalTermsPage() {
             <ul className="list-disc pl-5">
               <li>O usuário e responsável por manter suas credenciais seguras e não compartilhar acesso.</li>
               <li>Perfis e permissoes limitam as ações conforme funcao (RBAC).</li>
-              <li>Recomendado habilitar 2FA para perfis administrativos quando disponivel.</li>
+              <li>Recomendado habilitar 2FA para perfis administrativos quando disponível.</li>
             </ul>
           </Section>
 
           <Section title="3. Uso Adequado">
             <ul className="list-disc pl-5">
-              <li>Proibido inserir conteudo ilicito, ofensivo, ou violar direitos de terceiros.</li>
-              <li>Proibido tentar explorar vulnerabilidades, burlar permissão ou acessar dados sem autorizacao.</li>
+              <li>Proibido inserir conteúdo ilícito, ofensivo ou violar direitos de terceiros.</li>
+              <li>Proibido tentar explorar vulnerabilidades, burlar permissão ou acessar dados sem autorização.</li>
             </ul>
           </Section>
 
           <Section title="4. Dados e Documentos">
             <p>
-              O usuário declara possuir base legal e autorizacao para inserir dados de pacientes e arquivos (incluindo dados
-              sensiveis), e deve respeitar as politicas internas e a LGPD.
+              O usuário declara possuir base legal e autorização para inserir dados de pacientes e arquivos (incluindo dados
+              sensíveis), e deve respeitar as políticas internas e a LGPD.
             </p>
           </Section>
 
@@ -60,13 +60,13 @@ export default function LegalTermsPage() {
 
           <Section title="6. Responsabilidades">
             <p>
-              O OrthoScan e uma ferramenta de gestao. Decisoes clinicas e responsabilidade tecnica permanecem com os
-              profissionais e/ou clinicas envolvidas.
+              O OrthoScan é uma ferramenta de gestão. Decisões clínicas e responsabilidade técnica permanecem com os
+              profissionais e/ou clínicas envolvidas.
             </p>
           </Section>
 
-          <Section title="7. Alteracoes">
-            <p>Estes termos podem ser atualizados. Alteracoes relevantes devem ser comunicadas aos usuarios.</p>
+          <Section title="7. Alterações">
+            <p>Estes termos podem ser atualizados. Alterações relevantes devem ser comunicadas aos usuários.</p>
           </Section>
 
           <div className="mt-8 flex flex-wrap gap-3">

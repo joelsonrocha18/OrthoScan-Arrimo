@@ -4,7 +4,6 @@ import { useToast } from '../app/ToastProvider'
 import AppShell from '../layouts/AppShell'
 import Badge from '../components/Badge'
 import Button from '../components/Button'
-import AiEditableModal from '../components/ai/AiEditableModal'
 import Card from '../components/Card'
 import Input from '../components/Input'
 import type { Case, CasePhase } from '../types/Case'
@@ -13,12 +12,10 @@ import { isAlignerProductType, normalizeProductType } from '../types/Product'
 import { DATA_MODE } from '../data/dataMode'
 import { useDb } from '../lib/useDb'
 import { getCurrentUser } from '../lib/auth'
-import { can } from '../auth/permissions'
 import { listCasesForUser, listLabItemsForUser } from '../auth/scope'
 import { supabase } from '../lib/supabaseClient'
-import { runAiEndpoint as runAiRequest } from '../repo/aiRepo'
 import { normalizeTreatmentIdsSupabase } from '../repo/profileRepo'
-import { useAiModuleEnabled } from '../lib/useAiModuleEnabled'
+import { buildActualChangeDateMap, buildArchScheduleDates, resolveAlignerArchTotals } from '../lib/alignerChange'
 import { downloadAlignerTreatmentReport, type AlignerTreatmentReportRow } from '../lib/alignerTreatmentReport'
 
 const phaseLabelMap: Record<CasePhase, string> = {
@@ -26,7 +23,7 @@ const phaseLabelMap: Record<CasePhase, string> = {
   'or\u00E7amento': 'Or\u00E7amento',
   contrato_pendente: 'Contrato pendente',
   contrato_aprovado: 'Contrato aprovado',
-  em_producao: 'Em producao',
+  em_producao: 'Em produção',
   finalizado: 'Finalizado',
 }
 
@@ -117,37 +114,12 @@ function resolveCaseOrigin(
   )
 }
 
-function addDaysIso(baseIsoDate: string, days: number) {
-  const base = new Date(`${baseIsoDate}T00:00:00`)
-  base.setDate(base.getDate() + days)
-  return base.toISOString().slice(0, 10)
-}
-
 function padTrayCount(value: number) {
   return String(Math.max(0, Math.trunc(value))).padStart(2, '0')
 }
 
 function formatTrayPair(upper: number, lower: number, upperLabel: 'sup' | 'Sup', lowerLabel: 'inf' | 'Inf') {
   return `${padTrayCount(upper)} ${upperLabel} / ${padTrayCount(lower)} ${lowerLabel}`
-}
-
-function resolveArchTotals(item: Pick<CaseListItem, 'arch' | 'totalTrays' | 'totalTraysUpper' | 'totalTraysLower'>) {
-  const totalUpper =
-    item.arch === 'inferior'
-      ? 0
-      : typeof item.totalTraysUpper === 'number'
-        ? item.totalTraysUpper
-        : (item.totalTrays ?? 0)
-  const totalLower =
-    item.arch === 'superior'
-      ? 0
-      : typeof item.totalTraysLower === 'number'
-        ? item.totalTraysLower
-        : (item.totalTrays ?? 0)
-  return {
-    upper: Math.max(0, Math.trunc(totalUpper)),
-    lower: Math.max(0, Math.trunc(totalLower)),
-  }
 }
 
 function resolveDeliveredToDentist(lots: Case['deliveryLots'] | undefined) {
@@ -164,37 +136,6 @@ function resolveDeliveredToDentist(lots: Case['deliveryLots'] | undefined) {
     },
     { upper: 0, lower: 0 },
   )
-}
-
-function buildActualChangeDateMap(installation: Case['installation'] | undefined, arch: 'superior' | 'inferior') {
-  const map = new Map<number, string>()
-  ;(installation?.actualChangeDates ?? []).forEach((entry) => {
-    if (!entry?.trayNumber || !entry?.changedAt) return
-    if (entry.arch && entry.arch !== arch && entry.arch !== 'ambos') return
-    map.set(Math.max(0, Math.trunc(entry.trayNumber)), entry.changedAt.slice(0, 10))
-  })
-  return map
-}
-
-function buildArchScheduleDates(
-  installedAt: string | undefined,
-  changeEveryDays: number | undefined,
-  totalTrays: number,
-  actualChangeDatesByTray: Map<number, string>,
-) {
-  const dates: Array<string | undefined> = []
-  if (!installedAt || totalTrays <= 0) return dates
-  const changeDays = Math.max(1, Math.trunc(changeEveryDays ?? 0) || 1)
-  let currentDate = installedAt.slice(0, 10)
-  for (let trayNumber = 1; trayNumber <= totalTrays; trayNumber += 1) {
-    if (trayNumber > 1) {
-      currentDate = addDaysIso(currentDate, changeDays)
-    }
-    const actualDate = actualChangeDatesByTray.get(trayNumber) ?? currentDate
-    dates[trayNumber] = actualDate
-    currentDate = actualDate
-  }
-  return dates
 }
 
 function pickMaxIsoDate(values: Array<string | undefined>) {
@@ -247,7 +188,7 @@ function caseStatusBadge(item: CaseListItem, liveLabStatus: LiveLabStatus, hasLa
   if (item.phase === 'contrato_aprovado' && hasLabOrder && !liveLabStatus) return { label: 'OS gerada', tone: 'info' as const }
   if (liveLabStatus === 'prontas') return { label: 'Pronto para entrega', tone: 'info' as const }
   if (liveLabStatus === 'controle_qualidade') return { label: 'Controle de qualidade', tone: 'info' as const }
-  if (liveLabStatus === 'em_producao') return { label: 'Em producao', tone: 'info' as const }
+  if (liveLabStatus === 'em_producao') return { label: 'Em produção', tone: 'info' as const }
   if (liveLabStatus === 'aguardando_iniciar') return { label: 'Aguardando iniciar', tone: 'neutral' as const }
   if ((item.deliveryLots?.length ?? 0) > 0 && !item.installation?.installedAt) return { label: 'Pronto para entrega', tone: 'info' as const }
   if (item.installation?.installedAt) return { label: 'Em entrega ao paciente', tone: 'info' as const }
@@ -259,8 +200,6 @@ export default function CasesPage() {
   const { addToast } = useToast()
   const isSupabaseMode = DATA_MODE === 'supabase'
   const currentUser = getCurrentUser(db)
-  const aiComercialEnabled = useAiModuleEnabled('comercial')
-  const canAiComercial = can(currentUser, 'ai.comercial') && aiComercialEnabled
   const [supabaseCases, setSupabaseCases] = useState<CaseListItem[]>([])
   const [supabasePatientsById, setSupabasePatientsById] = useState<Map<string, PatientLookup>>(new Map())
   const [supabaseClinicsById, setSupabaseClinicsById] = useState<Map<string, ClinicLookup>>(new Map())
@@ -271,10 +210,7 @@ export default function CasesPage() {
   const [originFilter, setOriginFilter] = useState<'todos' | 'interno' | 'externo'>('todos')
   const [showInTreatment, setShowInTreatment] = useState(true)
   const [showConcluded, setShowConcluded] = useState(false)
-  const [aiModalOpen, setAiModalOpen] = useState(false)
   const [isExportingExcel, setIsExportingExcel] = useState(false)
-  const [aiModalTitle, setAiModalTitle] = useState('')
-  const [aiDraft, setAiDraft] = useState('')
 
   useEffect(() => {
     let active = true
@@ -482,7 +418,7 @@ export default function CasesPage() {
     return filteredCases.map((item) => {
       const patientName = item.patientId ? (patientsById.get(item.patientId)?.name ?? item.patientName) : item.patientName
       const dentist = item.dentistId ? dentistsById.get(item.dentistId) : undefined
-      const totals = resolveArchTotals(item)
+      const totals = resolveAlignerArchTotals(item)
       const deliveredToDentist = resolveDeliveredToDentist(item.deliveryLots)
       const deliveredUpper = Math.min(totals.upper, Math.max(0, Math.trunc(item.installation?.deliveredUpper ?? 0)))
       const deliveredLower = Math.min(totals.lower, Math.max(0, Math.trunc(item.installation?.deliveredLower ?? 0)))
@@ -553,44 +489,25 @@ export default function CasesPage() {
     setShowConcluded((current) => !current)
   }
 
-  const runComercialAi = async (endpoint: '/comercial/script' | '/comercial/resumo-leigo' | '/comercial/followup', title: string) => {
-    if (!canAiComercial) return
-    const reference = filteredCases.find((item) => item.phase === 'or\u00E7amento' || item.phase === 'contrato_pendente') ?? filteredCases[0]
-    if (!reference) return
-    const result = await runAiRequest(endpoint, {
-      clinicId: currentUser?.linkedClinicId,
-      inputText: `Caso ${reference.treatmentCode ?? reference.shortId ?? reference.id}. Paciente ${reference.patientName}. Fase ${reference.phase}. Status ${reference.status}.`,
-      metadata: {
-        patientId: reference.patientId,
-        dentistId: reference.dentistId,
-        totalTraysUpper: reference.totalTraysUpper,
-        totalTraysLower: reference.totalTraysLower,
-      },
-    })
-    if (!result.ok) return
-    setAiModalTitle(title)
-    setAiDraft(result.output)
-    setAiModalOpen(true)
-  }
-
   return (
     <AppShell breadcrumb={['In\u00EDcio', 'Alinhadores']}>
       <section>
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Alinhadores</h1>
-        <p className="mt-2 text-sm text-slate-500">Gestao dos alinhadores com fluxo clinico e esteira de producao.</p>
+        
       </section>
 
-      <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
+      <section className="ui-surface-panel mt-6 rounded-2xl p-4">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_180px_auto_auto_auto] md:items-center">
           <Input
-            placeholder="Buscar por codigo, paciente ou N\u00BA Caso"
+            className="ui-input-strong"
+            placeholder="Buscar por código, paciente ou Nº Caso"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
           <select
             value={originFilter}
             onChange={(event) => setOriginFilter(event.target.value as 'todos' | 'interno' | 'externo')}
-            className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+            className="ui-input-strong h-10 w-full rounded-lg px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
           >
             <option value="todos">Todos</option>
             <option value="interno">Interno</option>
@@ -612,40 +529,27 @@ export default function CasesPage() {
             {isExportingExcel ? 'Gerando Excel...' : 'Gerar Excel'}
           </Button>
         </div>
-        {canAiComercial ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => void runComercialAi('/comercial/script', 'Script WhatsApp')}>
-              Script WhatsApp
-            </Button>
-            <Button variant="secondary" onClick={() => void runComercialAi('/comercial/resumo-leigo', 'Resumo leigo')}>
-              Resumo leigo
-            </Button>
-            <Button variant="secondary" onClick={() => void runComercialAi('/comercial/followup', 'Follow-up')}>
-              Follow-up
-            </Button>
-          </div>
-        ) : null}
       </section>
 
       <section className="mt-6">
-        <Card className="overflow-hidden p-0">
-          <div className="border-b border-slate-200 px-5 py-4 text-sm font-medium text-slate-700">
+        <Card className="ui-surface-panel overflow-hidden p-0">
+          <div className="border-b border-slate-300/80 px-5 py-4 text-sm font-semibold text-[#1A202C]">
             {filteredCases.length} registros
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
-              <thead className="bg-slate-50">
+              <thead className="ui-table-head">
                 <tr>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">N\u00BA Caso</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Paciente</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Interno/Externo</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Placas Sup/Inf</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Troca (dias)</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Etapa do tratamento</th>
-                  <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">A\u00E7\u00F5es</th>
+                  <th className="px-5 py-3 text-xs uppercase tracking-wide">N\u00BA Caso</th>
+                  <th className="px-5 py-3 text-xs uppercase tracking-wide">Paciente</th>
+                  <th className="px-5 py-3 text-xs uppercase tracking-wide">Interno/Externo</th>
+                  <th className="px-5 py-3 text-xs uppercase tracking-wide">Placas Sup/Inf</th>
+                  <th className="px-5 py-3 text-xs uppercase tracking-wide">Troca (dias)</th>
+                  <th className="px-5 py-3 text-xs uppercase tracking-wide">Etapa do tratamento</th>
+                  <th className="px-5 py-3 text-xs uppercase tracking-wide">A\u00E7\u00F5es</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-300/70">
                 {filteredCases.map((item) => {
                   const patientName = item.patientId ? (patientsById.get(item.patientId)?.name ?? item.patientName) : item.patientName
                   const dentist = item.dentistId ? dentistsById.get(item.dentistId) : undefined
@@ -675,24 +579,28 @@ export default function CasesPage() {
                   )
                   const originLabel = resolveCaseOrigin(item, patientsById, clinicsById) === 'interno' ? 'Interno' : 'Externo'
                   return (
-                    <tr key={item.id} className="bg-white">
-                      <td className="px-5 py-4 text-sm font-semibold text-slate-800">{item.treatmentCode ?? item.id}</td>
+                    <tr key={item.id} className="ui-table-row">
+                      <td className="px-5 py-4 text-sm font-bold text-[#1A202C]">{item.treatmentCode ?? item.id}</td>
                       <td className="px-5 py-4">
-                        <p className="text-sm font-medium text-slate-900">{patientName}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Data do pedido: {new Date(`${item.caseDate}T00:00:00`).toLocaleDateString('pt-BR')}
+                        <p className="text-[16px] font-bold text-[#1A202C]">{patientName}</p>
+                        <p className="mt-1 text-xs">
+                          <span className="ui-label">Data do pedido:</span>{' '}
+                          <span className="ui-value">{new Date(`${item.caseDate}T00:00:00`).toLocaleDateString('pt-BR')}</span>
                         </p>
                         {dentist ? (
-                          <p className="mt-1 text-xs text-slate-500">Dentista: {`${dentistPrefix} ${dentist.name}`}</p>
+                          <p className="mt-1 text-xs">
+                            <span className="ui-label">Dentista:</span>{' '}
+                            <span className="ui-value">{`${dentistPrefix} ${dentist.name}`}</span>
+                          </p>
                         ) : null}
                       </td>
-                      <td className="px-5 py-4 text-sm text-slate-700">
+                      <td className="px-5 py-4 text-sm font-semibold text-[#1A202C]">
                         {originLabel}
                       </td>
-                      <td className="px-5 py-4 text-sm text-slate-700">
+                      <td className="px-5 py-4 text-sm font-semibold text-[#1A202C]">
                         {traysLabel}
                       </td>
-                      <td className="px-5 py-4 text-sm text-slate-700">{item.changeEveryDays ?? '-'}</td>
+                      <td className="px-5 py-4 text-sm font-semibold text-[#1A202C]">{item.changeEveryDays ?? '-'}</td>
                       <td className="px-5 py-4">
                         <Badge tone={badge.tone}>{badge.label}</Badge>
                       </td>
@@ -713,17 +621,6 @@ export default function CasesPage() {
         </Card>
       </section>
 
-      <AiEditableModal
-        open={aiModalOpen}
-        title={aiModalTitle}
-        value={aiDraft}
-        onChange={setAiDraft}
-        onClose={() => setAiModalOpen(false)}
-        onSave={() => {
-          setAiModalOpen(false)
-        }}
-        saveLabel="Salvar rascunho"
-      />
     </AppShell>
   )
 }

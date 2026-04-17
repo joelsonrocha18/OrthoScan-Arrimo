@@ -48,7 +48,7 @@ export function initMonitoring() {
   window.addEventListener('error', (event) => {
     const payload: MonitoringEvent = {
       type: 'error',
-      message: event.message || 'Unknown error',
+      message: event.message || 'Erro desconhecido',
       stack: event.error?.stack,
       url: window.location.href,
       userAgent: navigator.userAgent,

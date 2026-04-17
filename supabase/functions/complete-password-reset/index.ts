@@ -19,15 +19,15 @@ async function sha256(input: string) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return json({ ok: false, error: 'Method not allowed' }, 405)
+  if (req.method !== 'POST') return json({ ok: false, error: 'Método não permitido.' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  if (!supabaseUrl || !serviceRoleKey) return json({ ok: false, error: 'Missing Supabase env vars.' }, 500)
+  if (!supabaseUrl || !serviceRoleKey) return json({ ok: false, error: 'Variáveis de ambiente do Supabase ausentes.' }, 500)
 
   const payload = (await req.json()) as Payload
-  if (!payload.token || !payload.newPassword) return json({ ok: false, error: 'Token e nova senha obrigatorios.' }, 400)
-  if (payload.newPassword.length < 10) return json({ ok: false, error: 'Senha deve ter no minimo 10 caracteres.' }, 400)
+  if (!payload.token || !payload.newPassword) return json({ ok: false, error: 'Token e nova senha obrigatórios.' }, 400)
+  if (payload.newPassword.length < 10) return json({ ok: false, error: 'Senha deve ter no mínimo 10 caracteres.' }, 400)
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
   const tokenHash = await sha256(payload.token)
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     .eq('token_hash', tokenHash)
     .maybeSingle()
 
-  if (tokenError || !tokenRow) return json({ ok: false, error: 'Token invalido.' }, 400)
+  if (tokenError || !tokenRow) return json({ ok: false, error: 'Token inválido.' }, 400)
   if (tokenRow.used_at) return json({ ok: false, error: 'Token ja utilizado.' }, 400)
   if (new Date(tokenRow.expires_at).getTime() < Date.now()) return json({ ok: false, error: 'Token expirado.' }, 400)
 

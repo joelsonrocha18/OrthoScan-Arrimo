@@ -23,11 +23,11 @@ export default function StatCard({ title, value, meta, metaTone = 'neutral', ico
     <Card className="p-5">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-500">{title}</p>
+          <p className="text-sm font-medium text-brand-700/78">{title}</p>
           <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{value}</p>
           <p className={cn('mt-1 text-sm font-medium', metaToneClasses[metaTone])}>{meta}</p>
         </div>
-        {icon ? <div className="rounded-lg bg-slate-100 p-2 text-slate-600">{icon}</div> : null}
+        {icon ? <div className="rounded-xl border border-baby-200 bg-baby-50 p-2 text-brand-600 shadow-[0_12px_24px_-20px_rgba(1,82,125,0.4)]">{icon}</div> : null}
       </div>
     </Card>
   )

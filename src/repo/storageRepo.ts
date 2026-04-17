@@ -1,41 +1,46 @@
-﻿import { supabase } from '../lib/supabaseClient'
 import { getSupabaseAccessToken } from '../lib/auth'
+import { logger } from '../lib/logger'
+import { supabase } from '../lib/supabaseClient'
+import { DATA_MODE } from '../data/dataMode'
+import { createValidationError, getErrorMessage } from '../shared/errors'
+import { buildUtcTimestampToken, sanitizeTokenSegment } from '../shared/utils/id'
 
 const BUCKET = 'orthoscan'
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
 const STORAGE_PROVIDER = ((import.meta.env.VITE_STORAGE_PROVIDER as string | undefined) ?? 'supabase').trim().toLowerCase()
 const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? ''
 const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? ''
-
-function sanitizeSegment(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase()
-}
-
-function utcStamp() {
-  const now = new Date()
-  const y = now.getUTCFullYear()
-  const m = String(now.getUTCMonth() + 1).padStart(2, '0')
-  const d = String(now.getUTCDate()).padStart(2, '0')
-  const hh = String(now.getUTCHours()).padStart(2, '0')
-  const mm = String(now.getUTCMinutes()).padStart(2, '0')
-  const ss = String(now.getUTCSeconds()).padStart(2, '0')
-  return `${y}${m}${d}_${hh}${mm}${ss}`
-}
+const localMockStorage = new Map<string, { file: File; createdAt: string }>()
 
 function fileNameWithTimestamp(fileName: string, params: { patientId?: string; origin?: string }) {
-  const cleaned = sanitizeSegment(fileName || 'arquivo')
-  const patientToken = sanitizeSegment(params.patientId || 'sem_paciente')
-  const originToken = sanitizeSegment(params.origin || 'origem_desconhecida')
-  return `${patientToken}_${utcStamp()}_${originToken}_${cleaned || 'arquivo'}`
+  const cleaned = sanitizeTokenSegment(fileName || 'arquivo', { fallback: 'arquivo' })
+  const patientToken = sanitizeTokenSegment(params.patientId || 'sem_paciente', { fallback: 'sem_paciente' })
+  const originToken = sanitizeTokenSegment(params.origin || 'origem_desconhecida', { fallback: 'origem_desconhecida' })
+  return `${patientToken}_${buildUtcTimestampToken()}_${originToken}_${cleaned || 'arquivo'}`
+}
+
+function assertStoragePath(path: string) {
+  const normalized = path.trim().replace(/\\/g, '/')
+  if (!normalized || normalized.startsWith('/') || normalized.includes('..') || normalized.includes('//')) {
+    throw createValidationError('Caminho de armazenamento inválido.')
+  }
+  return normalized
+}
+
+function isLocalMockStorageEnabled() {
+  return DATA_MODE === 'local'
+}
+
+function createLocalMockSignedUrl(path: string) {
+  const entry = localMockStorage.get(path)
+  if (!entry) {
+    return { ok: false as const, error: 'Arquivo local simulado não encontrado. Reenvie o arquivo nesta sessão.' }
+  }
+  return { ok: true as const, url: URL.createObjectURL(entry.file) }
 }
 
 export function buildPatientDocPath(params: { clinicId: string; patientId: string; fileName: string }) {
-  return `clinics/${sanitizeSegment(params.clinicId)}/patients/${sanitizeSegment(params.patientId)}/documents/${fileNameWithTimestamp(params.fileName, {
+  return `clinics/${sanitizeTokenSegment(params.clinicId)}/patients/${sanitizeTokenSegment(params.patientId)}/documents/${fileNameWithTimestamp(params.fileName, {
     patientId: params.patientId,
     origin: 'patient_doc',
   })}`
@@ -48,58 +53,98 @@ export function buildScanAttachmentPath(params: {
   kind: string
   fileName: string
 }) {
-  return `clinics/${sanitizeSegment(params.clinicId)}/scans/${sanitizeSegment(params.scanId)}/${sanitizeSegment(params.kind)}/${fileNameWithTimestamp(params.fileName, {
+  return `clinics/${sanitizeTokenSegment(params.clinicId)}/scans/${sanitizeTokenSegment(params.scanId)}/${sanitizeTokenSegment(params.kind)}/${fileNameWithTimestamp(params.fileName, {
     patientId: params.patientId,
     origin: params.kind,
   })}`
 }
 
 export async function uploadToStorage(path: string, file: File) {
-  if (STORAGE_PROVIDER === 'microsoft_drive') {
-    return uploadToMicrosoftDrive(path, file)
+  try {
+    const safePath = assertStoragePath(path)
+    if (isLocalMockStorageEnabled()) {
+      localMockStorage.set(safePath, { file, createdAt: new Date().toISOString() })
+      return { ok: true as const, path: safePath }
+    }
+    if (STORAGE_PROVIDER === 'microsoft_drive') {
+      return uploadToMicrosoftDrive(safePath, file)
+    }
+    if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
+    const { error } = await supabase.storage.from(BUCKET).upload(safePath, file, {
+      upsert: false,
+      contentType: file.type || undefined,
+    })
+    if (error) return { ok: false as const, error: error.message }
+    return { ok: true as const, path: safePath }
+  } catch (error) {
+    logger.error('Falha ao enviar arquivo ao storage.', { flow: 'storage.upload', path, fileName: file.name }, error)
+    return { ok: false as const, error: getErrorMessage(error, 'Falha ao enviar arquivo.') }
   }
-  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    upsert: false,
-    contentType: file.type || undefined,
-  })
-  if (error) return { ok: false as const, error: error.message }
-  return { ok: true as const, path }
 }
 
 export async function createSignedUrl(path: string, expiresIn = 300) {
-  if (STORAGE_PROVIDER === 'microsoft_drive') {
-    return resolveMicrosoftDriveDownloadUrl(path)
+  try {
+    const safePath = assertStoragePath(path)
+    if (isLocalMockStorageEnabled()) {
+      return createLocalMockSignedUrl(safePath)
+    }
+    if (STORAGE_PROVIDER === 'microsoft_drive') {
+      return resolveMicrosoftDriveDownloadUrl(safePath)
+    }
+    if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
+    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(safePath, expiresIn)
+    if (error || !data?.signedUrl) return { ok: false as const, error: error?.message ?? 'Falha ao gerar URL assinada.' }
+    return { ok: true as const, url: data.signedUrl }
+  } catch (error) {
+    logger.error('Falha ao gerar URL assinada.', { flow: 'storage.create_signed_url', path }, error)
+    return { ok: false as const, error: getErrorMessage(error, 'Falha ao gerar URL assinada.') }
   }
-  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
-  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, expiresIn)
-  if (error || !data?.signedUrl) return { ok: false as const, error: error?.message ?? 'Falha ao gerar URL assinada.' }
-  return { ok: true as const, url: data.signedUrl }
 }
 
 export async function downloadBlob(path: string) {
-  if (STORAGE_PROVIDER === 'microsoft_drive') {
-    const resolved = await resolveMicrosoftDriveDownloadUrl(path)
-    if (!resolved.ok) return resolved
-    const response = await fetch(resolved.url)
-    if (!response.ok) return { ok: false as const, error: 'Falha ao baixar arquivo no Microsoft Drive.' }
-    const blob = await response.blob()
-    return { ok: true as const, blob }
+  try {
+    const safePath = assertStoragePath(path)
+    if (isLocalMockStorageEnabled()) {
+      const entry = localMockStorage.get(safePath)
+      if (!entry) return { ok: false as const, error: 'Arquivo local simulado não encontrado. Reenvie o arquivo nesta sessão.' }
+      return { ok: true as const, blob: entry.file }
+    }
+    if (STORAGE_PROVIDER === 'microsoft_drive') {
+      const resolved = await resolveMicrosoftDriveDownloadUrl(safePath)
+      if (!resolved.ok) return resolved
+      const response = await fetch(resolved.url)
+      if (!response.ok) return { ok: false as const, error: 'Falha ao baixar arquivo no Microsoft Drive.' }
+      const blob = await response.blob()
+      return { ok: true as const, blob }
+    }
+    if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
+    const { data, error } = await supabase.storage.from(BUCKET).download(safePath)
+    if (error || !data) return { ok: false as const, error: error?.message ?? 'Falha ao baixar arquivo.' }
+    return { ok: true as const, blob: data }
+  } catch (error) {
+    logger.error('Falha ao baixar arquivo do storage.', { flow: 'storage.download', path }, error)
+    return { ok: false as const, error: getErrorMessage(error, 'Falha ao baixar arquivo.') }
   }
-  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
-  const { data, error } = await supabase.storage.from(BUCKET).download(path)
-  if (error || !data) return { ok: false as const, error: error?.message ?? 'Falha ao baixar arquivo.' }
-  return { ok: true as const, blob: data }
 }
 
 export async function deleteFromStorage(path: string) {
-  if (STORAGE_PROVIDER === 'microsoft_drive') {
-    return deleteFromMicrosoftDrive(path)
+  try {
+    const safePath = assertStoragePath(path)
+    if (isLocalMockStorageEnabled()) {
+      localMockStorage.delete(safePath)
+      return { ok: true as const }
+    }
+    if (STORAGE_PROVIDER === 'microsoft_drive') {
+      return deleteFromMicrosoftDrive(safePath)
+    }
+    if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
+    const { error } = await supabase.storage.from(BUCKET).remove([safePath])
+    if (error) return { ok: false as const, error: error.message }
+    return { ok: true as const }
+  } catch (error) {
+    logger.error('Falha ao remover arquivo do storage.', { flow: 'storage.delete', path }, error)
+    return { ok: false as const, error: getErrorMessage(error, 'Falha ao remover arquivo.') }
   }
-  if (!supabase) return { ok: false as const, error: 'Supabase não configurado.' }
-  const { error } = await supabase.storage.from(BUCKET).remove([path])
-  if (error) return { ok: false as const, error: error.message }
-  return { ok: true as const }
 }
 
 function fileExt(fileName: string) {
@@ -161,7 +206,7 @@ async function callMicrosoftDriveFunction(params: {
     return { ok: false as const, error: 'Supabase env ausente para chamar ms-drive-storage.' }
   }
   const token = await readAccessToken()
-  if (!token) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
+  if (!token) return { ok: false as const, error: 'Sessão expirada. Saia e entre novamente.' }
 
   const response = await fetch(msFunctionUrl(), {
     method: 'POST',
@@ -170,7 +215,7 @@ async function callMicrosoftDriveFunction(params: {
       'x-user-jwt': token,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(params),
+    body: JSON.stringify({ ...params, path: assertStoragePath(params.path) }),
   })
 
   let payload: { ok?: boolean; error?: string; url?: string } | null = null
@@ -190,11 +235,11 @@ async function uploadToMicrosoftDrive(path: string, file: File) {
     return { ok: false as const, error: 'Supabase env ausente para chamar ms-drive-storage.' }
   }
   const token = await readAccessToken()
-  if (!token) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
+  if (!token) return { ok: false as const, error: 'Sessão expirada. Saia e entre novamente.' }
 
   const form = new FormData()
   form.set('action', 'upload')
-  form.set('path', path)
+  form.set('path', assertStoragePath(path))
   form.set('file', file, file.name)
 
   const response = await fetch(msFunctionUrl(), {
@@ -215,7 +260,7 @@ async function uploadToMicrosoftDrive(path: string, file: File) {
   if (!response.ok || !payload?.ok) {
     return { ok: false as const, error: payload?.error ?? `Falha ms-drive-storage (${response.status}).` }
   }
-  return { ok: true as const, path }
+  return { ok: true as const, path: assertStoragePath(path) }
 }
 
 async function resolveMicrosoftDriveDownloadUrl(path: string) {
@@ -231,4 +276,3 @@ async function deleteFromMicrosoftDrive(path: string) {
   if (!response.ok) return { ok: false as const, error: response.error ?? 'Falha ao remover arquivo no Microsoft Drive.' }
   return { ok: true as const }
 }
-

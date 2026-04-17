@@ -4,7 +4,7 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   if (!supabaseUrl || !serviceRoleKey) {
-    return new Response(JSON.stringify({ ok: false, error: 'Missing Supabase env vars.' }), { status: 500 })
+    return new Response(JSON.stringify({ ok: false, error: 'Variáveis de ambiente do Supabase ausentes.' }), { status: 500 })
   }
 
   const authHeader = req.headers.get('Authorization') ?? ''
@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
   }
   const clinicId = profile?.clinic_id
   if (!clinicId) {
-    return new Response(JSON.stringify({ ok: false, error: 'Missing clinic_id in profile.' }), { status: 400 })
+    return new Response(JSON.stringify({ ok: false, error: 'clinic_id ausente no perfil.' }), { status: 400 })
   }
 
   const clinics = await supabase.from('clinics').select('*').eq('id', clinicId)

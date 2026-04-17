@@ -7,6 +7,9 @@ type FilePickerWithCameraProps = {
   accept?: string
   capture?: 'environment' | 'user'
   disabled?: boolean
+  uploadLabel?: string
+  cameraLabel?: string
+  cameraTitle?: string
   onFileSelected: (file: File) => void
 }
 
@@ -15,6 +18,9 @@ export default function FilePickerWithCamera({
   accept = 'image/*',
   capture = 'environment',
   disabled = false,
+  uploadLabel = 'Enviar arquivo',
+  cameraLabel = 'Abrir câmera',
+  cameraTitle = 'Capturar foto',
   onFileSelected,
 }: FilePickerWithCameraProps) {
   const uploadId = useId()
@@ -68,7 +74,7 @@ export default function FilePickerWithCamera({
             disabled ? 'bg-slate-100 text-slate-400' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
-          Enviar arquivo
+          {uploadLabel}
         </label>
         <input
           id={uploadId}
@@ -87,7 +93,7 @@ export default function FilePickerWithCamera({
             disabled ? 'bg-slate-100 text-slate-400' : 'bg-brand-500 text-white hover:bg-brand-700'
           }`}
         >
-          Abrir camera
+          {cameraLabel}
         </button>
         <input
           id={cameraId}
@@ -105,7 +111,7 @@ export default function FilePickerWithCamera({
         onClose={handleCloseModal}
         onCaptured={handleCaptured}
         facingMode={capture}
-        title="Capturar foto"
+        title={cameraTitle}
       />
     </div>
   )

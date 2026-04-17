@@ -4,8 +4,8 @@
 - Crie um novo projeto no dashboard.
 - Anote `Project URL` e `Anon public key`.
 
-## 2) Auth (Email/Senha)
-- Habilite Email Provider.
+## 2) Auth (e-mail/senha)
+- Habilite o provedor de e-mail.
 - Configure URLs de redirect:
   - `SITE_URL` (ex.: https://seu-dominio.com)
   - Redirects: `https://seu-dominio.com/**`
@@ -73,7 +73,7 @@ Configure variaveis:
 - `MS_TENANT_ID`
 - `MS_CLIENT_ID`
 - `MS_CLIENT_SECRET`
-- `MS_DRIVE_ID` (obrigatorio em `app`; opcional em `delegated`)
+- `MS_DRIVE_ID` (obrigatório em `app`; opcional em `delegated`)
 - `MS_DRIVE_BASE_PATH` (opcional, ex.: `orthoscan`)
 - `MS_DRIVE_LINK_SCOPE` (opcional: `anonymous` ou `organization`)
 - `MS_AUTHORITY` (somente `delegated`, ex.: `consumers`)
@@ -100,7 +100,7 @@ VITE_STORAGE_PROVIDER=microsoft_drive
 Depois de criar o usuário no Auth, crie um profile:
 ```
 insert into profiles (user_id, role, clinic_id, full_name, is_active)
-values ('<auth_user_id>', 'master_admin', '<clinic_id>', 'Master Admin', true);
+values ('<auth_user_id>', 'master_admin', '<clinic_id>', 'Administrador master', true);
 ```
 
 ## 7) Seed inicial
@@ -111,4 +111,4 @@ Use `/app/settings/migration` (somente master_admin) para exportar o DB local e 
 
 ## Nota: perfis (profiles) no modo Supabase
 - O app lista e aplica RBAC usando `profiles`.
-- O reset de senha busca o usuario por `profiles.login_email` (preenchido automaticamente no onboarding/invite).
+- O reset de senha busca o usuário por `profiles.login_email` (preenchido automaticamente no onboarding/invite).

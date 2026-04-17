@@ -93,7 +93,7 @@ export default function DiagnosticsPage() {
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Diagnóstico do Sistema</h1>
-          <p className="mt-2 text-sm text-slate-500">Checklist automático de recursos, RBAC e dados.</p>
+          
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={handleCreateData}>
@@ -103,7 +103,7 @@ export default function DiagnosticsPage() {
             Limpar dados de teste
           </Button>
           <Button onClick={handleRun} disabled={running}>
-            {running ? 'Executando...' : 'Executar diagnostico'}
+            {running ? 'Executando...' : 'Executar diagnóstico'}
           </Button>
         </div>
       </section>
@@ -111,7 +111,7 @@ export default function DiagnosticsPage() {
       <section className="mt-4">
         <Card className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-slate-900">Resumo do diagnostico</p>
+            <p className="text-sm font-semibold text-slate-900">Resumo do diagnóstico</p>
             {report ? (
               <p className="mt-1 text-xs text-slate-500">
                 Iniciado em {new Date(report.startedAt).toLocaleString('pt-BR')} • Finalizado em{' '}
@@ -131,7 +131,7 @@ export default function DiagnosticsPage() {
               ) : null}
               {summary.viaCep ? (
                 <span className="text-xs text-slate-500">
-                  ViaCEP: {summary.viaCep.status === 'pass' ? 'OK' : 'Indisponivel'}
+                  ViaCEP: {summary.viaCep.status === 'pass' ? 'OK' : 'Indisponível'}
                 </span>
               ) : null}
             </div>

@@ -1,19 +1,19 @@
-# React + TypeScript + Vite
+﻿# React + TypeScript + Vite
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Este template oferece uma configuração mínima para usar React no Vite com HMR e algumas regras do ESLint.
 
-Currently, two official plugins are available:
+Atualmente, há dois plugins oficiais disponíveis:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) usa [Babel](https://babeljs.io/) ou [oxc](https://oxc.rs), quando usado com [rolldown-vite](https://vite.dev/guide/rolldown), para Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) usa [SWC](https://swc.rs/) para Fast Refresh
 
-## React Compiler
+## Compilador React
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+O Compilador React não está habilitado neste template por causa do impacto no desempenho de desenvolvimento e build. Para adicioná-lo, consulte [esta documentação](https://react.dev/learn/react-compiler/installation).
 
-## Expanding the ESLint configuration
+## Expandindo a configuração do ESLint
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Se estiver desenvolvendo uma aplicação de produção, recomendamos atualizar a configuração para habilitar regras de lint com análise de tipos:
 
 ```js
 export default defineConfig([
@@ -21,29 +21,29 @@ export default defineConfig([
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
-      // Other configs...
+      // Outras configurações...
 
-      // Remove tseslint.configs.recommended and replace with this
+      // Remova tseslint.configs.recommended e substitua por isto
       tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
+      // Como alternativa, use isto para regras mais rígidas
       tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
+      // Opcionalmente, adicione isto para regras de estilo
       tseslint.configs.stylisticTypeChecked,
 
-      // Other configs...
+      // Outras configurações...
     ],
     languageOptions: {
       parserOptions: {
         project: ['./tsconfig.node.json', './tsconfig.app.json'],
         tsconfigRootDir: import.meta.dirname,
       },
-      // other options...
+      // outras opções...
     },
   },
 ])
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Também é possível instalar [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) e [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) para regras de lint específicas de React:
 
 ```js
 // eslint.config.js
@@ -55,10 +55,10 @@ export default defineConfig([
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
-      // Other configs...
-      // Enable lint rules for React
+      // Outras configurações...
+      // Habilita regras de lint para React
       reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
+      // Habilita regras de lint para React DOM
       reactDom.configs.recommended,
     ],
     languageOptions: {
@@ -66,11 +66,12 @@ export default defineConfig([
         project: ['./tsconfig.node.json', './tsconfig.app.json'],
         tsconfigRootDir: import.meta.dirname,
       },
-      // other options...
+      // outras opções...
     },
   },
 ])
 ```
+
 ## Deploy (Vercel)
 
 ### 1) Build local (checagem)
@@ -80,23 +81,23 @@ npm install
 npm run build
 ```
 
-### 2) Vari�veis de ambiente na Vercel
+### 2) Variáveis de ambiente na Vercel
 
 - `VITE_DATA_MODE=local` para demo simples (dados no navegador)
-- `VITE_DATA_MODE=supabase` para produ��o multiusu�rio
-- Se usar Supabase, tamb�m configurar:
+- `VITE_DATA_MODE=supabase` para produção multiusuário
+- Se usar Supabase, também configurar:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 
-### 3) Publica��o
+### 3) Publicação
 
-1. Suba este reposit�rio no GitHub.
-2. Na Vercel: `Add New Project`.
+1. Suba este repositório no GitHub.
+2. Na Vercel: `Adicionar novo projeto`.
 3. Selecione o repo `arrimo-orthoscan-frontend`.
-4. Build Command: `npm run build`.
-5. Output Directory: `dist`.
-6. Deploy.
+4. Comando de build: `npm run build`.
+5. Diretório de saída: `dist`.
+6. Faça o deploy.
 
 ### 4) Rotas SPA
 
-O arquivo `vercel.json` j� est� configurado para fallback de rotas (`/app/*` -> `index.html`).
+O arquivo `vercel.json` já está configurado para fallback de rotas (`/app/*` -> `index.html`).

@@ -7,6 +7,25 @@ function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }
 
+function withDisabledAi(settings: SystemSettings): SystemSettings {
+  return {
+    ...settings,
+    aiGateway: {
+      enabled: false,
+      modules: {
+        clinica: false,
+        lab: false,
+        gestao: false,
+        comercial: false,
+      },
+      provider: 'mock',
+      model: 'gpt-4.1-mini',
+      apiBaseUrl: '',
+      apiKey: '',
+    },
+  }
+}
+
 export async function loadSystemSettingsSupabase(): Promise<SystemSettings | null> {
   if (!supabase) return null
   const { data, error } = await supabase
@@ -18,7 +37,7 @@ export async function loadSystemSettingsSupabase(): Promise<SystemSettings | nul
   const row = asObject(data)
   const value = row.value
   if (!value || typeof value !== 'object') return null
-  return value as SystemSettings
+  return withDisabledAi(value as SystemSettings)
 }
 
 export async function saveSystemSettingsSupabase(settings: SystemSettings) {
@@ -28,7 +47,7 @@ export async function saveSystemSettingsSupabase(settings: SystemSettings) {
     .from('app_settings')
     .upsert({
       key: SETTINGS_KEY,
-      value: settings,
+      value: withDisabledAi(settings),
       updated_at: now,
     }, { onConflict: 'key' })
   if (error) return { ok: false as const, error: error.message }

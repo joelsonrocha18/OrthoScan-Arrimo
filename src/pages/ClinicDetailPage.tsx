@@ -166,7 +166,7 @@ export default function ClinicDetailPage() {
       setForm(mapToForm(existing))
       setIsFormDirty(false)
     }
-  }, [existing?.id, existing?.updatedAt, isFormDirty])
+  }, [existing, isFormDirty])
 
   useEffect(() => {
     const cep = normalizeCep(form.address.cep)
@@ -190,7 +190,7 @@ export default function ClinicDetailPage() {
             state: data.state || current.address.state,
           },
         }))
-        setCepStatus('Endereco preenchido automaticamente.')
+        setCepStatus('Endereço preenchido automaticamente.')
         setCepError('')
       })
       .catch((err: Error) => {
@@ -220,7 +220,7 @@ export default function ClinicDetailPage() {
         <Card>
           <h1 className="text-xl font-semibold text-slate-900">Registro não encontrado</h1>
           <Link to="/app/clinics" className="mt-3 inline-flex text-sm font-semibold text-brand-700">
-            Voltar para clinicas
+            Voltar para clínicas
           </Link>
         </Card>
       </AppShell>
@@ -229,23 +229,23 @@ export default function ClinicDetailPage() {
 
   const handleSave = async () => {
     if (!canWrite) {
-      setError('Sem permissão para editar clinicas.')
+      setError('Sem permissão para editar clínicas.')
       return
     }
     if (!form.tradeName.trim()) {
-      setError('Nome fantasia e obrigatorio.')
+      setError('Nome fantasia é obrigatório.')
       return
     }
     if (form.phone.trim() && !isValidFixedPhone(form.phone)) {
-      setError('Telefone fixo invalido.')
+      setError('Telefone fixo inválido.')
       return
     }
     if (form.whatsapp.trim() && !isValidMobilePhone(form.whatsapp)) {
-      setError('Celular/WhatsApp invalido.')
+      setError('Celular/WhatsApp inválido.')
       return
     }
     if (form.cnpj.trim() && !isValidCnpj(form.cnpj)) {
-      setError('CNPJ invalido.')
+      setError('CNPJ inválido.')
       return
     }
 
@@ -290,7 +290,7 @@ export default function ClinicDetailPage() {
         .select('id')
         .single()
       if (insertError || !data?.id) {
-        setError(insertError?.message ?? 'Falha ao criar clinica.')
+        setError(insertError?.message ?? 'Falha ao criar clínica.')
         return
       }
       navigate(`/app/clinics/${data.id}`, { replace: true })
@@ -411,7 +411,7 @@ export default function ClinicDetailPage() {
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-            {isNew ? 'Nova clinica' : existing?.tradeName}
+            {isNew ? 'Nova clínica' : existing?.tradeName}
           </h1>
           {!isNew && existing ? <p className="mt-1 text-xs font-semibold text-slate-500">{clinicCode(existing.id, existing.shortId)}</p> : null}
           <p className="mt-2 text-sm text-slate-500">
@@ -477,7 +477,7 @@ export default function ClinicDetailPage() {
         </Card>
 
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900">Endereco</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Endereço</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">CEP</label>
@@ -500,7 +500,7 @@ export default function ClinicDetailPage() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Numero</label>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Número</label>
               <Input
                 value={form.address.number}
                 onChange={(event) =>

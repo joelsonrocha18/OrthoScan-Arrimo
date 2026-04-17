@@ -1,14 +1,9 @@
-﻿import { loadDb, saveDb } from '../data/db'
+import { loadDb, saveDb } from '../data/db'
+import { normalizeText } from '../shared/validators'
+import { nowIsoDateTime } from '../shared/utils/date'
+import { createEntityId } from '../shared/utils/id'
 import type { Clinic } from '../types/Clinic'
 import { formatCnpj, isValidCnpj } from '../lib/cnpj'
-
-function nowIso() {
-  return new Date().toISOString()
-}
-
-function normalizeText(value?: string) {
-  return value?.trim() || undefined
-}
 
 function matchesQuery(value: string | undefined, query: string) {
   if (!value) return false
@@ -39,14 +34,14 @@ export function getClinic(id: string) {
 export function createClinic(payload: Omit<Clinic, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>) {
   const db = loadDb()
   const tradeName = payload.tradeName.trim()
-  if (!tradeName) return { ok: false as const, error: 'Nome fantasia e obrigatorio.' }
+  if (!tradeName) return { ok: false as const, error: 'Nome fantasia é obrigatório.' }
   if (payload.cnpj && !isValidCnpj(payload.cnpj)) {
-    return { ok: false as const, error: 'CNPJ invalido.' }
+    return { ok: false as const, error: 'CNPJ inválido.' }
   }
 
-  const now = nowIso()
+  const now = nowIsoDateTime()
   const clinic: Clinic = {
-    id: `clinic_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    id: createEntityId('clinic'),
     tradeName,
     legalName: normalizeText(payload.legalName),
     cnpj: payload.cnpj ? formatCnpj(payload.cnpj) : undefined,
@@ -70,7 +65,7 @@ export function updateClinic(id: string, patch: Partial<Clinic>) {
   const current = db.clinics.find((clinic) => clinic.id === id)
   if (!current) return { ok: false as const, error: 'Clínica não encontrada.' }
   if (patch.cnpj && !isValidCnpj(patch.cnpj)) {
-    return { ok: false as const, error: 'CNPJ invalido.' }
+    return { ok: false as const, error: 'CNPJ inválido.' }
   }
 
   const next: Clinic = {
@@ -83,7 +78,7 @@ export function updateClinic(id: string, patch: Partial<Clinic>) {
     whatsapp: patch.whatsapp !== undefined ? normalizeText(patch.whatsapp) : current.whatsapp,
     email: patch.email !== undefined ? normalizeText(patch.email) : current.email,
     notes: patch.notes !== undefined ? normalizeText(patch.notes) : current.notes,
-    updatedAt: nowIso(),
+    updatedAt: nowIsoDateTime(),
   }
 
   db.clinics = db.clinics.map((clinic) => (clinic.id === id ? next : clinic))
@@ -96,7 +91,7 @@ export function softDeleteClinic(id: string) {
   const current = db.clinics.find((clinic) => clinic.id === id)
   if (!current) return { ok: false as const, error: 'Clínica não encontrada.' }
   db.clinics = db.clinics.map((clinic) =>
-    clinic.id === id ? { ...clinic, deletedAt: nowIso(), isActive: false, updatedAt: nowIso() } : clinic,
+    clinic.id === id ? { ...clinic, deletedAt: nowIsoDateTime(), isActive: false, updatedAt: nowIsoDateTime() } : clinic,
   )
   saveDb(db)
   return { ok: true as const }
@@ -107,9 +102,8 @@ export function restoreClinic(id: string) {
   const current = db.clinics.find((clinic) => clinic.id === id)
   if (!current) return { ok: false as const, error: 'Clínica não encontrada.' }
   db.clinics = db.clinics.map((clinic) =>
-    clinic.id === id ? { ...clinic, deletedAt: undefined, isActive: true, updatedAt: nowIso() } : clinic,
+    clinic.id === id ? { ...clinic, deletedAt: undefined, isActive: true, updatedAt: nowIsoDateTime() } : clinic,
   )
   saveDb(db)
   return { ok: true as const }
 }
-

@@ -1,5 +1,8 @@
-﻿export function normalizeCep(value: string) {
-  return value.replace(/\D/g, '').slice(0, 8)
+import { createExternalServiceError, createNotFoundError, createValidationError } from '../shared/errors'
+import { onlyDigits } from '../shared/validators'
+
+export function normalizeCep(value: string) {
+  return onlyDigits(value).slice(0, 8)
 }
 
 export function isValidCep(value: string) {
@@ -9,12 +12,12 @@ export function isValidCep(value: string) {
 export async function fetchCep(cep: string) {
   const normalized = normalizeCep(cep)
   if (!isValidCep(normalized)) {
-    throw new Error('CEP invalido.')
+    throw createValidationError('CEP inválido.')
   }
 
   const response = await fetch(`https://viacep.com.br/ws/${normalized}/json/`)
   if (!response.ok) {
-    throw new Error('Não foi possível consultar o CEP.')
+    throw createExternalServiceError('Não foi possível consultar o CEP.', undefined, { cep: normalized })
   }
 
   const data = (await response.json()) as {
@@ -26,7 +29,7 @@ export async function fetchCep(cep: string) {
   }
 
   if (data.erro) {
-    throw new Error('CEP não encontrado.')
+    throw createNotFoundError('CEP não encontrado.', { cep: normalized })
   }
 
   return {
@@ -36,4 +39,3 @@ export async function fetchCep(cep: string) {
     state: data.uf ?? '',
   }
 }
-

@@ -17,30 +17,30 @@ export default function LegalPrivacyPage() {
         <div className="mb-6">
           <h1 className="text-2xl font-semibold tracking-tight text-slate-50">Politica de Privacidade</h1>
           <p className="mt-1 text-sm text-slate-400">
-            OrthoScan (laboratorio de alinhadores). Versao modelo para revisao juridica. Ultima atualizacao: 18/02/2026.
+            OrthoScan (laboratório de alinhadores). Versão modelo para revisão jurídica. Última atualização: 18/02/2026.
           </p>
         </div>
 
         <Card className="border border-slate-800 bg-slate-900">
           <p className="text-sm text-slate-300">
             Esta politica descreve como tratamos dados pessoais ao operar o sistema administrativo OrthoScan. Dependendo do
-            contrato, o laboratorio pode atuar como <span className="font-semibold text-slate-100">operador</span> e a
-            clinica/dentista como <span className="font-semibold text-slate-100">controlador</span>, nos termos da LGPD.
+            contrato, o laboratório pode atuar como <span className="font-semibold text-slate-100">operador</span> e a
+            clínica/dentista como <span className="font-semibold text-slate-100">controlador</span>, nos termos da LGPD.
           </p>
 
           <Section title="1. Dados Pessoais Tratados">
             <ul className="list-disc pl-5">
               <li>Dados de identificacao e contato (nome, telefone, e-mail).</li>
-              <li>Dados de pacientes (incluindo dados sensiveis relacionados a saude odontologica).</li>
+              <li>Dados de pacientes (incluindo dados sensíveis relacionados à saúde odontológica).</li>
               <li>Dados de uso do sistema (logs de acesso, auditoria, operacoes realizadas).</li>
-              <li>Arquivos e documentos enviados ao sistema (ex: scans, fotos, RX, PDFs).</li>
+              <li>Arquivos e documentos enviados ao sistema (ex.: exames, fotos, RX, PDFs).</li>
             </ul>
           </Section>
 
           <Section title="2. Finalidades">
             <ul className="list-disc pl-5">
-              <li>Executar o fluxo de trabalho do laboratorio (triagem, planejamento, producao e entregas).</li>
-              <li>Gestao de contratos, orcamentos, status e comunicacao com clinicas/dentistas.</li>
+              <li>Executar o fluxo de trabalho do laboratório (triagem, planejamento, produção e entregas).</li>
+              <li>Gestão de contratos, orçamentos, status e comunicação com clínicas/dentistas.</li>
               <li>Seguranca, prevencao a fraudes e auditoria.</li>
               <li>Suporte tecnico e melhoria do produto.</li>
             </ul>
@@ -48,18 +48,18 @@ export default function LegalPrivacyPage() {
 
           <Section title="3. Bases Legais (LGPD)">
             <p>
-              As bases legais variam conforme o contexto (execucao de contrato, cumprimento de obrigacao legal/regulatoria,
-              legitimo interesse e, quando aplicavel, consentimento).
+              As bases legais variam conforme o contexto (execução de contrato, cumprimento de obrigação legal/regulatória,
+              legítimo interesse e, quando aplicável, consentimento).
             </p>
             <p className="text-xs text-slate-400">
-              Observacao: dados sensiveis exigem criterios reforcados. Recomenda-se validacao juridica do enquadramento
+              Observação: dados sensíveis exigem critérios reforçados. Recomenda-se validação jurídica do enquadramento
               para cada operacao.
             </p>
           </Section>
 
           <Section title="4. Compartilhamento">
             <ul className="list-disc pl-5">
-              <li>Com clinicas/dentistas vinculados ao caso.</li>
+              <li>Com clínicas/dentistas vinculados ao caso.</li>
               <li>Com provedores de infraestrutura (ex: hospedagem, banco de dados) estritamente para operar o sistema.</li>
               <li>Com terceiros quando exigido por lei ou ordem de autoridade competente.</li>
             </ul>
@@ -74,8 +74,8 @@ export default function LegalPrivacyPage() {
 
           <Section title="6. Direitos do Titular">
             <p>
-              Voce pode solicitar confirmacao de tratamento, acesso, correcao, portabilidade, eliminacao (quando aplicavel)
-              e informacoes sobre compartilhamento. Algumas solicitacoes podem depender do controlador do dado (clinica).
+              Você pode solicitar confirmação de tratamento, acesso, correção, portabilidade, eliminação (quando aplicável)
+              e informações sobre compartilhamento. Algumas solicitações podem depender do controlador do dado (clínica).
             </p>
           </Section>
 
@@ -88,8 +88,8 @@ export default function LegalPrivacyPage() {
 
           <Section title="8. Contato">
             <p>
-              Para solicitacoes LGPD e privacidade, utilize o canal informado no contrato ou na tela de configuracoes do
-              laboratorio.
+              Para solicitações LGPD e privacidade, utilize o canal informado no contrato ou na tela de configurações do
+              laboratório.
             </p>
           </Section>
 

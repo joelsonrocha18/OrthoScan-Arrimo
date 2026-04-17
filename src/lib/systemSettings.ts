@@ -88,12 +88,12 @@ const defaultSettings: SystemSettings = {
     leadDays: 10,
   },
   aiGateway: {
-    enabled: true,
+    enabled: false,
     modules: {
-      clinica: true,
-      lab: true,
-      gestao: true,
-      comercial: true,
+      clinica: false,
+      lab: false,
+      gestao: false,
+      comercial: false,
     },
     provider: 'mock',
     model: 'gpt-4.1-mini',
@@ -142,12 +142,12 @@ export function loadSystemSettings(): SystemSettings {
           : 10,
     }
     const aiGateway = {
-      enabled: aiGatewayRaw.enabled !== false,
+      enabled: aiGatewayRaw.enabled === true,
       modules: {
-        clinica: aiModulesRaw.clinica !== false,
-        lab: aiModulesRaw.lab !== false,
-        gestao: aiModulesRaw.gestao !== false,
-        comercial: aiModulesRaw.comercial !== false,
+        clinica: aiModulesRaw.clinica === true,
+        lab: aiModulesRaw.lab === true,
+        gestao: aiModulesRaw.gestao === true,
+        comercial: aiModulesRaw.comercial === true,
       },
       provider: aiGatewayRaw.provider === 'http' || aiGatewayRaw.provider === 'openai' ? aiGatewayRaw.provider : 'mock',
       model: typeof aiGatewayRaw.model === 'string' && aiGatewayRaw.model.trim() ? aiGatewayRaw.model : 'gpt-4.1-mini',

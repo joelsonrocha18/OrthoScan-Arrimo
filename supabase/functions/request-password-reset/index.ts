@@ -20,7 +20,7 @@ async function sha256(input: string) {
 async function sendEmail(params: { to: string; subject: string; html: string }) {
   const apiKey = Deno.env.get('RESEND_API_KEY') ?? ''
   const from = Deno.env.get('EMAIL_FROM') ?? ''
-  if (!apiKey || !from) return { ok: false as const, error: 'RESEND_API_KEY/EMAIL_FROM nao configurados.' }
+  if (!apiKey || !from) return { ok: false as const, error: 'RESEND_API_KEY/EMAIL_FROM não configurados.' }
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -42,15 +42,15 @@ async function sendEmail(params: { to: string; subject: string; html: string }) 
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return json({ ok: false, error: 'Method not allowed' }, 405)
+  if (req.method !== 'POST') return json({ ok: false, error: 'Método não permitido.' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   const siteUrl = Deno.env.get('SITE_URL') ?? ''
-  if (!supabaseUrl || !serviceRoleKey) return json({ ok: false, error: 'Missing Supabase env vars.' }, 500)
+  if (!supabaseUrl || !serviceRoleKey) return json({ ok: false, error: 'Variáveis de ambiente do Supabase ausentes.' }, 500)
 
   const payload = (await req.json()) as Payload
-  if (!payload.email) return json({ ok: false, error: 'Email obrigatorio.' }, 400)
+  if (!payload.email) return json({ ok: false, error: 'E-mail obrigatório.' }, 400)
 
   const supabase = createClient(supabaseUrl, serviceRoleKey)
 
@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
   })
 
   if (!emailResult.ok) {
-    return json({ ok: true, warning: 'Email nao enviado. Configure RESEND_API_KEY/EMAIL_FROM.' })
+    return json({ ok: true, warning: 'E-mail não enviado. Configure RESEND_API_KEY/EMAIL_FROM.' })
   }
   return json({ ok: true })
 })

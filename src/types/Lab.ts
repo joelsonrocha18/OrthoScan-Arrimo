@@ -1,4 +1,12 @@
 import type { ProductType } from './Product'
+import type {
+  LabFinancialImpact,
+  LabProductionChecklist,
+  LabStageSLASnapshot,
+  LabStageTimelineRecord,
+  LabStageValue,
+  OrthoDomainEvent,
+} from './Domain'
 
 export type LabStatus = 'aguardando_iniciar' | 'em_producao' | 'controle_qualidade' | 'prontas'
 
@@ -27,6 +35,15 @@ export type LabItem = {
   plannedDate: string
   dueDate: string
   status: LabStatus
+  stage?: LabStageValue
+  stageTimeline?: LabStageTimelineRecord[]
+  sla?: LabStageSLASnapshot
+  productionChecklist?: LabProductionChecklist
+  reworkOfCaseId?: string
+  reworkOfLabOrderId?: string
+  reworkOfTrayNumber?: number
+  financialImpact?: LabFinancialImpact
+  domainEvents?: OrthoDomainEvent[]
   priority: LabPriority
   notes?: string
   createdAt: string

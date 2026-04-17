@@ -33,13 +33,13 @@ function newId() {
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
-    return new Response('Method not allowed', { status: 405 })
+    return new Response('Método não permitido.', { status: 405 })
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   if (!supabaseUrl || !serviceRoleKey) {
-    return new Response(JSON.stringify({ ok: false, error: 'Missing Supabase env vars.' }), { status: 500 })
+    return new Response(JSON.stringify({ ok: false, error: 'Variáveis de ambiente do Supabase ausentes.' }), { status: 500 })
   }
 
   const authHeader = req.headers.get('Authorization') ?? ''
@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
   const payload = (await req.json()) as ImportPayload
   if (!payload?.clinic?.tradeName || !payload?.ownerUserId) {
-    return new Response(JSON.stringify({ ok: false, error: 'Missing payload fields.' }), { status: 400 })
+    return new Response(JSON.stringify({ ok: false, error: 'Campos obrigatórios ausentes no payload.' }), { status: 400 })
   }
 
   const {

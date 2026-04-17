@@ -46,18 +46,18 @@ export default function Topbar({ breadcrumb, onMenuToggle }: TopbarProps) {
   const userDisplayName = userPrefix ? `${userPrefix} ${baseUserDisplayName}` : baseUserDisplayName
 
   return (
-    <header className="border-b border-slate-200 bg-white px-4 py-2.5 sm:px-5">
+    <header className="sticky top-0 z-20 border-b border-baby-200/80 bg-white/94 px-4 py-2.5 shadow-[0_16px_28px_-28px_rgba(1,82,125,0.38)] backdrop-blur-md sm:px-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button variant="ghost" size="sm" className="md:hidden" aria-label="Abrir menu" onClick={onMenuToggle}>
           <Menu className="h-5 w-5" />
         </Button>
         <Breadcrumb items={breadcrumb} />
         {currentUser ? (
-          <div className="flex max-w-full items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            <span className="font-semibold text-emerald-700">Online</span>
+          <div className="flex max-w-full items-center gap-2 rounded-full border border-baby-200 bg-baby-50 px-3 py-1 text-xs shadow-[0_8px_18px_-16px_rgba(1,82,125,0.45)]">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-baby-500" />
+            <span className="font-semibold text-brand-700">Online</span>
             <span className="hidden text-slate-500 sm:inline">|</span>
-            <span className="max-w-[170px] truncate font-medium text-slate-700 sm:max-w-[260px]">{userDisplayName}</span>
+            <span className="max-w-[170px] truncate font-medium text-slate-800 sm:max-w-[260px]">{userDisplayName}</span>
           </div>
         ) : null}
       </div>

@@ -1,3 +1,4 @@
+import { nowIsoDate, toDateOnly } from '../shared/utils/date'
 import { loadExcelJS } from './loadExcelJS'
 
 export type AlignerTreatmentReportRow = {
@@ -16,7 +17,7 @@ export type AlignerTreatmentReportRow = {
 }
 
 const COLUMN_HEADERS = [
-  'Numero caso',
+  'Número do caso',
   'nome do paciente',
   'nome do dentista',
   'tratamento planejado',
@@ -26,15 +27,15 @@ const COLUMN_HEADERS = [
   'placas entregue ao dentista',
   'placa atual',
   'data de inicio tratamento',
-  'data da ultima troca',
-  'data da proxima troca',
+  'data da última troca',
+  'data da próxima troca',
 ]
 
 const COLUMN_WIDTHS = [15, 22.71, 16.43, 20.43, 12.57, 24, 16, 25.86, 13.14, 23.57, 19.14, 20.71]
 
 function toExcelDate(value?: string) {
   if (!value) return ''
-  return new Date(`${value.slice(0, 10)}T00:00:00`)
+  return toDateOnly(value)
 }
 
 export async function downloadAlignerTreatmentReport(rows: AlignerTreatmentReportRow[]) {
@@ -100,7 +101,7 @@ export async function downloadAlignerTreatmentReport(rows: AlignerTreatmentRepor
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `relatorio_pacientes_em_tratamento_${new Date().toISOString().slice(0, 10)}.xlsx`
+  anchor.download = `relatorio_pacientes_em_tratamento_${nowIsoDate()}.xlsx`
   document.body.appendChild(anchor)
   anchor.click()
   document.body.removeChild(anchor)

@@ -1,6 +1,17 @@
+export type PatientDocumentMetadata = {
+  trayNumber?: number
+  capturedAt?: string
+  accessCode?: string
+  sentAt?: string
+  deviceLabel?: string
+  source?: 'patient_portal' | 'internal'
+  uploadedByPatient?: boolean
+}
+
 export type PatientDocument = {
   id: string
   patientId: string
+  caseId?: string
   title: string
   category: 'identificacao' | 'contrato' | 'consentimento' | 'exame' | 'foto' | 'outro'
   createdAt: string
@@ -12,4 +23,5 @@ export type PatientDocument = {
   mimeType?: string
   status: 'ok' | 'erro'
   errorNote?: string
+  metadata?: PatientDocumentMetadata
 }

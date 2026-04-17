@@ -5,11 +5,11 @@ where not exists (
   select 1 from public.clinics where trade_name = 'ARRIMO OrthoScan'
 );
 
--- Passo manual (apos criar usuario no Auth):
+-- Passo manual (após criar usuário no Auth):
 -- 1) Pegue o USER_ID no painel Auth.
--- 2) Pegue o CLINIC_ID da clinica criada acima.
+-- 2) Pegue o CLINIC_ID da clínica criada acima.
 -- 3) Execute:
 -- insert into public.profiles(user_id, role, clinic_id, full_name, is_active)
--- values ('<USER_ID>', 'master_admin', '<CLINIC_ID>', 'Master Admin', true)
+-- values ('<USER_ID>', 'master_admin', '<CLINIC_ID>', 'Administrador master', true)
 -- on conflict (user_id) do update
 -- set role='master_admin', clinic_id=excluded.clinic_id, is_active=true;

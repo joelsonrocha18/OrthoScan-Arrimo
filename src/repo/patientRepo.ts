@@ -1,13 +1,8 @@
-﻿import { loadDb, saveDb } from '../data/db'
+import { loadDb, saveDb } from '../data/db'
+import { normalizeText } from '../shared/validators'
+import { nowIsoDateTime } from '../shared/utils/date'
+import { createEntityId } from '../shared/utils/id'
 import type { Patient } from '../types/Patient'
-
-function nowIso() {
-  return new Date().toISOString()
-}
-
-function normalizeName(name: string) {
-  return name.trim()
-}
 
 function matchesQuery(value: string | undefined, query: string) {
   if (!value) return false
@@ -37,13 +32,13 @@ export function getPatient(id: string) {
 
 export function createPatient(payload: Omit<Patient, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>) {
   const db = loadDb()
-  const name = normalizeName(payload.name)
-  if (!name) return { ok: false as const, error: 'Nome e obrigatorio.' }
-  if (!payload.birthDate) return { ok: false as const, error: 'Data de nascimento e obrigatoria.' }
+  const name = normalizeText(payload.name) ?? ''
+  if (!name) return { ok: false as const, error: 'Nome é obrigatório.' }
+  if (!payload.birthDate) return { ok: false as const, error: 'Data de nascimento é obrigatória.' }
 
-  const now = nowIso()
+  const now = nowIsoDateTime()
   const next: Patient = {
-    id: `pat_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    id: createEntityId('pat'),
     name,
     firstName: payload.firstName,
     lastName: payload.lastName,
@@ -71,15 +66,15 @@ export function updatePatient(id: string, patch: Partial<Patient>) {
   const current = db.patients.find((item) => item.id === id)
   if (!current) return { ok: false as const, error: 'Paciente não encontrado.' }
   const nextBirthDate = patch.birthDate ?? current.birthDate
-  if (!nextBirthDate) return { ok: false as const, error: 'Data de nascimento e obrigatoria.' }
+  if (!nextBirthDate) return { ok: false as const, error: 'Data de nascimento é obrigatória.' }
 
   const next: Patient = {
     ...current,
     ...patch,
-    name: patch.name ? normalizeName(patch.name) : current.name,
+    name: patch.name ? (normalizeText(patch.name) ?? current.name) : current.name,
     firstName: patch.firstName !== undefined ? patch.firstName?.trim() || undefined : current.firstName,
     lastName: patch.lastName !== undefined ? patch.lastName?.trim() || undefined : current.lastName,
-    updatedAt: nowIso(),
+    updatedAt: nowIsoDateTime(),
   }
 
   db.patients = db.patients.map((item) => (item.id === id ? next : item))
@@ -93,7 +88,7 @@ export function softDeletePatient(id: string) {
   if (!current) return { ok: false as const, error: 'Paciente não encontrado.' }
 
   db.patients = db.patients.map((item) =>
-    item.id === id ? { ...item, deletedAt: nowIso(), updatedAt: nowIso() } : item,
+    item.id === id ? { ...item, deletedAt: nowIsoDateTime(), updatedAt: nowIsoDateTime() } : item,
   )
   saveDb(db)
   return { ok: true as const }
@@ -105,9 +100,8 @@ export function restorePatient(id: string) {
   if (!current) return { ok: false as const, error: 'Paciente não encontrado.' }
 
   db.patients = db.patients.map((item) =>
-    item.id === id ? { ...item, deletedAt: undefined, updatedAt: nowIso() } : item,
+    item.id === id ? { ...item, deletedAt: undefined, updatedAt: nowIsoDateTime() } : item,
   )
   saveDb(db)
   return { ok: true as const }
 }
-

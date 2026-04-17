@@ -1,4 +1,16 @@
-﻿import type { ProductType } from './Product'
+import type { ProductType } from './Product'
+import type {
+  CaseFinancialSnapshot,
+  CaseLifecycleStatusValue,
+  CasePlanningVersion,
+  CaseReworkSummary,
+  CaseSLASnapshot,
+  CaseStageApproval,
+  LabStageValue,
+  OrthoDomainEvent,
+  OrthoDomainEventName,
+  SLAStatusValue,
+} from './Domain'
 
 export type CaseStatus =
   | 'planejamento'
@@ -7,6 +19,7 @@ export type CaseStatus =
   | 'em_tratamento'
   | 'aguardando_reposicao'
   | 'finalizado'
+
 export type CasePhase =
   | 'planejamento'
   | 'orçamento'
@@ -78,6 +91,42 @@ export type CaseInstallation = {
   }>
 }
 
+export type CaseTimelineEntry = {
+  id: string
+  at: string
+  type:
+    | 'case_created'
+    | 'status_changed'
+    | 'note_added'
+    | 'delivery_registered'
+    | 'installation_registered'
+    | 'tray_updated'
+    | 'contract_updated'
+    | 'budget_updated'
+    | 'planning_version_published'
+    | 'planning_version_approved'
+    | 'lab_event'
+    | 'sla_alert'
+    | 'audit'
+  title: string
+  description?: string
+  actorName?: string
+  actorEmail?: string
+  source?: 'domain' | 'audit'
+  metadata?: {
+    status?: CaseStatus
+    phase?: CasePhase
+    trayNumber?: number
+    noteScope?: 'planning' | 'budget' | 'contract' | 'installation' | 'tray' | 'general'
+    caseLifecycleStatus?: CaseLifecycleStatusValue
+    labStage?: LabStageValue
+    slaStatus?: SLAStatusValue
+    domainEvent?: OrthoDomainEventName
+    caseId?: string
+    labOrderId?: string
+  }
+}
+
 export type Case = {
   id: string
   shortId?: string
@@ -117,8 +166,17 @@ export type Case = {
   sourceScanId?: string
   sourceExamCode?: string
   arch?: 'superior' | 'inferior' | 'ambos'
+  planningNote?: string
   complaint?: string
   dentistGuidance?: string
+  planningVersions?: CasePlanningVersion[]
+  stageApprovals?: CaseStageApproval[]
+  financial?: CaseFinancialSnapshot
+  lifecycleStatus?: CaseLifecycleStatusValue
+  sla?: CaseSLASnapshot
+  reworkSummary?: CaseReworkSummary
+  domainEvents?: OrthoDomainEvent[]
+  timelineEntries?: CaseTimelineEntry[]
   scanFiles?: {
     id: string
     name: string
@@ -139,4 +197,3 @@ export type Case = {
   createdAt: string
   updatedAt: string
 }
-

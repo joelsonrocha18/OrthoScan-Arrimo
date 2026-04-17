@@ -105,7 +105,7 @@ export function syncLabItemToCaseTray(
   }
 
   if (labItem.trayNumber < 1 || labItem.trayNumber > caseItem.totalTrays) {
-    return { ok: false, message: 'Numero da placa fora do intervalo do caso.' }
+    return { ok: false, message: 'Número da placa fora do intervalo do caso.' }
   }
 
   const mappedState = trayStateFromLabStatus(labItem.status)

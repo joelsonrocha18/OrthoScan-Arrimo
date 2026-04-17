@@ -137,7 +137,7 @@ export default function WebcamCaptureModal({
                   size="sm"
                   onClick={() => document.getElementById(fallbackInputId)?.click()}
                 >
-                  Usar upload
+                  Usar arquivo
                 </Button>
                 <Button variant="ghost" size="sm" onClick={handleClose}>
                   Cancelar

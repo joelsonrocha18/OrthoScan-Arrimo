@@ -1,38 +1,21 @@
-﻿import { loadDb, saveDb } from './db'
 import { pushAudit } from './audit'
-import type { Case, CaseTray } from '../types/Case'
-import type { Scan, ScanAttachment } from '../types/Scan'
-import { isAlignerProductType, normalizeProductType } from '../types/Product'
+import { loadDb, saveDb } from './db'
+import { getCurrentUser } from '../lib/auth'
+import { logger } from '../lib/logger'
 import { uploadFileToStorage } from '../lib/storageUpload'
 import { nextOrthTreatmentCode, normalizeOrthTreatmentCode } from '../lib/treatmentCode'
+import { createLocalCaseRepository } from '../modules/cases/infra/local/LocalCaseRepository'
+import { nowIsoDateTime } from '../shared/utils/date'
+import { createEntityId, createExamCode } from '../shared/utils/id'
+import { validateCreateCaseFromScanInput, validateCreateScanInput } from '../shared/validators'
+import type { Scan, ScanAttachment } from '../types/Scan'
 
 function nowIso() {
-  return new Date().toISOString()
+  return nowIsoDateTime()
 }
 
 function nextExamCode() {
-  const stamp = Date.now().toString().slice(-6)
-  const rand = Math.random().toString(36).slice(2, 4).toUpperCase()
-  return `EXM-${stamp}${rand}`
-}
-
-function buildPendingTrays(totalTrays: number, scanDate: string, changeEveryDays: number) {
-  const trays: CaseTray[] = []
-  const base = new Date(`${scanDate}T00:00:00`)
-  for (let tray = 1; tray <= totalTrays; tray += 1) {
-    const due = new Date(base)
-    due.setDate(due.getDate() + changeEveryDays * tray)
-    trays.push({ trayNumber: tray, state: 'pendente', dueDate: due.toISOString().slice(0, 10) })
-  }
-  return trays
-}
-
-function isInternalClinic(db: ReturnType<typeof loadDb>, clinicId?: string) {
-  if (!clinicId) return false
-  const clinic = db.clinics.find((item) => item.id === clinicId)
-  if (!clinic) return false
-  const shortId = (clinic.shortId ?? '').trim().toUpperCase()
-  return clinic.id === 'clinic_arrimo' || shortId === 'CLI-0001' || clinic.tradeName.trim().toUpperCase() === 'ARRIMO'
+  return createExamCode()
 }
 
 function nextTreatmentCode(db: ReturnType<typeof loadDb>) {
@@ -57,23 +40,30 @@ async function fileFromAttachment(att: ScanAttachment) {
     const response = await fetch(att.url)
     const blob = await response.blob()
     return new File([blob], att.name, { type: att.mime || blob.type || 'application/octet-stream' })
-  } catch {
+  } catch (error) {
+    logger.warn('Não foi possível reabrir o anexo local do exame antes do envio.', {
+      flow: 'scan.attachment.rehydrate',
+      attachmentId: att.id,
+      attachmentName: att.name,
+    })
+    logger.error('Erro ao reidratar o anexo local do exame.', { flow: 'scan.attachment.rehydrate' }, error)
     return null
   }
 }
 
 export async function createScan(scan: Omit<Scan, 'id' | 'createdAt' | 'updatedAt'>) {
+  const validatedScan = validateCreateScanInput(scan)
   const db = loadDb()
-  const serviceOrderCode = normalizeOrthTreatmentCode(scan.serviceOrderCode) || nextTreatmentCode(db)
+  const serviceOrderCode = normalizeOrthTreatmentCode(validatedScan.serviceOrderCode) || nextTreatmentCode(db)
   const attachments: ScanAttachment[] = []
 
-  for (const att of scan.attachments) {
+  for (const att of validatedScan.attachments) {
     const localFile = await fileFromAttachment(att)
     if (localFile) {
       const uploaded = await uploadFileToStorage(localFile, {
         scope: 'scans',
-        clinicId: scan.clinicId,
-        ownerId: scan.patientId ?? scan.patientName.replace(/\s+/g, '_').toLowerCase(),
+        clinicId: validatedScan.clinicId,
+        ownerId: validatedScan.patientId ?? validatedScan.patientName.replace(/\s+/g, '_').toLowerCase(),
       })
       if (uploaded) {
         attachments.push({
@@ -94,17 +84,24 @@ export async function createScan(scan: Omit<Scan, 'id' | 'createdAt' | 'updatedA
   }
 
   const next: Scan = {
-    ...scan,
-    shortId: scan.shortId ?? nextExamCode(),
+    ...validatedScan,
+    shortId: validatedScan.shortId ?? nextExamCode(),
     serviceOrderCode,
     attachments,
-    id: `scan_${Date.now()}`,
+    id: createEntityId('scan'),
     createdAt: nowIso(),
     updatedAt: nowIso(),
   }
   db.scans = [next, ...db.scans]
   pushAudit(db, { entity: 'scan', entityId: next.id, action: 'scan.create', message: `Exame criado para ${next.patientName}.` })
   saveDb(db)
+  logger.info('Exame criado no repositório local.', {
+    flow: 'scan.create',
+    scanId: next.id,
+    patientId: next.patientId,
+    clinicId: next.clinicId,
+    attachments: next.attachments.length,
+  })
   return next
 }
 
@@ -153,7 +150,7 @@ export async function addScanAttachmentAsync(
 
   const nextAttachment: ScanAttachment = {
     ...attachment,
-    id: attachment.id ?? `scan_file_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    id: attachment.id ?? createEntityId('scan-file'),
     url: nextUrl,
     isLocal: nextIsLocal ?? true,
     status: attachment.status ?? 'ok',
@@ -255,94 +252,13 @@ export function createCaseFromScan(
     planningNote?: string
   },
 ): { ok: true; caseId: string } | { ok: false; error: string } {
-  const db = loadDb()
-  const scan = db.scans.find((item) => item.id === scanId)
-  if (!scan) return { ok: false, error: 'Scan não encontrado.' }
-  if (scan.status !== 'aprovado') return { ok: false, error: 'Apenas scans aprovados podem gerar caso.' }
-  if (scan.linkedCaseId) return { ok: false, error: 'Este scan ja foi convertido em caso.' }
-  const selectedProductType = normalizeProductType(scan.purposeProductType, 'alinhador_12m')
-  const isAlignerFlow = isAlignerProductType(selectedProductType)
-  const upper = payload.totalTraysUpper ?? 0
-  const lower = payload.totalTraysLower ?? 0
-  const normalizedUpper = isAlignerFlow ? (scan.arch === 'inferior' ? 0 : upper) : 0
-  const normalizedLower = isAlignerFlow ? (scan.arch === 'superior' ? 0 : lower) : 0
-  const fallback = Math.max(normalizedUpper, normalizedLower)
-  if (isAlignerFlow && fallback <= 0) return { ok: false, error: 'Informe total de placas superior e/ou inferior.' }
-
-  const internal = isInternalClinic(db, scan.clinicId)
-  const treatmentCode = normalizeOrthTreatmentCode(scan.serviceOrderCode) || nextTreatmentCode(db)
-  const caseId = treatmentCode
-  if (db.cases.some((item) => item.id === caseId)) {
-    return { ok: false, error: `Ja existe um caso com o codigo ${caseId}.` }
+  const repository = createLocalCaseRepository(null)
+  const actor = getCurrentUser()
+  const result = repository.createFromScan(validateCreateCaseFromScanInput({ scanId, ...payload }))
+  if (!result.ok) {
+    logger.warn('Falha ao criar caso a partir do exame no modo local.', { flow: 'cases.create_from_scan', scanId, actorId: actor?.id, reason: result.error })
+    return { ok: false, error: result.error }
   }
-  const scanFiles = scan.attachments.map((att: ScanAttachment) => ({
-    id: att.id,
-    name: att.name,
-    kind: att.kind,
-    slotId: att.slotId,
-    rxType: att.rxType,
-    arch: att.arch,
-    isLocal: att.isLocal,
-    url: att.url,
-    filePath: att.filePath,
-    status: att.status ?? 'ok',
-    attachedAt: att.attachedAt ?? att.createdAt,
-    note: att.note,
-    flaggedAt: att.flaggedAt,
-    flaggedReason: att.flaggedReason,
-    createdAt: att.createdAt,
-  }))
-
-  const newCase: Case = {
-    id: caseId,
-    productType: selectedProductType,
-    productId: selectedProductType,
-    requestedProductId: scan.purposeProductId,
-    requestedProductLabel: scan.purposeLabel,
-    treatmentCode,
-    treatmentOrigin: internal ? 'interno' : 'externo',
-    patientName: scan.patientName,
-    patientId: scan.patientId,
-    dentistId: scan.dentistId,
-    requestedByDentistId: scan.requestedByDentistId,
-    clinicId: scan.clinicId,
-    scanDate: scan.scanDate,
-    totalTrays: isAlignerFlow ? fallback : 0,
-    totalTraysUpper: normalizedUpper || undefined,
-    totalTraysLower: normalizedLower || undefined,
-    changeEveryDays: isAlignerFlow ? payload.changeEveryDays : 0,
-    attachmentBondingTray: isAlignerFlow ? payload.attachmentBondingTray : false,
-    status: 'planejamento',
-    phase: 'planejamento',
-    budget: undefined,
-    contract: { status: 'pendente' },
-    deliveryLots: [],
-    installation: undefined,
-    trays: isAlignerFlow ? buildPendingTrays(fallback, scan.scanDate, payload.changeEveryDays) : [],
-    attachments: [],
-    sourceScanId: scan.id,
-    sourceExamCode: scan.shortId,
-    arch: scan.arch,
-    complaint: scan.complaint,
-    dentistGuidance: scan.dentistGuidance,
-    scanFiles,
-    createdAt: nowIso(),
-    updatedAt: nowIso(),
-  }
-
-  db.cases = [newCase, ...db.cases]
-  db.scans = db.scans.map((item) =>
-    item.id === scan.id
-      ? { ...item, status: 'convertido', linkedCaseId: caseId, serviceOrderCode: treatmentCode, updatedAt: nowIso() }
-      : item,
-  )
-  pushAudit(db, {
-    entity: 'case',
-    entityId: newCase.id,
-    action: 'case.create_from_scan',
-    message: `Caso ${newCase.treatmentCode ?? newCase.id} criado a partir do scan ${scan.id}.`,
-  })
-  saveDb(db)
-  return { ok: true, caseId }
+  logger.info('Caso criado a partir do exame no modo local.', { flow: 'cases.create_from_scan', scanId, caseId: result.data.caseId, actorId: actor?.id })
+  return { ok: true, caseId: result.data.caseId }
 }
-

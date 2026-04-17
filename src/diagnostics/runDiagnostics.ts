@@ -119,7 +119,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
     id: 'env_storage',
     title: 'LocalStorage',
     status: storageOk ? 'pass' : 'fail',
-    message: storageOk ? 'LocalStorage disponivel.' : 'LocalStorage indisponivel.',
+    message: storageOk ? 'LocalStorage disponível.' : 'LocalStorage indisponível.',
     fixHint: storageOk ? undefined : 'Verifique bloqueio do navegador ou modo privado.',
   })
   const hasDbKey = storageOk ? window.localStorage.getItem(DB_KEY) !== null : false
@@ -133,10 +133,10 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
   const viaCepOk = await pingViaCep()
   items.push({
     id: 'viacep.ping',
-    title: 'ViaCEP disponivel',
+    title: 'ViaCEP disponível',
     status: viaCepOk ? 'pass' : 'warn',
-    message: viaCepOk ? 'ViaCEP respondeu com sucesso.' : 'ViaCEP indisponivel ou sem rede.',
-    fixHint: viaCepOk ? undefined : 'Sem internet/HTTPS/ViaCEP indisponivel.',
+    message: viaCepOk ? 'ViaCEP respondeu com sucesso.' : 'ViaCEP indisponível ou sem rede.',
+    fixHint: viaCepOk ? undefined : 'Sem internet/HTTPS/ViaCEP indisponível.',
   })
 
   const missingCollections: string[] = []
@@ -250,7 +250,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
       title: 'Escopo (Dentista/Clínica)',
       status: ok ? 'pass' : 'fail',
       message: ok ? 'Escopo aplicado corretamente.' : 'Escopo com vazamento ou retorno incorreto.',
-      details: `Dentist_client pacientes: ${patientsDent.map((item) => item.id).join(', ') || '-'} | Clinic_client pacientes: ${patientsClinic.map((item) => item.id).join(', ') || '-'} | Scans: ${scansDent.map((item) => item.id).join(', ') || '-'} | Cases: ${casesClinic.map((item) => item.id).join(', ') || '-'}`,
+      details: `Dentista cliente - pacientes: ${patientsDent.map((item) => item.id).join(', ') || '-'} | Clínica cliente - pacientes: ${patientsClinic.map((item) => item.id).join(', ') || '-'} | Exames: ${scansDent.map((item) => item.id).join(', ') || '-'} | Casos: ${casesClinic.map((item) => item.id).join(', ') || '-'}`,
       fixHint: ok ? undefined : 'Revisar auth/scope.ts e relacionamentos clinicId/dentistId.',
     })
   }
@@ -264,7 +264,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
   const docsWithErrorMissingNote = db.patientDocuments.filter((doc) => doc.status === 'erro' && !doc.errorNote)
   items.push({
     id: 'docs_rules',
-    title: 'Anexos/Docs (historico)',
+    title: 'Anexos/Docs (histórico)',
     status: missingDocFns.length === 0 && docsWithErrorMissingNote.length === 0 ? 'pass' : 'warn',
     message:
       missingDocFns.length === 0
@@ -282,7 +282,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
     title: 'LAB pipeline',
     status: invalidLab.length === 0 ? 'pass' : 'warn',
     message: invalidLab.length === 0 ? 'Status do LAB ok.' : `Status fora do esperado: ${invalidLab.map((item) => item.status).join(', ')}`,
-    fixHint: invalidLab.length === 0 ? undefined : 'Revisar migracao de status do LAB.',
+    fixHint: invalidLab.length === 0 ? undefined : 'Revisar migração de status do LAB.',
   })
 
   if (DATA_MODE === 'supabase') {
@@ -320,7 +320,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
             mismatch.length === 0
               ? 'RLS aparente ok (patients).'
               : `RLS possível vazamento: clinic_id divergente (${mismatch.length}).`,
-          fixHint: mismatch.length === 0 ? undefined : 'Revisar policies de patients/scans/cases.',
+          fixHint: mismatch.length === 0 ? undefined : 'Revisar políticas de pacientes/exames/casos.',
         })
       } else {
         items.push({
@@ -338,7 +338,7 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
     if (!supabase) {
       items.push({
         id: 'supabase_migration_tools',
-        title: 'Migration tools available',
+        title: 'Ferramentas de migração disponíveis',
         status: 'warn',
         message: 'Supabase não configurado.',
         fixHint: 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.',
@@ -347,9 +347,9 @@ export async function runDiagnostics(): Promise<DiagnosticReport> {
       const result = await supabase.functions.invoke('export-db', { body: {} })
       items.push({
         id: 'supabase_migration_tools',
-        title: 'Migration tools available',
+        title: 'Ferramentas de migração disponíveis',
         status: result.error ? 'warn' : 'pass',
-        message: result.error ? 'Sem permissão ou function indisponivel.' : 'Export function respondeu.',
+        message: result.error ? 'Sem permissão ou function indisponível.' : 'Export function respondeu.',
         fixHint: result.error ? 'Verifique deploy das functions e permissão do usuário.' : undefined,
       })
     }

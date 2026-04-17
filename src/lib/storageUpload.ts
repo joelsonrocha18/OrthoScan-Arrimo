@@ -1,4 +1,5 @@
 import { DATA_MODE } from '../data/dataMode'
+import { createTimestampedToken, sanitizeTokenSegment } from '../shared/utils/id'
 import { logger } from './logger'
 import { supabase } from './supabaseClient'
 
@@ -10,15 +11,16 @@ type UploadResult = {
 }
 
 function sanitizeFileName(name: string) {
-  return name
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
+  return sanitizeTokenSegment(name || 'arquivo.bin', {
+    lowerCase: false,
+    trimUnderscores: false,
+    fallback: 'arquivo.bin',
+  })
 }
 
 function uniquePath(scope: UploadScope, clinicId: string, ownerId: string, fileName: string) {
   const safeName = sanitizeFileName(fileName || 'arquivo.bin')
-  const stamp = `${Date.now()}_${Math.random().toString(16).slice(2)}`
+  const stamp = createTimestampedToken()
   return `${scope}/${clinicId}/${ownerId}/${stamp}_${safeName}`
 }
 

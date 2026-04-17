@@ -24,7 +24,7 @@ function nowIso() {
 }
 
 function statusLabel(item: { isActive: boolean; deletedAt?: string }) {
-  if (item.deletedAt) return { label: 'Excluido', tone: 'danger' as const }
+  if (item.deletedAt) return { label: 'Excluído', tone: 'danger' as const }
   if (!item.isActive) return { label: 'Inativo', tone: 'neutral' as const }
   return { label: 'Ativo', tone: 'success' as const }
 }
@@ -108,7 +108,7 @@ export default function DentistsPage() {
     if (!canWrite) return
     const clinicId = resolveDefaultClinicId()
     if (!clinicId) {
-      addToast({ type: 'error', title: 'Nenhuma clinica ativa encontrada para gerar o link.' })
+      addToast({ type: 'error', title: 'Nenhuma clínica ativa encontrada para gerar o link.' })
       return
     }
     setInviteLoading(true)
@@ -126,7 +126,7 @@ export default function DentistsPage() {
     addToast({ type: 'success', title: 'Link de cadastro gerado' })
     try {
       await navigator.clipboard.writeText(result.inviteLink)
-      addToast({ type: 'success', title: 'Link copiado para a área de transferencia' })
+      addToast({ type: 'success', title: 'Link copiado para a área de transferência' })
     } catch {
       // no-op
     }
@@ -240,7 +240,6 @@ export default function DentistsPage() {
       <section className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Dentistas</h1>
-          <p className="mt-2 text-sm text-slate-500">Cadastro de profissionais.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {canWrite && isSupabaseMode ? (
@@ -264,8 +263,7 @@ export default function DentistsPage() {
       {showImport ? (
         <section className="mt-4">
           <Card>
-            <h2 className="text-lg font-semibold text-slate-900">Importar dentistas por planilha</h2>
-            <p className="mt-1 text-sm text-slate-500">Coluna esperada: Nome do dentista.</p>
+            <h2 className="text-lg font-semibold text-slate-900">Importar dentistas</h2>
             <textarea
               className="mt-3 min-h-36 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
               placeholder="Cole aqui os dados copiados do Excel"
@@ -295,9 +293,6 @@ export default function DentistsPage() {
         <section className="mt-4">
           <Card>
             <h2 className="text-base font-semibold text-slate-900">Link de cadastro do dentista</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              O dentista abre o link, preenche os dados e salva. O cadastro entra no sistema automaticamente.
-            </p>
             <Input className="mt-3" value={inviteLink} readOnly onFocus={(event) => event.currentTarget.select()} />
             <div className="mt-3 flex gap-2">
               <Button
@@ -319,7 +314,7 @@ export default function DentistsPage() {
           <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex-1">
               <Input
-                placeholder="Buscar por codigo, nome, CRO ou telefone"
+                placeholder="Buscar por código, nome, CRO ou telefone"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -339,7 +334,7 @@ export default function DentistsPage() {
                   checked={showDeleted}
                   onChange={(event) => setShowDeleted(event.target.checked)}
                 />
-                Mostrar excluidos
+                Mostrar excluídos
               </label>
             </div>
           </div>

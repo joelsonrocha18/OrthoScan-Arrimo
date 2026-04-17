@@ -15,7 +15,7 @@ function json(body: unknown, status = 200) {
 async function sendEmail(params: { to: string; subject: string; html: string }) {
   const apiKey = Deno.env.get('RESEND_API_KEY') ?? ''
   const from = Deno.env.get('EMAIL_FROM') ?? ''
-  if (!apiKey || !from) return { ok: false as const, error: 'RESEND_API_KEY/EMAIL_FROM nao configurados.' }
+  if (!apiKey || !from) return { ok: false as const, error: 'RESEND_API_KEY/EMAIL_FROM não configurados.' }
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -37,16 +37,16 @@ async function sendEmail(params: { to: string; subject: string; html: string }) 
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return json({ ok: false, error: 'Method not allowed' }, 405)
+  if (req.method !== 'POST') return json({ ok: false, error: 'Método não permitido.' }, 405)
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceRoleKey = Deno.env.get('SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   const siteUrl = Deno.env.get('SITE_URL') ?? ''
   // Return 200 with {ok:false} so the client can show a helpful message.
-  if (!supabaseUrl || !serviceRoleKey) return json({ ok: false, error: 'Missing SUPABASE_URL/SERVICE_ROLE_KEY.' })
+  if (!supabaseUrl || !serviceRoleKey) return json({ ok: false, error: 'SUPABASE_URL ou SERVICE_ROLE_KEY ausente.' })
 
   const payload = (await req.json()) as Payload
-  if (!payload.email) return json({ ok: false, error: 'Email obrigatorio.' })
+  if (!payload.email) return json({ ok: false, error: 'E-mail obrigatório.' })
 
   const authHeader = req.headers.get('Authorization') ?? ''
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
   const emailResult = await sendEmail({
     to: payload.email,
     subject: 'Acesso ao sistema OrthoScan',
-    html: `<p>Ola ${payload.fullName ?? ''},</p><p>Seu acesso ao sistema esta disponivel.</p><p><a href="${linkData.properties.action_link}">Entrar no sistema</a></p>`,
+    html: `<p>Olá ${payload.fullName ?? ''},</p><p>Seu acesso ao sistema está disponível.</p><p><a href="${linkData.properties.action_link}">Entrar no sistema</a></p>`,
   })
 
   await supabase.from('security_audit_logs').insert({

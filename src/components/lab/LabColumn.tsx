@@ -18,10 +18,10 @@ type LabColumnProps = {
 }
 
 const toneMap: Record<LabStatus, string> = {
-  aguardando_iniciar: 'border-slate-200 bg-slate-100/60',
-  em_producao: 'border-sky-200 bg-sky-50/60',
-  controle_qualidade: 'border-amber-200 bg-amber-50/60',
-  prontas: 'border-emerald-200 bg-emerald-50/60',
+  aguardando_iniciar: 'border-slate-200 border-t-4 border-t-slate-400 bg-white/70',
+  em_producao: 'border-slate-200 border-t-4 border-t-sky-500 bg-white/70',
+  controle_qualidade: 'border-slate-200 border-t-4 border-t-amber-500 bg-white/70',
+  prontas: 'border-slate-200 border-t-4 border-t-emerald-500 bg-white/70',
 }
 
 export default function LabColumn({
@@ -40,10 +40,10 @@ export default function LabColumn({
   hasNextStatus,
 }: LabColumnProps) {
   return (
-    <div className={`min-w-[280px] rounded-2xl border p-3 ${toneMap[status]}`}>
+    <div className={`min-w-[280px] rounded-2xl border p-3 shadow-[0_8px_24px_rgba(15,23,42,0.04)] backdrop-blur-sm ${toneMap[status]}`}>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-600">{items.length}</span>
+        <h3 className="text-[15px] font-semibold text-[#1A202C]">{title}</h3>
+        <span className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-[#4A5568] shadow-sm">{items.length}</span>
       </div>
 
       <div className="space-y-3">

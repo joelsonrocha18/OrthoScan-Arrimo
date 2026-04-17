@@ -220,7 +220,7 @@ export default function ScanDetailsModal({
       <Card className="max-h-[90vh] w-full max-w-6xl overflow-y-auto">
         <div className="flex items-start justify-between">
           <div>
-            <h3 className="text-xl font-semibold text-slate-900">Detalhes do Scan</h3>
+            <h3 className="text-xl font-semibold text-slate-900">Detalhes do exame</h3>
             <p className="mt-1 text-sm text-slate-500">{scan.patientName}</p>
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -233,7 +233,7 @@ export default function ScanDetailsModal({
             Resumo
           </button>
           <button type="button" className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${tab === 'arquivos' ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-700'}`} onClick={() => setTab('arquivos')}>
-            Arquivos (Historico)
+            Arquivos (Histórico)
           </button>
           <button type="button" className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${tab === 'adicionar' ? 'bg-brand-500 text-white' : 'bg-slate-100 text-slate-700'}`} onClick={() => setTab('adicionar')}>
             Adicionar Anexo
@@ -250,9 +250,9 @@ export default function ScanDetailsModal({
               </div>
             </div>
             <div className="mt-4 rounded-xl border border-slate-200 p-4">
-              <h4 className="text-sm font-semibold text-slate-800">Dados clinicos</h4>
+              <h4 className="text-sm font-semibold text-slate-800">Dados clínicos</h4>
               <p className="mt-1 text-sm text-slate-600">Queixa: {scan.complaint || '-'}</p>
-              <p className="mt-1 text-sm text-slate-600">Orientacao: {scan.dentistGuidance || '-'}</p>
+              <p className="mt-1 text-sm text-slate-600">Orientação: {scan.dentistGuidance || '-'}</p>
               <p className="mt-1 text-sm text-slate-600">Observações: {scan.notes || '-'}</p>
             </div>
           </>
@@ -260,9 +260,9 @@ export default function ScanDetailsModal({
 
         {tab === 'arquivos' ? (
           <div className="mt-4 space-y-4">
-            {section('Scan 3D - Superior', grouped.scan3d.superior)}
-            {section('Scan 3D - Inferior', grouped.scan3d.inferior)}
-            {section('Scan 3D - Mordida', grouped.scan3d.mordida)}
+            {section('Escaneamento 3D - Superior', grouped.scan3d.superior)}
+            {section('Escaneamento 3D - Inferior', grouped.scan3d.inferior)}
+            {section('Escaneamento 3D - Mordida', grouped.scan3d.mordida)}
             {grouped.intra.map((entry) => section(`Foto Intra - ${entry.slot.label}`, entry.files))}
             {grouped.extra.map((entry) => section(`Foto Extra - ${entry.slot.label}`, entry.files))}
             {section('Radiografia - Panoramica', grouped.rx.panoramica)}
@@ -278,7 +278,7 @@ export default function ScanDetailsModal({
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">Categoria</label>
               <select value={category} onChange={(event) => setCategory(event.target.value as AddCategory)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm">
-                <option value="scan3d">Scan 3D</option>
+                <option value="scan3d">Escaneamento 3D</option>
                 <option value="foto_intra">Foto intraoral</option>
                 <option value="foto_extra">Foto extraoral</option>
                 <option value="raiox">Radiografia</option>
@@ -343,7 +343,7 @@ export default function ScanDetailsModal({
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
-                {category === 'projeto' ? 'Observacao (opcional)' : 'Observacao (obrigatoria)'}
+                {category === 'projeto' ? 'Observação (opcional)' : 'Observação (obrigatória)'}
               </label>
               <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
             </div>
@@ -376,7 +376,7 @@ export default function ScanDetailsModal({
               </Button>
             </>
           ) : null}
-          {scan.status === 'aprovado' ? <Button onClick={() => onCreateCase(scan)}>Criar Caso</Button> : null}
+          {scan.status === 'aprovado' ? <Button onClick={() => onCreateCase(scan)}>Criar caso</Button> : null}
           {scan.status === 'convertido' && scan.linkedCaseId ? (
             <Link to={`/app/cases/${scan.linkedCaseId}`} className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white">
               Abrir Caso

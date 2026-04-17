@@ -76,6 +76,7 @@ type LegacyCase = {
   attachments?: CaseAttachment[]
   sourceScanId?: string
   arch?: ScanArch
+  planningNote?: string
   complaint?: string
   dentistGuidance?: string
   dentistId?: string
@@ -83,6 +84,14 @@ type LegacyCase = {
   clinicId?: string
   treatmentCode?: string
   treatmentOrigin?: 'interno' | 'externo'
+  timelineEntries?: Case['timelineEntries']
+  planningVersions?: Case['planningVersions']
+  stageApprovals?: Case['stageApprovals']
+  financial?: Case['financial']
+  lifecycleStatus?: Case['lifecycleStatus']
+  sla?: Case['sla']
+  reworkSummary?: Case['reworkSummary']
+  domainEvents?: Case['domainEvents']
   scanAttachments?: Array<{
     id: string
     name: string
@@ -573,7 +582,7 @@ function seedLabItems(): LabItem[] {
   return [
     { id: 'lab_001', caseId: 'case_001', clinicId: 'clinic_arrimo', patientId: 'pat_maria_silva', dentistId: 'dent_demo', productType: 'alinhador_12m', productId: 'alinhador_12m', requestCode: 'OS-1001', requestKind: 'producao', arch: 'ambos', trayNumber: 11, plannedUpperQty: 2, plannedLowerQty: 2, planningDefinedAt: timestamp, plannedDate: daysFromNow(-4), dueDate: daysFromNow(-1), status: 'aguardando_iniciar', priority: 'Medio', notes: 'Aguardando liberar produção.', patientName: 'Maria Silva', createdAt: timestamp, updatedAt: timestamp },
     { id: 'lab_002', caseId: 'case_001', clinicId: 'clinic_arrimo', patientId: 'pat_maria_silva', dentistId: 'dent_demo', productType: 'alinhador_12m', productId: 'alinhador_12m', requestCode: 'OS-1002', requestKind: 'producao', arch: 'ambos', trayNumber: 12, plannedUpperQty: 2, plannedLowerQty: 2, planningDefinedAt: timestamp, plannedDate: daysFromNow(-3), dueDate: daysFromNow(1), status: 'em_producao', priority: 'Medio', notes: 'Impressão em andamento.', patientName: 'Maria Silva', createdAt: timestamp, updatedAt: timestamp },
-    { id: 'lab_003', caseId: 'case_001', clinicId: 'clinic_arrimo', patientId: 'pat_maria_silva', dentistId: 'dent_demo', productType: 'alinhador_12m', productId: 'alinhador_12m', requestCode: 'OS-1003', requestKind: 'reconfeccao', arch: 'superior', trayNumber: 10, plannedUpperQty: 1, plannedLowerQty: 0, planningDefinedAt: timestamp, plannedDate: daysFromNow(-6), dueDate: daysFromNow(-2), status: 'controle_qualidade', priority: 'Urgente', notes: 'Rework por ajuste de margem.', patientName: 'Maria Silva', createdAt: timestamp, updatedAt: timestamp },
+    { id: 'lab_003', caseId: 'case_001', clinicId: 'clinic_arrimo', patientId: 'pat_maria_silva', dentistId: 'dent_demo', productType: 'alinhador_12m', productId: 'alinhador_12m', requestCode: 'OS-1003', requestKind: 'reconfeccao', arch: 'superior', trayNumber: 10, plannedUpperQty: 1, plannedLowerQty: 0, planningDefinedAt: timestamp, plannedDate: daysFromNow(-6), dueDate: daysFromNow(-2), status: 'controle_qualidade', priority: 'Urgente', notes: 'Reconfecção por ajuste de margem.', patientName: 'Maria Silva', createdAt: timestamp, updatedAt: timestamp },
     { id: 'lab_004', caseId: 'case_003', clinicId: 'clinic_arrimo', patientId: 'pat_ana_costa', dentistId: 'dent_demo', productType: 'alinhador_3m', productId: 'alinhador_3m', requestCode: 'OS-1004', requestKind: 'producao', arch: 'ambos', trayNumber: 6, plannedUpperQty: 2, plannedLowerQty: 2, planningDefinedAt: timestamp, plannedDate: daysFromNow(-2), dueDate: daysFromNow(2), status: 'prontas', priority: 'Baixo', notes: 'Pronto para entrega ao profissional.', patientName: 'Ana Costa', createdAt: timestamp, updatedAt: timestamp },
     { id: 'lab_005', caseId: 'case_005', clinicId: 'clinic_parceira', patientId: 'pat_luiza_ferreira', dentistId: 'dent_parceiro_2', productType: 'contencao', productId: 'contencao', requestCode: 'OS-1005', requestKind: 'reposicao_programada', expectedReplacementDate: daysFromNow(30), arch: 'ambos', trayNumber: 1, plannedUpperQty: 1, plannedLowerQty: 1, planningDefinedAt: timestamp, plannedDate: daysFromNow(5), dueDate: daysFromNow(15), status: 'aguardando_iniciar', priority: 'Baixo', notes: 'Reposição automática futura.', patientName: 'Luiza Ferreira', createdAt: timestamp, updatedAt: timestamp },
     { id: 'lab_006', caseId: 'case_004', clinicId: 'clinic_parceira', patientId: 'pat_bruno_ramos', dentistId: 'dent_parceiro_1', productType: 'placa_bruxismo', productId: 'placa_bruxismo', requestCode: 'OS-1006', requestKind: 'producao', arch: 'superior', trayNumber: 1, plannedUpperQty: 1, plannedLowerQty: 0, planningDefinedAt: timestamp, plannedDate: daysFromNow(-1), dueDate: daysFromNow(3), status: 'em_producao', priority: 'Urgente', notes: 'Paciente com dor ATM.', patientName: 'Bruno Ramos', createdAt: timestamp, updatedAt: timestamp },
@@ -763,7 +772,7 @@ function seedUsers(): User[] {
   return [
     {
       id: 'user_master',
-      name: 'Master Admin',
+      name: 'Administrador master',
       email: MASTER_EMAIL || 'master@orthoscan.local',
       password: defaultPassword,
       role: 'master_admin',
@@ -773,7 +782,7 @@ function seedUsers(): User[] {
     },
     {
       id: 'user_dentist_admin',
-      name: 'Dentista Admin',
+      name: 'Administrador dentista',
       email: 'dentist.admin@orthoscan.local',
       password: defaultPassword,
       role: 'dentist_admin',
@@ -1142,8 +1151,17 @@ function migrateCase(oldCase: LegacyCase): Case {
     attachments,
     sourceScanId: oldCase.sourceScanId,
     arch: oldCase.arch ?? 'ambos',
+    planningNote: oldCase.planningNote,
     complaint: oldCase.complaint,
     dentistGuidance: oldCase.dentistGuidance,
+    planningVersions: Array.isArray(oldCase.planningVersions) ? oldCase.planningVersions : [],
+    stageApprovals: Array.isArray(oldCase.stageApprovals) ? oldCase.stageApprovals : [],
+    financial: oldCase.financial,
+    lifecycleStatus: oldCase.lifecycleStatus,
+    sla: oldCase.sla,
+    reworkSummary: oldCase.reworkSummary,
+    domainEvents: Array.isArray(oldCase.domainEvents) ? oldCase.domainEvents : [],
+    timelineEntries: Array.isArray(oldCase.timelineEntries) ? oldCase.timelineEntries : [],
     scanFiles,
     createdAt: oldCase.createdAt ?? nowIso(),
     updatedAt: oldCase.updatedAt ?? nowIso(),
@@ -1258,6 +1276,16 @@ function migrateLabItem(raw: LegacyLabItem): LabItem {
     plannedDate: raw.plannedDate ?? toIsoDate(new Date()),
     dueDate: raw.dueDate ?? toIsoDate(new Date()),
     status: normalizeLabStatus(raw.status),
+    stage: raw.stage,
+    stageTimeline: Array.isArray(raw.stageTimeline) ? raw.stageTimeline : [],
+    sla: raw.sla,
+    productionChecklist: raw.productionChecklist,
+    reworkOfCaseId: raw.reworkOfCaseId,
+    reworkOfLabOrderId: raw.reworkOfLabOrderId,
+    reworkOfTrayNumber: raw.reworkOfTrayNumber,
+    financialImpact: raw.financialImpact,
+    domainEvents: Array.isArray(raw.domainEvents) ? raw.domainEvents : [],
+    deliveredToProfessionalAt: raw.deliveredToProfessionalAt,
     priority: raw.priority ?? 'Medio',
     notes: raw.notes,
     createdAt: raw.createdAt ?? nowIso(),
@@ -1371,9 +1399,17 @@ function normalizeDb(raw: unknown): AppDb {
   const patients = Array.isArray(input.patients) ? (input.patients as Partial<Patient>[]).map(migratePatient) : []
   const scans = Array.isArray(input.scans) ? (input.scans as LegacyScan[]).map(migrateScan) : []
   const patientDocuments = Array.isArray(input.patientDocuments)
-    ? (input.patientDocuments as LegacyPatientDocument[]).map((item) => ({
+    ? (input.patientDocuments as LegacyPatientDocument[]).map((item) => {
+        const rawItem = item as unknown as { caseId?: unknown; case_id?: unknown }
+        return ({
         id: item.id,
         patientId: item.patientId ?? 'unknown',
+        caseId:
+          typeof rawItem.caseId === 'string'
+            ? rawItem.caseId
+            : typeof rawItem.case_id === 'string'
+              ? rawItem.case_id
+              : undefined,
         title: item.title ?? item.fileName ?? 'Documento',
         category: item.category ?? 'outro',
         createdAt: item.createdAt ?? nowIso(),
@@ -1385,7 +1421,40 @@ function normalizeDb(raw: unknown): AppDb {
         mimeType: item.mimeType,
         status: item.status ?? 'ok',
         errorNote: item.errorNote,
-      }))
+        metadata:
+          item.metadata && typeof item.metadata === 'object'
+            ? {
+                trayNumber:
+                  typeof (item.metadata as { trayNumber?: unknown }).trayNumber === 'number'
+                    ? (item.metadata as { trayNumber: number }).trayNumber
+                    : undefined,
+                capturedAt:
+                  typeof (item.metadata as { capturedAt?: unknown }).capturedAt === 'string'
+                    ? (item.metadata as { capturedAt: string }).capturedAt
+                    : undefined,
+                accessCode:
+                  typeof (item.metadata as { accessCode?: unknown }).accessCode === 'string'
+                    ? (item.metadata as { accessCode: string }).accessCode
+                    : undefined,
+                sentAt:
+                  typeof (item.metadata as { sentAt?: unknown }).sentAt === 'string'
+                    ? (item.metadata as { sentAt: string }).sentAt
+                    : undefined,
+                deviceLabel:
+                  typeof (item.metadata as { deviceLabel?: unknown }).deviceLabel === 'string'
+                    ? (item.metadata as { deviceLabel: string }).deviceLabel
+                    : undefined,
+                source:
+                  (item.metadata as { source?: unknown }).source === 'patient_portal' || (item.metadata as { source?: unknown }).source === 'internal'
+                    ? ((item.metadata as { source: 'patient_portal' | 'internal' }).source)
+                    : undefined,
+                uploadedByPatient:
+                  typeof (item.metadata as { uploadedByPatient?: unknown }).uploadedByPatient === 'boolean'
+                    ? (item.metadata as { uploadedByPatient: boolean }).uploadedByPatient
+                    : undefined,
+              }
+            : undefined,
+      })})
     : []
   const legacyDocsFromPatients: PatientDocument[] = patients.flatMap((patient) => {
     const rawDocs = (input.patients as Array<{ id?: string; documents?: Array<{ id: string; name?: string; url?: string; isLocal?: boolean; status?: 'ok' | 'erro'; note?: string; flaggedReason?: string; createdAt?: string }> }> | undefined) ?? []
@@ -1394,6 +1463,7 @@ function normalizeDb(raw: unknown): AppDb {
     return docs.map((doc) => ({
       id: doc.id,
       patientId: patient.id,
+      caseId: undefined,
       title: doc.name ?? 'Documento',
       category: 'outro',
       createdAt: doc.createdAt ?? nowIso(),

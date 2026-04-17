@@ -61,7 +61,7 @@ function json(req: Request, body: unknown, status = 200) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) })
   if (req.method !== 'POST') {
-    return json(req, { ok: false, error: 'Method not allowed' }, 405)
+    return json(req, { ok: false, error: 'Método não permitido.' }, 405)
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SERVICE_ROLE_KEY') ?? ''
 
   if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-    return json(req, { ok: false, error: 'Missing Supabase env vars.' }, 500)
+    return json(req, { ok: false, error: 'Variáveis de ambiente do Supabase ausentes.' }, 500)
   }
 
   const payload = (await req.json()) as InvitePayload
@@ -82,10 +82,10 @@ Deno.serve(async (req) => {
     return json(req, { ok: false, code: 'unauthorized', error: 'Unauthorized.' }, 401)
   }
   if (!payload.email || !payload.role || !payload.clinicId) {
-    return json(req, { ok: false, error: 'Missing payload fields.' }, 400)
+    return json(req, { ok: false, error: 'Campos obrigatórios ausentes no payload.' }, 400)
   }
   if (!APP_ROLES.has(payload.role)) {
-    return json(req, { ok: false, error: 'Invalid role.' }, 400)
+    return json(req, { ok: false, error: 'Perfil inválido.' }, 400)
   }
 
   const {
@@ -108,10 +108,10 @@ Deno.serve(async (req) => {
     return json(req, { ok: false, code: 'forbidden', error: 'Forbidden.' }, 403)
   }
   if (role === 'dentist_admin' && profile?.clinic_id !== payload.clinicId) {
-    return json(req, { ok: false, code: 'forbidden', error: 'Clinic mismatch.' }, 403)
+    return json(req, { ok: false, code: 'forbidden', error: 'Clínica incompatível.' }, 403)
   }
   if (role === 'dentist_admin' && ['master_admin', 'dentist_admin'].includes(payload.role)) {
-    return json(req, { ok: false, code: 'forbidden', error: 'Role not allowed for actor.' }, 403)
+    return json(req, { ok: false, code: 'forbidden', error: 'Perfil não permitido para este usuário.' }, 403)
   }
 
   const inviteWindowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString()
@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
 
   const password = payload.password?.trim()
   if (password && password.length < 8) {
-    return json(req, { ok: false, error: 'Senha deve ter no minimo 8 caracteres.' }, 400)
+    return json(req, { ok: false, error: 'Senha deve ter no mínimo 8 caracteres.' }, 400)
   }
   const email = payload.email.trim().toLowerCase()
   const fullName = payload.fullName?.trim() ?? null
@@ -145,9 +145,9 @@ Deno.serve(async (req) => {
 
   const { data: createdData, error: createError } = await admin.auth.admin.createUser(createPayload)
   if (createError || !createdData?.user) {
-    const message = createError?.message ?? 'Create user failed.'
+    const message = createError?.message ?? 'Falha ao criar usuário.'
     if (message.toLowerCase().includes('already')) {
-      return json(req, { ok: false, error: 'Email ja cadastrado.' }, 400)
+      return json(req, { ok: false, error: 'E-mail já cadastrado.' }, 400)
     }
     return json(req, { ok: false, error: message }, 400)
   }

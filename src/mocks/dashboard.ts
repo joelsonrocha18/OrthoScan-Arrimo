@@ -50,18 +50,18 @@ export const dashboardStats: DashboardStat[] = [
 
 export const pendingActions: PendingAction[] = [
   {
-    title: 'Aprovar reconfeccao - Maria Silva',
+    title: 'Aprovar reconfecção - Maria Silva',
     priorityText: 'Urgente',
     priorityTone: 'danger',
     kind: 'rework',
-    kindLabel: 'Rework',
+    kindLabel: 'Reconfecção',
   },
   {
     title: 'Placa #12 pronta para entrega',
-    priorityText: 'Medio',
+    priorityText: 'Médio',
     priorityTone: 'info',
     kind: 'tray',
-    kindLabel: 'Tray',
+    kindLabel: 'Placa',
   },
   {
     title: 'Confirmar entrega - Joao Santos',

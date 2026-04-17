@@ -44,7 +44,7 @@ export async function createOnboardingInvite(payload: {
     accessToken = getSupabaseAccessToken() ?? ''
   }
 
-  if (!accessToken) return { ok: false as const, error: 'Sessao expirada. Saia e entre novamente.' }
+  if (!accessToken) return { ok: false as const, error: 'Sessão expirada. Saia e entre novamente.' }
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!anonKey) return { ok: false as const, error: 'Supabase anon key ausente no build.' }
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
@@ -91,7 +91,7 @@ export async function validateOnboardingInvite(token: string) {
   if (!data?.ok) {
     return {
       ok: false as const,
-      error: (data?.error as string | undefined) ?? 'Convite invalido.',
+      error: (data?.error as string | undefined) ?? 'Convite inválido.',
       expired: Boolean(data?.expired),
       used: Boolean(data?.used),
     }

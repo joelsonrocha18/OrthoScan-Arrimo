@@ -14,7 +14,7 @@ begin
 
   item_arch := coalesce(new.data->>'arch', '');
   if item_arch = '' then
-    raise exception 'Defina a arcada do produto antes de iniciar producao.';
+    raise exception 'Defina a arcada do produto antes de iniciar produção.';
   end if;
 
   item_product := coalesce(new.product_id, new.product_type, new.data->>'productId', new.data->>'productType', 'alinhador_12m');
@@ -22,7 +22,7 @@ begin
     planned_upper := coalesce(nullif(new.data->>'plannedUpperQty', '')::numeric, 0);
     planned_lower := coalesce(nullif(new.data->>'plannedLowerQty', '')::numeric, 0);
     if planned_upper + planned_lower <= 0 then
-      raise exception 'Defina quantidades por arcada antes de iniciar producao.';
+      raise exception 'Defina quantidades por arcada antes de iniciar produção.';
     end if;
   end if;
 

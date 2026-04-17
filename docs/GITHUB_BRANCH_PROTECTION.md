@@ -1,18 +1,18 @@
-# GitHub Branch Protection (main)
+# Proteção de Branch no GitHub (main)
 
-Prerequisite:
+Pré-requisitos:
 
-- `gh` installed
-- authenticated with `gh auth login`
-- write/admin permission on the repository
+- `gh` instalado
+- autenticação com `gh auth login`
+- permissão de escrita/admin no repositório
 
-Repository:
+Repositório:
 
 - `joelsonrocha18/OrthoScan-Arrimo`
 
-## Apply protection
+## Aplicar proteção
 
-Run:
+Execute:
 
 ```bash
 gh api -X PUT repos/joelsonrocha18/OrthoScan-Arrimo/branches/main/protection ^
@@ -25,8 +25,8 @@ gh api -X PUT repos/joelsonrocha18/OrthoScan-Arrimo/branches/main/protection ^
   -f restrictions=
 ```
 
-Notes:
+Observações:
 
-- The required status check name must match the job name from `.github/workflows/ci.yml` (`quality`).
-- If your default branch is not `main`, replace `main` in the endpoint.
+- O nome do status check obrigatório deve corresponder ao nome do job em `.github/workflows/ci.yml` (`quality`).
+- Se a branch padrão não for `main`, substitua `main` no endpoint.
 
