@@ -1,5 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadDb, saveDb, type AppDb } from '../../../data/db'
+
+vi.mock('../../../repo/storageRepo', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../repo/storageRepo')>()
+  return {
+    ...actual,
+    uploadToStorage: async (path: string) => ({ ok: true as const, path }),
+  }
+})
+
 import { createLocalPatientAccessRepository } from '../../../modules/publicAccess/infra/local/LocalPatientAccessRepository'
 
 function buildDb(): AppDb {
