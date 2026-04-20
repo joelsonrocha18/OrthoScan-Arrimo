@@ -1,12 +1,12 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import type { ComponentType, ReactElement } from 'react'
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import InternalRouteUrlMask, { InternalAppEntryRedirect } from './app/InternalRouteUrlMask'
 import ProtectedRoute from './app/ProtectedRoute'
 import { ToastProvider } from './app/ToastProvider'
 import { getAuthProvider } from './auth/authProvider'
 import { DATA_MODE } from './data/dataMode'
 import { applyStoredTheme, saveSystemSettings } from './lib/systemSettings'
-import { loadSystemSettingsSupabase } from './repo/systemSettingsRepo'
 
 const PUSH_NOTIFICATIONS_ENABLED = ((import.meta.env.VITE_WEB_PUSH_ENABLED as string | undefined)?.trim().toLowerCase() ?? '') === 'true'
 
@@ -85,6 +85,7 @@ export default function App() {
     applyStoredTheme()
     if (DATA_MODE !== 'supabase') return
     void (async () => {
+      const { loadSystemSettingsSupabase } = await import('./repo/systemSettingsRepo')
       const remote = await loadSystemSettingsSupabase()
       if (!remote) return
       saveSystemSettings(remote)
@@ -109,6 +110,7 @@ export default function App() {
   return (
     <ToastProvider>
       <Router>
+        <InternalRouteUrlMask />
         {PushNotificationsBridge ? <PushNotificationsBridge /> : null}
         <Routes>
           <Route path="/" element={<RootRedirect />} />
@@ -122,6 +124,7 @@ export default function App() {
           <Route path="/legal/lgpd" element={withSuspense(<LegalLgpdPage />)} />
           <Route path="/complete-signup" element={withSuspense(<OnboardingInvitePage />)} />
           <Route path="/reset-password" element={withSuspense(<ResetPasswordPage />)} />
+          <Route path="/app" element={<InternalAppEntryRedirect />} />
           <Route element={<ProtectedRoute permission="dashboard.read" />}>
             <Route path="/app/dashboard" element={withSuspense(<DashboardPage />)} />
             <Route path="/dashboard/agendamentos" element={<Navigate to="/app/dashboard" replace />} />
